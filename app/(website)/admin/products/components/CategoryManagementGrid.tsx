@@ -283,7 +283,7 @@ export default function CategoryManagementGrid({
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={categoryIds} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
               {categories.map((category, index) => (
                 <SortableCategoryCard
                   key={category.id}
@@ -340,7 +340,7 @@ export default function CategoryManagementGrid({
   // Normal (non-drag) mode
   return (
     <div className="bg-white rounded-lg border border-gray-300 overflow-hidden shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 p-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 p-6">
         {categories.map((category, index) => (
           <CategoryCard
             key={category.id}
