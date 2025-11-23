@@ -10,7 +10,6 @@ export interface SelectionData {
 }
 
 const STORAGE_KEY = 'pos_selections'
-const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001' // العميل الافتراضي
 
 export function usePersistentSelections() {
   const [selections, setSelections] = useState<SelectionData>({
@@ -22,20 +21,23 @@ export function usePersistentSelections() {
   const [isLoaded, setIsLoaded] = useState(false)
 
   // Load default customer from database
+  // البحث عن العميل الافتراضي بناءً على الاسم "عميل"
   const loadDefaultCustomer = async () => {
     try {
       const { data, error } = await supabase
         .from('customers')
         .select('*')
-        .eq('id', DEFAULT_CUSTOMER_ID)
+        .eq('name', 'عميل')
         .maybeSingle()
 
       if (error) {
+        console.error('Error loading default customer:', error)
         return null
       }
 
       return data
     } catch (error) {
+      console.error('Error in loadDefaultCustomer:', error)
       return null
     }
   }
