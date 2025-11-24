@@ -544,77 +544,77 @@ export default function CustomersPage() {
         
         {/* Top Action Buttons Toolbar - Full Width with Horizontal Scroll */}
         <div className="bg-[#374151] border-b border-gray-600 px-4 py-2 w-full">
-          <div className="flex items-center justify-start gap-1 overflow-x-auto scrollbar-hide">
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <ArrowPathIcon className="h-5 w-5 mb-1" />
+          <div className="flex items-center justify-start gap-2 overflow-x-auto scrollbar-hide">
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <ArrowPathIcon className="h-4 w-4" />
               <span className="text-sm">تحديث</span>
             </button>
 
             <button
               onClick={toggleGroupSidebar}
-              className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
+              className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors"
             >
-              <FolderPlusIcon className="h-5 w-5 mb-1" />
+              <FolderPlusIcon className="h-4 w-4" />
               <span className="text-sm">مجموعة جديدة</span>
             </button>
 
             <button
               onClick={() => selectedCustomerGroup && handleEditGroup(selectedCustomerGroup)}
-              className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-colors ${
                 selectedCustomerGroup && !selectedCustomerGroup.isDefault
-                  ? 'text-gray-300 hover:text-white'
+                  ? 'text-gray-300 hover:text-white hover:bg-gray-600/30'
                   : 'text-gray-500 cursor-not-allowed'
               }`}
               disabled={!selectedCustomerGroup || selectedCustomerGroup.isDefault}
             >
-              <PencilSquareIcon className="h-5 w-5 mb-1" />
+              <PencilSquareIcon className="h-4 w-4" />
               <span className="text-sm">تحرير المجموعة</span>
             </button>
 
             <button
               onClick={handleDeleteGroup}
-              className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-colors ${
                 selectedCustomerGroup && !selectedCustomerGroup.isDefault
-                  ? 'text-red-400 hover:text-red-300'
+                  ? 'text-red-400 hover:text-red-300 hover:bg-red-600/10'
                   : 'text-gray-500 cursor-not-allowed'
               }`}
               disabled={!selectedCustomerGroup || selectedCustomerGroup.isDefault}
             >
-              <TrashIcon className="h-5 w-5 mb-1" />
+              <TrashIcon className="h-4 w-4" />
               <span className="text-sm">حذف المجموعة</span>
             </button>
 
             <button
               onClick={toggleAddCustomerModal}
-              className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
+              className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors"
             >
-              <UserPlusIcon className="h-5 w-5 mb-1" />
+              <UserPlusIcon className="h-4 w-4" />
               <span className="text-sm">إضافة عميل</span>
             </button>
 
             <button
               onClick={() => selectedCustomer && openEditCustomerModal(selectedCustomer)}
-              className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-colors ${
                 selectedCustomer
-                  ? 'text-gray-300 hover:text-white'
+                  ? 'text-gray-300 hover:text-white hover:bg-gray-600/30'
                   : 'text-gray-500 cursor-not-allowed'
               }`}
               disabled={!selectedCustomer}
             >
-              <PencilSquareIcon className="h-5 w-5 mb-1" />
+              <PencilSquareIcon className="h-4 w-4" />
               <span className="text-sm">تحرير العميل</span>
             </button>
 
             <button
               onClick={handleDeleteCustomer}
-              className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
+              className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-colors ${
                 !selectedCustomer
                   ? 'text-gray-500 cursor-not-allowed'
                   : selectedCustomer && isDefaultCustomer(selectedCustomer.id)
                   ? 'text-gray-500 cursor-not-allowed'
                   : isDeleting
                   ? 'text-gray-500 cursor-not-allowed'
-                  : 'text-red-400 hover:text-red-300'
+                  : 'text-red-400 hover:text-red-300 hover:bg-red-600/10'
               }`}
               disabled={!selectedCustomer || (selectedCustomer && isDefaultCustomer(selectedCustomer.id)) || isDeleting}
               title={
@@ -627,41 +627,41 @@ export default function CustomersPage() {
                   : 'حذف العميل'
               }
             >
-              <TrashIcon className="h-5 w-5 mb-1" />
+              <TrashIcon className="h-4 w-4" />
               <span className="text-sm">{isDeleting ? 'جاري الحذف...' : 'حذف العميل'}</span>
             </button>
 
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <PrinterIcon className="h-5 w-5 mb-1" />
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <PrinterIcon className="h-4 w-4" />
               <span className="text-sm">طباعة</span>
             </button>
 
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <DocumentArrowDownIcon className="h-5 w-5 mb-1" />
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <DocumentArrowDownIcon className="h-4 w-4" />
               <span className="text-sm">حفظ كـ PDF</span>
             </button>
 
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <ArrowDownTrayIcon className="h-5 w-5 mb-1" />
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <ArrowDownTrayIcon className="h-4 w-4" />
               <span className="text-sm">استيراد</span>
             </button>
 
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <ArrowUpTrayIcon className="h-5 w-5 mb-1" />
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <ArrowUpTrayIcon className="h-4 w-4" />
               <span className="text-sm">تصدير</span>
             </button>
 
-            <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
-              <ArrowsUpDownIcon className="h-5 w-5 mb-1" />
+            <button className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors">
+              <ArrowsUpDownIcon className="h-4 w-4" />
               <span className="text-sm">ترتيب</span>
             </button>
 
             {viewMode === 'table' && (
               <button
                 onClick={() => setShowColumnsModal(true)}
-                className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
+                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md cursor-pointer whitespace-nowrap transition-colors"
               >
-                <TableCellsIcon className="h-5 w-5 mb-1" />
+                <TableCellsIcon className="h-4 w-4" />
                 <span className="text-sm">الأعمدة</span>
               </button>
             )}
