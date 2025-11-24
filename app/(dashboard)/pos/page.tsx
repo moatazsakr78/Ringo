@@ -98,6 +98,7 @@ import TransferLocationModal from "../../components/TransferLocationModal";
 import QuickAddProductModal from "../../components/QuickAddProductModal";
 import ColumnsControlModal from "../../components/ColumnsControlModal";
 import PaymentSplit from "../../components/PaymentSplit";
+import POSTabletView from "../../components/POSTabletView";
 import { useProductsAdmin } from "../../../lib/hooks/useProductsAdmin";
 import { Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
@@ -236,6 +237,29 @@ function POSPageContent() {
 
   // ✨ OPTIMIZED: Use super-optimized admin hook for better performance
   const { products, branches, isLoading, error, fetchProducts } = useProductsAdmin();
+
+  // Device Detection for Tablet View
+  const [isTabletDevice, setIsTabletDevice] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(0);
+
+  useEffect(() => {
+    const checkDevice = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const width = window.innerWidth;
+      setWindowWidth(width);
+
+      const isMobile = /mobile|android.*mobile|webos|blackberry|opera mini|iemobile/.test(userAgent);
+      const isTablet = (/tablet|ipad|playbook|silk|android(?!.*mobile)/i.test(userAgent) ||
+                        (width >= 768 && width <= 1280)) &&
+                       !isMobile;
+
+      setIsTabletDevice(isTablet);
+    };
+
+    checkDevice();
+    window.addEventListener('resize', checkDevice);
+    return () => window.removeEventListener('resize', checkDevice);
+  }, []);
 
   // Generate dynamic table columns based on branches - same as Products page
   const dynamicTableColumns = useMemo(() => {
@@ -1545,6 +1569,325 @@ function POSPageContent() {
       alert("يرجى السماح بالنوافذ المنبثقة لطباعة الفاتورة");
     }
   };
+
+  // Render Tablet View if tablet device detected
+  if (isTabletDevice) {
+    return (
+      <>
+        <POSTabletView
+          products={products}
+          filteredProducts={filteredProducts}
+          isLoading={isLoading}
+          error={error}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          cartItems={cartItems}
+          setCartItems={setCartItems}
+          isCartOpen={isCartOpen}
+          setIsCartOpen={setIsCartOpen}
+          cartTotal={cartTotal}
+          removeFromCart={removeFromCart}
+          clearCart={clearCart}
+          updateActiveTabCart={updateActiveTabCart}
+          selections={selections}
+          isPurchaseMode={isPurchaseMode}
+          isTransferMode={isTransferMode}
+          isReturnMode={isReturnMode}
+          selectedSupplier={selectedSupplier}
+          selectedWarehouse={selectedWarehouse}
+          setIsRecordsModalOpen={setIsRecordsModalOpen}
+          setIsCustomerModalOpen={setIsCustomerModalOpen}
+          setIsBranchModalOpen={setIsBranchModalOpen}
+          setIsHistoryModalOpen={setIsHistoryModalOpen}
+          setIsSupplierModalOpen={setIsSupplierModalOpen}
+          setIsWarehouseModalOpen={setIsWarehouseModalOpen}
+          setShowQuickAddProductModal={setShowQuickAddProductModal}
+          setShowColumnsModal={setShowColumnsModal}
+          handleProductClick={handleProductClick}
+          selectedProduct={selectedProduct}
+          handleCreateInvoice={handleCreateInvoice}
+          hasAllRequiredSelections={hasAllRequiredSelections}
+          isProcessingInvoice={isProcessingInvoice}
+          setPaymentSplitData={setPaymentSplitData}
+          setCreditAmount={setCreditAmount}
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          posTabs={posTabs}
+          activeTab={activePOSTab}
+          switchTab={switchTab}
+          closeTab={closeTab}
+          setShowAddTabModal={setShowAddTabModal}
+          setShowPurchaseModeConfirm={setShowPurchaseModeConfirm}
+          setIsTransferMode={setIsTransferMode}
+          setTransferFromLocation={setTransferFromLocation}
+          setTransferToLocation={setTransferToLocation}
+          setIsTransferLocationModalOpen={setIsTransferLocationModalOpen}
+          setIsReturnMode={setIsReturnMode}
+          clearSelections={clearSelections}
+        />
+
+        {/* Modals */}
+        <RecordsSelectionModal
+          isOpen={isRecordsModalOpen}
+          onClose={() => setIsRecordsModalOpen(false)}
+          onSelectRecord={handleRecordSelect}
+        />
+
+        <CustomerSelectionModal
+          isOpen={isCustomerModalOpen}
+          onClose={() => setIsCustomerModalOpen(false)}
+          onSelectCustomer={handleCustomerSelect}
+        />
+
+        <BranchSelectionModal
+          isOpen={isBranchModalOpen}
+          onClose={() => setIsBranchModalOpen(false)}
+          onSelectBranch={handleBranchSelect}
+        />
+
+        <HistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+        />
+
+        <SupplierSelectionModal
+          isOpen={isSupplierModalOpen}
+          onClose={() => setIsSupplierModalOpen(false)}
+          onSelect={setSelectedSupplier}
+          selectedSupplier={selectedSupplier}
+        />
+
+        <WarehouseSelectionModal
+          isOpen={isWarehouseModalOpen}
+          onClose={() => setIsWarehouseModalOpen(false)}
+          onSelect={setSelectedWarehouse}
+          selectedWarehouse={selectedWarehouse}
+        />
+
+        <TransferLocationModal
+          isOpen={isTransferLocationModalOpen}
+          onClose={() => setIsTransferLocationModalOpen(false)}
+          onConfirm={handleTransferLocationConfirm}
+        />
+
+        <QuickAddProductModal
+          isOpen={showQuickAddProductModal}
+          onClose={() => setShowQuickAddProductModal(false)}
+          onAddToCart={handleQuickAddToCart}
+        />
+
+        <ColumnsControlModal
+          isOpen={showColumnsModal}
+          onClose={() => setShowColumnsModal(false)}
+          columns={getAllColumns()}
+          onColumnsChange={handleColumnsChange}
+        />
+
+        {/* Add Tab Modal */}
+        {showAddTabModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setShowAddTabModal(false)}>
+            <div className="bg-[#2B3544] rounded-lg p-6 w-96 max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+              <h3 className="text-white text-lg font-medium mb-4">إضافة نافذة بيع جديدة</h3>
+              <input
+                type="text"
+                value={newTabName}
+                onChange={(e) => setNewTabName(e.target.value)}
+                placeholder="اسم النافذة..."
+                className="w-full px-4 py-2 bg-[#374151] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && newTabName.trim()) {
+                    addTab(newTabName.trim());
+                    setNewTabName("");
+                    setShowAddTabModal(false);
+                  }
+                }}
+                autoFocus
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => {
+                    setNewTabName("");
+                    setShowAddTabModal(false);
+                  }}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={() => {
+                    if (newTabName.trim()) {
+                      addTab(newTabName.trim());
+                      setNewTabName("");
+                      setShowAddTabModal(false);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                  disabled={!newTabName.trim()}
+                >
+                  موافق
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Purchase Mode Confirmation Modal */}
+        {showPurchaseModeConfirm && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setShowPurchaseModeConfirm(false)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-[#2B3544] rounded-2xl shadow-2xl border border-[#4A5568] w-full max-w-md">
+                <div className="flex items-center justify-between p-6 border-b border-[#4A5568]">
+                  <div>
+                    <h2 className="text-lg font-bold text-white">
+                      تفعيل وضع الشراء
+                    </h2>
+                    <p className="text-gray-400 text-sm">
+                      {isPurchaseMode
+                        ? "إيقاف وضع الشراء والعودة لوضع البيع"
+                        : "تفعيل وضع الشراء من الموردين"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  <p className="text-white mb-4">
+                    {isPurchaseMode
+                      ? "هل تريد إيقاف وضع الشراء والعودة لوضع البيع؟"
+                      : "هل تريد تفعيل وضع الشراء من الموردين؟"}
+                  </p>
+                  {!isPurchaseMode && (
+                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                      <p className="text-blue-400 text-sm">
+                        📝 في وضع الشراء، سيتم تحديد المورد والمخزن بدلاً من
+                        العميل والفرع.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 border-t border-[#4A5568]">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowPurchaseModeConfirm(false)}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors"
+                    >
+                      إلغاء
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsPurchaseMode(!isPurchaseMode);
+                        if (isPurchaseMode) {
+                          setSelectedSupplier(null);
+                          setSelectedWarehouse(null);
+                        }
+                        setShowPurchaseModeConfirm(false);
+                      }}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg font-medium transition-colors"
+                    >
+                      {isPurchaseMode ? "إيقاف وضع الشراء" : "تفعيل وضع الشراء"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Print Receipt Confirmation Modal */}
+        {showPrintReceiptModal && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setShowPrintReceiptModal(false)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="bg-[#2B3544] rounded-2xl shadow-2xl border border-[#4A5568] w-full max-w-md">
+                <div className="flex items-center justify-between p-6 border-b border-[#4A5568]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-blue-500 rounded-full flex items-center justify-center">
+                      <PrinterIcon className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-bold text-white">
+                        طباعة الفاتورة
+                      </h2>
+                      <p className="text-gray-400 text-sm">
+                        تم إنشاء الفاتورة بنجاح
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                    <p className="text-green-400 text-sm flex items-center gap-2 mb-2">
+                      <span className="text-green-400">✅</span>
+                      تم إنشاء{" "}
+                      {lastInvoiceData?.isReturn ? "المرتجع" : "الفاتورة"} بنجاح
+                    </p>
+                    <div className="text-white text-sm space-y-1">
+                      <p>
+                        رقم الفاتورة:{" "}
+                        <span className="font-bold">
+                          {lastInvoiceData?.invoiceNumber}
+                        </span>
+                      </p>
+                      <p>
+                        الإجمالي:{" "}
+                        <span className="font-bold text-green-400">
+                          {formatPrice(
+                            lastInvoiceData?.totalAmount || 0,
+                            "system",
+                          )}
+                        </span>
+                      </p>
+                      <p>
+                        عدد الأصناف:{" "}
+                        <span className="font-bold">
+                          {lastInvoiceData?.cartItems?.length}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-white font-medium text-center mb-4">
+                    هل تريد طباعة الفاتورة؟
+                  </p>
+                </div>
+
+                <div className="p-6 border-t border-[#4A5568]">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowPrintReceiptModal(false)}
+                      className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-lg font-medium transition-colors"
+                    >
+                      لا، شكراً
+                    </button>
+                    <button
+                      onClick={() => {
+                        printReceipt(lastInvoiceData);
+                        setShowPrintReceiptModal(false);
+                      }}
+                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <PrinterIcon className="h-5 w-5" />
+                      نعم، اطبع الفاتورة
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-[#2B3544]">
