@@ -1572,8 +1572,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                       <h3 className="text-blue-400 font-medium text-right p-4 pb-2 flex-shrink-0 border-b border-gray-600">
                         تفاصيل الفاتورة {sales[selectedTransaction]?.invoice_number || ''}
                       </h3>
-                      
-                      <div className="flex-1 min-h-0 px-4 pb-4">
+
+                      <div className="flex-1 min-h-0">
                         {isLoadingItems ? (
                           <div className="flex items-center justify-center h-full">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
