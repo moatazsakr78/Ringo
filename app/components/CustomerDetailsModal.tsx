@@ -28,6 +28,31 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
+  // Tablet Detection
+  const [isTabletDevice, setIsTabletDevice] = useState(false)
+
+  useEffect(() => {
+    const checkDevice = () => {
+      const userAgent = navigator.userAgent.toLowerCase()
+      const width = window.innerWidth
+
+      const isMobile = /mobile|android.*mobile|webos|blackberry|opera mini|iemobile/.test(userAgent)
+      const isTablet = (/tablet|ipad|playbook|silk|android(?!.*mobile)/i.test(userAgent) ||
+        (width >= 768 && width <= 1280 && !isMobile))
+
+      setIsTabletDevice(isTablet)
+
+      // Auto-hide customer details on tablet for better space
+      if (isTablet) {
+        setShowCustomerDetails(false)
+      }
+    }
+
+    checkDevice()
+    window.addEventListener('resize', checkDevice)
+    return () => window.removeEventListener('resize', checkDevice)
+  }, [])
+
   // Real-time state for sales and sale items
   const [sales, setSales] = useState<any[]>([])
   const [saleItems, setSaleItems] = useState<any[]>([])
@@ -1016,116 +1041,241 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       }`}>
         <div className="bg-[#2B3544] h-full w-full flex flex-col">
           
-          {/* Top Navigation - All buttons in one row */}
-          <div className="bg-[#374151] border-b border-gray-600 px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-8">
-                {/* Action Buttons - Same style as customer list */}
-                <div className="flex items-center gap-1">
-                  <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
-                    <PencilSquareIcon className="h-5 w-5 mb-1" />
-                    <span className="text-sm">تحرير الفاتورة</span>
+          {/* Top Navigation - Responsive Layout */}
+          <div className="bg-[#374151] border-b border-gray-600">
+            {/* Tablet Layout */}
+            {isTabletDevice ? (
+              <div className="px-4 py-3">
+                {/* Single Scrollable Row with Close Button and All Tabs/Actions */}
+                <div className="flex items-center gap-3">
+                  {/* Close Button - Fixed */}
+                  <button
+                    onClick={onClose}
+                    className="flex-shrink-0 text-gray-400 hover:text-white w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600/30 transition-colors"
+                  >
+                    <XMarkIcon className="h-6 w-6" />
                   </button>
 
-                  <button 
-                    onClick={() => {
-                      if (sales.length > 0 && selectedTransaction < sales.length) {
-                        handleDeleteInvoice(sales[selectedTransaction])
-                      }
-                    }}
-                    disabled={sales.length === 0 || selectedTransaction >= sales.length}
-                    className="flex flex-col items-center p-2 text-red-400 hover:text-red-300 disabled:text-gray-500 disabled:cursor-not-allowed cursor-pointer min-w-[80px] transition-colors"
-                  >
-                    <TrashIcon className="h-5 w-5 mb-1" />
-                    <span className="text-sm">حذف الفاتورة</span>
-                  </button>
+                  {/* Scrollable Buttons Container */}
+                  <div className="flex-1 overflow-x-auto scrollbar-hide">
+                    <div className="flex items-center gap-2 min-w-max">
+                      {/* Main Tabs */}
+                      <button
+                        onClick={() => setActiveTab('invoices')}
+                        className={`px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${
+                          activeTab === 'invoices'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                        }`}
+                      >
+                        فواتير ({sales.length})
+                      </button>
 
-                  <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
-                    <TableCellsIcon className="h-5 w-5 mb-1" />
-                    <span className="text-sm">إدارة الأعمدة</span>
-                  </button>
-                </div>
+                      <button
+                        onClick={() => setActiveTab('payments')}
+                        className={`px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${
+                          activeTab === 'payments'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                        }`}
+                      >
+                        الدفعات
+                      </button>
 
-                {/* Tab Navigation - Same row */}
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setActiveTab('payments')}
-                    className={`px-6 py-3 text-base font-medium border-b-2 rounded-t-lg transition-all duration-200 ${
-                      activeTab === 'payments' 
-                        ? 'text-blue-400 border-blue-400 bg-blue-600/10' 
-                        : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
-                    }`}
-                  >
-                    الدفعات
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('statement')}
-                    className={`px-6 py-3 text-base font-medium border-b-2 rounded-t-lg transition-all duration-200 ${
-                      activeTab === 'statement' 
-                        ? 'text-blue-400 border-blue-400 bg-blue-600/10' 
-                        : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
-                    }`}
-                  >
-                    كشف الحساب
-                  </button>
-                  <button 
-                    onClick={() => setActiveTab('invoices')}
-                    className={`px-6 py-3 text-base font-semibold border-b-2 rounded-t-lg transition-all duration-200 ${
-                      activeTab === 'invoices' 
-                        ? 'text-blue-400 border-blue-400 bg-blue-600/10' 
-                        : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
-                    }`}
-                  >
-                    فواتير العميل ({sales.length})
-                  </button>
-                </div>
-                
-                {/* View Mode Toggle Buttons - Only show for invoices tab */}
-                {activeTab === 'invoices' && (
-                  <div className="flex gap-1 bg-gray-600/50 rounded-lg p-1">
-                    <button
-                      onClick={() => setViewMode('invoices-only')}
-                      className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
-                        viewMode === 'invoices-only'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
-                      }`}
-                      title="عرض فواتير العميل فقط"
-                    >
-                      📋
-                    </button>
-                    <button
-                      onClick={() => setViewMode('split')}
-                      className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
-                        viewMode === 'split'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
-                      }`}
-                      title="عرض مقسم"
-                    >
-                      ⬌
-                    </button>
-                    <button
-                      onClick={() => setViewMode('details-only')}
-                      className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
-                        viewMode === 'details-only'
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
-                      }`}
-                      title="عرض تفاصيل الفاتورة فقط"
-                    >
-                      📄
-                    </button>
+                      <button
+                        onClick={() => setActiveTab('statement')}
+                        className={`px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap ${
+                          activeTab === 'statement'
+                            ? 'bg-blue-600 text-white shadow-sm'
+                            : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                        }`}
+                      >
+                        كشف الحساب
+                      </button>
+
+                      {/* View Mode Toggle Button - Only for invoices tab */}
+                      {activeTab === 'invoices' && (
+                        <div className="flex gap-1 bg-gray-600/50 rounded-lg p-1">
+                          <button
+                            onClick={() => setViewMode('invoices-only')}
+                            className={`px-2.5 py-1.5 text-base rounded transition-all duration-200 ${
+                              viewMode === 'invoices-only'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                            }`}
+                            title="فواتير فقط"
+                          >
+                            📋
+                          </button>
+                          <button
+                            onClick={() => setViewMode('split')}
+                            className={`px-2.5 py-1.5 text-base rounded transition-all duration-200 ${
+                              viewMode === 'split'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                            }`}
+                            title="عرض مقسم"
+                          >
+                            ⬌
+                          </button>
+                          <button
+                            onClick={() => setViewMode('details-only')}
+                            className={`px-2.5 py-1.5 text-base rounded transition-all duration-200 ${
+                              viewMode === 'details-only'
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                            }`}
+                            title="تفاصيل فقط"
+                          >
+                            📄
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Action Buttons - Only for invoices tab */}
+                      {activeTab === 'invoices' && (
+                        <>
+                          <button className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-lg transition-all whitespace-nowrap">
+                            <PencilSquareIcon className="h-4 w-4" />
+                            <span>تحرير</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (sales.length > 0 && selectedTransaction < sales.length) {
+                                handleDeleteInvoice(sales[selectedTransaction])
+                              }
+                            }}
+                            disabled={sales.length === 0 || selectedTransaction >= sales.length}
+                            className="flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:text-red-300 disabled:text-gray-500 disabled:cursor-not-allowed hover:bg-red-600/10 rounded-lg transition-all whitespace-nowrap"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                            <span>حذف</span>
+                          </button>
+
+                          <button className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-lg transition-all whitespace-nowrap">
+                            <TableCellsIcon className="h-4 w-4" />
+                            <span>الأعمدة</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-600/30 transition-colors"
-              >
-                ×
-              </button>
-            </div>
+            ) : (
+              /* Desktop Layout - Original */
+              <div className="px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-8">
+                    {/* Action Buttons - Same style as customer list */}
+                    <div className="flex items-center gap-1">
+                      <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
+                        <PencilSquareIcon className="h-5 w-5 mb-1" />
+                        <span className="text-sm">تحرير الفاتورة</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (sales.length > 0 && selectedTransaction < sales.length) {
+                            handleDeleteInvoice(sales[selectedTransaction])
+                          }
+                        }}
+                        disabled={sales.length === 0 || selectedTransaction >= sales.length}
+                        className="flex flex-col items-center p-2 text-red-400 hover:text-red-300 disabled:text-gray-500 disabled:cursor-not-allowed cursor-pointer min-w-[80px] transition-colors"
+                      >
+                        <TrashIcon className="h-5 w-5 mb-1" />
+                        <span className="text-sm">حذف الفاتورة</span>
+                      </button>
+
+                      <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
+                        <TableCellsIcon className="h-5 w-5 mb-1" />
+                        <span className="text-sm">إدارة الأعمدة</span>
+                      </button>
+                    </div>
+
+                    {/* Tab Navigation - Same row */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setActiveTab('payments')}
+                        className={`px-6 py-3 text-base font-medium border-b-2 rounded-t-lg transition-all duration-200 ${
+                          activeTab === 'payments'
+                            ? 'text-blue-400 border-blue-400 bg-blue-600/10'
+                            : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
+                        }`}
+                      >
+                        الدفعات
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('statement')}
+                        className={`px-6 py-3 text-base font-medium border-b-2 rounded-t-lg transition-all duration-200 ${
+                          activeTab === 'statement'
+                            ? 'text-blue-400 border-blue-400 bg-blue-600/10'
+                            : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
+                        }`}
+                      >
+                        كشف الحساب
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('invoices')}
+                        className={`px-6 py-3 text-base font-semibold border-b-2 rounded-t-lg transition-all duration-200 ${
+                          activeTab === 'invoices'
+                            ? 'text-blue-400 border-blue-400 bg-blue-600/10'
+                            : 'text-gray-300 hover:text-white border-transparent hover:border-gray-400 hover:bg-gray-600/20'
+                        }`}
+                      >
+                        فواتير العميل ({sales.length})
+                      </button>
+                    </div>
+
+                    {/* View Mode Toggle Buttons - Only show for invoices tab */}
+                    {activeTab === 'invoices' && (
+                      <div className="flex gap-1 bg-gray-600/50 rounded-lg p-1">
+                        <button
+                          onClick={() => setViewMode('invoices-only')}
+                          className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
+                            viewMode === 'invoices-only'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                          }`}
+                          title="عرض فواتير العميل فقط"
+                        >
+                          📋
+                        </button>
+                        <button
+                          onClick={() => setViewMode('split')}
+                          className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
+                            viewMode === 'split'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                          }`}
+                          title="عرض مقسم"
+                        >
+                          ⬌
+                        </button>
+                        <button
+                          onClick={() => setViewMode('details-only')}
+                          className={`px-3 py-1.5 text-sm font-medium rounded transition-all duration-200 ${
+                            viewMode === 'details-only'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'text-gray-300 hover:text-white hover:bg-gray-600/50'
+                          }`}
+                          title="عرض تفاصيل الفاتورة فقط"
+                        >
+                          📄
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-600/30 transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-1 min-h-0" ref={containerRef}>
@@ -1146,125 +1296,159 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
             {/* Right Sidebar - Customer Info (First in RTL) */}
             {showCustomerDetails && (
-              <div className="w-80 bg-[#3B4754] border-l border-gray-600 flex flex-col">
-                
+              <div className={`bg-[#3B4754] border-l border-gray-600 flex flex-col ${
+                isTabletDevice ? 'w-64' : 'w-80'
+              }`}>
+
                 {/* Customer Balance */}
-                <div className="p-4 border-b border-gray-600">
-                  <div className="bg-blue-600 rounded p-4 text-center">
-                    <div className="text-2xl font-bold text-white">{formatPrice(customerBalance, 'system')}</div>
-                    <div className="text-blue-200 text-sm">رصيد العميل</div>
+                <div className={`border-b border-gray-600 ${isTabletDevice ? 'p-3' : 'p-4'}`}>
+                  <div className={`bg-blue-600 rounded text-center ${isTabletDevice ? 'p-3' : 'p-4'}`}>
+                    <div className={`font-bold text-white ${isTabletDevice ? 'text-xl' : 'text-2xl'}`}>
+                      {formatPrice(customerBalance, 'system')}
+                    </div>
+                    <div className={`text-blue-200 ${isTabletDevice ? 'text-xs' : 'text-sm'}`}>
+                      رصيد العميل
+                    </div>
                   </div>
                 </div>
 
                 {/* Customer Details */}
-                <div className="p-4 space-y-4 flex-1">
-                  <h3 className="text-white font-medium text-lg text-right">معلومات العميل</h3>
-                
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">{customer.name || 'Mazen taps'}</span>
-                    <span className="text-gray-400 text-sm">اسم العميل</span>
+                <div className={`space-y-3 flex-1 overflow-y-auto scrollbar-hide ${isTabletDevice ? 'p-3' : 'p-4'}`}>
+                  <h3 className={`text-white font-medium text-right ${isTabletDevice ? 'text-base' : 'text-lg'}`}>
+                    معلومات العميل
+                  </h3>
+
+                  <div className={isTabletDevice ? 'space-y-2' : 'space-y-3'}>
+                    <div className="flex justify-between items-center">
+                      <span className={`text-white ${isTabletDevice ? 'text-sm' : ''}`}>
+                        {customer.name || 'Mazen taps'}
+                      </span>
+                      <span className="text-gray-400 text-xs">اسم العميل</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className={`text-white ${isTabletDevice ? 'text-sm' : ''}`}>
+                        {customer.address || '23626125215'}
+                      </span>
+                      <span className="text-gray-400 text-xs">رقم الهاتف</span>
+                    </div>
+
+                    {!isTabletDevice && (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-white">عمر الثامن</span>
+                          <span className="text-gray-400 text-sm">الجيل</span>
+                        </div>
+
+                        <div className="flex justify-between items-center">
+                          <span className="text-white">6/24/2025</span>
+                          <span className="text-gray-400 text-sm">تاريخ التسجيل</span>
+                        </div>
+                      </>
+                    )}
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-yellow-400 flex items-center gap-1">
+                        <span className={isTabletDevice ? 'text-sm' : ''}>Immortal</span>
+                        <span>⭐</span>
+                      </span>
+                      <span className="text-gray-400 text-xs">الرتبة</span>
+                    </div>
                   </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">{customer.address || '23626125215'}</span>
-                    <span className="text-gray-400 text-sm">رقم الهاتف</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">عمر الثامن</span>
-                    <span className="text-gray-400 text-sm">الجيل</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">6/24/2025</span>
-                    <span className="text-gray-400 text-sm">تاريخ التسجيل</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-yellow-400 flex items-center gap-1">
-                      <span>Immortal</span>
-                      <span>⭐</span>
-                    </span>
-                    <span className="text-gray-400 text-sm">الرتبة</span>
+
+                  {/* Customer Statistics */}
+                  <div className={`border-t border-gray-600 ${isTabletDevice ? 'pt-3 mt-3' : 'pt-4 mt-4'}`}>
+                    <h4 className={`text-white font-medium text-right flex items-center gap-2 ${
+                      isTabletDevice ? 'text-sm mb-2' : 'mb-3'
+                    }`}>
+                      <span>📊</span>
+                      <span>إحصائيات</span>
+                    </h4>
+                    <div className={isTabletDevice ? 'space-y-2' : 'space-y-3'}>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-white ${isTabletDevice ? 'text-sm' : ''}`}>
+                          {sales.length}
+                        </span>
+                        <span className="text-gray-400 text-xs">عدد الفواتير</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-blue-400 ${isTabletDevice ? 'text-sm' : ''}`}>
+                          {formatPrice(totalInvoicesAmount, 'system')}
+                        </span>
+                        <span className="text-gray-400 text-xs">إجمالي الفواتير</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className={`text-green-400 ${isTabletDevice ? 'text-sm' : ''}`}>
+                          {formatPrice(totalPayments, 'system')}
+                        </span>
+                        <span className="text-gray-400 text-xs">إجمالي الدفعات</span>
+                      </div>
+                      {!isTabletDevice && (
+                        <>
+                          <div className="flex justify-between items-center">
+                            <span className="text-white">{formatPrice(averageOrderValue, 'system')}</span>
+                            <span className="text-gray-400 text-sm">متوسط قيمة الطلبية</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-white">
+                              {sales.length > 0
+                                ? new Date(sales[0].created_at).toLocaleDateString('en-GB')
+                                : '-'
+                              }
+                            </span>
+                            <span className="text-gray-400 text-sm">آخر فاتورة</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Customer Statistics */}
-              <div className="p-4 border-t border-gray-600">
-                <h4 className="text-white font-medium mb-3 text-right flex items-center gap-2">
-                  <span>📊</span>
-                  <span>إحصائيات العميل</span>
-                </h4>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">{sales.length}</span>
-                    <span className="text-gray-400 text-sm">عدد الفواتير</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-blue-400">{formatPrice(totalInvoicesAmount, 'system')}</span>
-                    <span className="text-gray-400 text-sm">إجمالي الفواتير</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-green-400">{formatPrice(totalPayments, 'system')}</span>
-                    <span className="text-gray-400 text-sm">إجمالي الدفعات</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">{formatPrice(averageOrderValue, 'system')}</span>
-                    <span className="text-gray-400 text-sm">متوسط قيمة الطلبية</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-white">
-                      {sales.length > 0
-                        ? new Date(sales[0].created_at).toLocaleDateString('en-GB')
-                        : '-'
-                      }
-                    </span>
-                    <span className="text-gray-400 text-sm">آخر فاتورة</span>
-                  </div>
+                {/* Date Filter Button */}
+                <div className={`border-t border-gray-600 ${isTabletDevice ? 'p-3' : 'p-4'}`}>
+                  <button
+                    onClick={() => setShowDateFilter(true)}
+                    className={`w-full bg-blue-600 hover:bg-blue-700 text-white rounded font-medium flex items-center justify-center gap-2 transition-colors ${
+                      isTabletDevice ? 'px-3 py-2 text-sm' : 'px-4 py-3'
+                    }`}
+                  >
+                    <CalendarDaysIcon className={isTabletDevice ? 'h-4 w-4' : 'h-5 w-5'} />
+                    <span>التاريخ</span>
+                  </button>
+
+                  {/* Current Filter Display */}
+                  {dateFilter.type !== 'all' && (
+                    <div className="mt-2 text-center">
+                      <span className="text-xs text-blue-400">
+                        {dateFilter.type === 'today' && 'عرض فواتير اليوم'}
+                        {dateFilter.type === 'current_week' && 'عرض فواتير الأسبوع الحالي'}
+                        {dateFilter.type === 'last_week' && 'عرض فواتير الأسبوع الماضي'}
+                        {dateFilter.type === 'current_month' && 'عرض فواتير الشهر الحالي'}
+                        {dateFilter.type === 'last_month' && 'عرض فواتير الشهر الماضي'}
+                        {dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate &&
+                          `من ${dateFilter.startDate.toLocaleDateString('en-GB')} إلى ${dateFilter.endDate.toLocaleDateString('en-GB')}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {/* Date Filter Button */}
-              <div className="p-4 border-t border-gray-600">
-                <button
-                  onClick={() => setShowDateFilter(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded font-medium flex items-center justify-center gap-2 transition-colors"
-                >
-                  <CalendarDaysIcon className="h-5 w-5" />
-                  <span>التاريخ</span>
-                </button>
-                
-                {/* Current Filter Display */}
-                {dateFilter.type !== 'all' && (
-                  <div className="mt-2 text-center">
-                    <span className="text-xs text-blue-400">
-                      {dateFilter.type === 'today' && 'عرض فواتير اليوم'}
-                      {dateFilter.type === 'current_week' && 'عرض فواتير الأسبوع الحالي'}
-                      {dateFilter.type === 'last_week' && 'عرض فواتير الأسبوع الماضي'}
-                      {dateFilter.type === 'current_month' && 'عرض فواتير الشهر الحالي'}
-                      {dateFilter.type === 'last_month' && 'عرض فواتير الشهر الماضي'}
-                      {dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate && 
-                        `من ${dateFilter.startDate.toLocaleDateString('en-GB')} إلى ${dateFilter.endDate.toLocaleDateString('en-GB')}`}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
             )}
 
             {/* Main Content Area - Left side containing both tables */}
             <div className="flex-1 flex flex-col min-w-0 relative">
               
               {/* Search Bar */}
-              <div className="bg-[#374151] border-b border-gray-600 p-4">
+              <div className={`bg-[#374151] border-b border-gray-600 ${isTabletDevice ? 'p-3' : 'p-4'}`}>
                 <div className="relative">
-                  <MagnifyingGlassIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <MagnifyingGlassIcon className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 ${
+                    isTabletDevice ? 'h-3.5 w-3.5' : 'h-4 w-4'
+                  }`} />
                   <input
                     type="text"
-                    placeholder="ابحث عن فاتورة (رقم الفاتورة، اسم العميل، أو الهاتف)..."
-                    className="w-full pl-4 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder={isTabletDevice ? "بحث..." : "ابحث عن فاتورة (رقم الفاتورة، اسم العميل، أو الهاتف)..."}
+                    className={`w-full pr-10 bg-[#2B3544] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      isTabletDevice ? 'pl-3 py-1.5 text-xs' : 'pl-4 py-2 text-sm'
+                    }`}
                   />
                 </div>
               </div>
