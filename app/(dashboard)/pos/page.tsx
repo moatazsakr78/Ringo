@@ -1607,6 +1607,13 @@ function POSPageContent() {
           setShowColumnsModal={setShowColumnsModal}
           handleProductClick={handleProductClick}
           selectedProduct={selectedProduct}
+          showColorSelectionModal={showColorSelectionModal}
+          setShowColorSelectionModal={setShowColorSelectionModal}
+          modalProduct={modalProduct}
+          setModalProduct={setModalProduct}
+          handleColorSelection={handleColorSelection}
+          hasRequiredForCart={hasRequiredForCart}
+          transferFromLocation={transferFromLocation}
           handleCreateInvoice={handleCreateInvoice}
           hasAllRequiredSelections={hasAllRequiredSelections}
           isProcessingInvoice={isProcessingInvoice}

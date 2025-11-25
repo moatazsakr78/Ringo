@@ -6,6 +6,7 @@ import Sidebar from './layout/Sidebar'
 import TopHeader from './layout/TopHeader'
 import PaymentSplit from './PaymentSplit'
 import ResizableTable from './tables/ResizableTable'
+import ColorSelectionModal from './ColorSelectionModal'
 import {
   MagnifyingGlassIcon,
   Squares2X2Icon,
@@ -71,6 +72,15 @@ interface POSTabletViewProps {
   handleProductClick: (product: any) => void
   selectedProduct: any
 
+  // Color Selection Modal
+  showColorSelectionModal: boolean
+  setShowColorSelectionModal: (show: boolean) => void
+  modalProduct: any
+  setModalProduct: (product: any) => void
+  handleColorSelection: (selections: { [key: string]: number }, totalQuantity: number, purchasePrice?: number) => void
+  hasRequiredForCart: () => boolean
+  transferFromLocation: any
+
   // Invoice
   handleCreateInvoice: () => void
   hasAllRequiredSelections: () => boolean
@@ -134,6 +144,13 @@ export default function POSTabletView({
   setShowColumnsModal,
   handleProductClick,
   selectedProduct,
+  showColorSelectionModal,
+  setShowColorSelectionModal,
+  modalProduct,
+  setModalProduct,
+  handleColorSelection,
+  hasRequiredForCart,
+  transferFromLocation,
   handleCreateInvoice,
   hasAllRequiredSelections,
   isProcessingInvoice,
@@ -840,6 +857,22 @@ export default function POSTabletView({
           )}
         </div>
       </div>
+
+      {/* Color Selection Modal */}
+      <ColorSelectionModal
+        isOpen={showColorSelectionModal}
+        onClose={() => {
+          setShowColorSelectionModal(false)
+          setModalProduct(null)
+        }}
+        product={modalProduct}
+        onAddToCart={handleColorSelection}
+        hasRequiredForCart={hasRequiredForCart()}
+        selectedBranchId={selections.branch?.id}
+        isPurchaseMode={isPurchaseMode}
+        isTransferMode={isTransferMode}
+        transferFromLocation={transferFromLocation}
+      />
 
       {/* Tablet-optimized styles */}
       <style jsx global>{`
