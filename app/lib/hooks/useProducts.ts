@@ -265,79 +265,82 @@ export function useProducts() {
             console.warn('Unable to fetch inventory data (likely auth required):', err)
           }
 
-          // Fetch variant definitions and quantities
+          // ✅ Fetch variants from product_variants table
           let variantsData: any[] = []
           try {
             console.log(`🔍 Loading variants for product: ${product.name} (${product.id})`)
 
-            // First, load variant definitions (colors and shapes)
-            const { data: definitions, error: defError } = await supabase
-              .from('product_color_shape_definitions')
+            // Load variants directly from product_variants table
+            const { data: variants, error: variantsError } = await supabase
+              .from('product_variants')
               .select('*')
               .eq('product_id', product.id)
 
-            console.log(`📊 Definitions query result:`, { definitions, defError })
+            console.log(`📊 Variants query result:`, { variants, variantsError })
 
-            if (defError) {
-              console.error('❌ Error loading definitions:', defError)
+            if (variantsError) {
+              console.error('❌ Error loading variants:', variantsError)
             }
 
-            if (!defError && definitions && definitions.length > 0) {
-              console.log(`✅ Found ${definitions.length} definitions for ${product.name}`)
+            if (!variantsError && variants && variants.length > 0) {
+              console.log(`✅ Found ${variants.length} variants for ${product.name}`)
 
-              // Build productColors from color definitions
-              const colorDefinitions = definitions.filter(d => d.variant_type === 'color')
-              if (colorDefinitions.length > 0) {
-                productColors = colorDefinitions.map(d => ({
-                  id: d.id,
-                  name: d.name || '',
-                  color: d.color_hex || '#6B7280',
-                  image: d.image_url || undefined
-                }))
+              // Build productColors from color variants (deduplicate by name)
+              const colorVariants = variants.filter(v => v.variant_type === 'color')
+              if (colorVariants.length > 0) {
+                const uniqueColors = new Map<string, any>()
+                colorVariants.forEach(v => {
+                  if (!uniqueColors.has(v.name)) {
+                    uniqueColors.set(v.name, {
+                      id: v.id,
+                      name: v.name,
+                      color: v.color_hex || '#6B7280',
+                      image: v.image_url || undefined,
+                      barcode: v.barcode || undefined
+                    })
+                  }
+                })
+                productColors = Array.from(uniqueColors.values())
                 console.log(`🎨 Built ${productColors.length} productColors:`, productColors)
               }
 
-              // Load quantities for these definitions
-              const { data: quantities, error: qtyError } = await supabase
-                .from('product_variant_quantities')
-                .select('*')
-                .in('variant_definition_id', definitions.map(d => d.id))
+              // Build variantsData grouped by branch_id
+              const variantsByBranch: Record<string, any[]> = {}
+              variants.forEach(v => {
+                const branchId = v.branch_id
+                if (!variantsByBranch[branchId]) {
+                  variantsByBranch[branchId] = []
+                }
+                variantsByBranch[branchId].push({
+                  id: v.id,
+                  variant_type: v.variant_type,
+                  name: v.name,
+                  quantity: v.quantity || 0,
+                  color_hex: v.color_hex,
+                  color_name: v.color_name,
+                  image_url: v.image_url,
+                  barcode: v.barcode
+                })
+              })
 
-              console.log(`📦 Quantities query result:`, { quantities, qtyError })
+              // Convert to array format for variantsData
+              variantsData = Object.entries(variantsByBranch).flatMap(([branchId, branchVariants]) =>
+                branchVariants.map(v => ({
+                  branch_id: branchId,
+                  warehouse_id: null,
+                  variant_type: v.variant_type,
+                  name: v.name,
+                  value: v.color_hex || '',
+                  quantity: v.quantity,
+                  image_url: v.image_url,
+                  barcode: v.barcode,
+                  id: v.id
+                }))
+              )
 
-              if (qtyError) {
-                console.error('❌ Error loading quantities:', qtyError)
-              }
-
-              if (!qtyError && quantities && quantities.length > 0) {
-                console.log(`✅ Found ${quantities.length} quantities for ${product.name}`)
-
-                // Build variantsData from definitions + quantities
-                variantsData = quantities.map(qty => {
-                  const definition = definitions.find(d => d.id === qty.variant_definition_id)
-                  if (!definition) {
-                    console.warn(`⚠️ No definition found for quantity:`, qty)
-                    return null
-                  }
-
-                  return {
-                    branch_id: qty.branch_id,
-                    warehouse_id: null, // We only support branches for now
-                    variant_type: definition.variant_type,
-                    name: definition.name,
-                    value: definition.color_hex || '',
-                    quantity: qty.quantity || 0,
-                    image_url: definition.image_url,
-                    barcode: definition.barcode
-                  }
-                }).filter(v => v !== null)
-
-                console.log(`✅ Built ${variantsData.length} variantsData for ${product.name}:`, variantsData)
-              } else {
-                console.log(`⚠️ No quantities found for ${product.name}`)
-              }
+              console.log(`✅ Built ${variantsData.length} variantsData for ${product.name}:`, variantsData)
             } else {
-              console.log(`⚠️ No definitions found for ${product.name}`)
+              console.log(`⚠️ No variants found for ${product.name}`)
             }
           } catch (err) {
             console.error('❌ Error fetching variants data:', err)
