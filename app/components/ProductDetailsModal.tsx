@@ -698,20 +698,46 @@ export default function ProductDetailsModal({
             'الحد الأدنى للمخزون': product.min_stock?.toString() || '0',
             'سعر الجملة': product.wholesale_price ? formatPrice(product.wholesale_price) : 'غير محدد'
           },
-          colors: colorVariants?.map(variant => ({
-            id: variant.id,
-            name: variant.color_name || variant.name,
-            hex: variant.color_hex,
-            image_url: variant.image_url,
-            quantity: variant.quantity || 0
-          }))
-          .sort((a, b) => (b.quantity || 0) - (a.quantity || 0)) || [], // Sort by quantity descending
-          shapes: shapeVariants?.map(variant => ({
-            id: variant.id,
-            name: variant.name,
-            image_url: variant.image_url,
-            available: (variant.quantity || 0) > 0
-          })) || [],
+          colors: colorVariants && colorVariants.length > 0
+            ? Object.values(
+                colorVariants.reduce((acc: any, variant: any) => {
+                  const colorKey = variant.color_name || variant.name;
+                  if (!acc[colorKey]) {
+                    acc[colorKey] = {
+                      id: variant.id,
+                      name: colorKey,
+                      hex: variant.color_hex,
+                      image_url: variant.image_url,
+                      quantity: 0
+                    };
+                  }
+                  // Sum quantities from all branches
+                  acc[colorKey].quantity += variant.quantity || 0;
+                  return acc;
+                }, {})
+              ).sort((a: any, b: any) => (b.quantity || 0) - (a.quantity || 0))
+            : [], // Sort by total quantity descending
+          shapes: shapeVariants && shapeVariants.length > 0
+            ? Object.values(
+                shapeVariants.reduce((acc: any, variant: any) => {
+                  const shapeKey = variant.name;
+                  if (!acc[shapeKey]) {
+                    acc[shapeKey] = {
+                      id: variant.id,
+                      name: shapeKey,
+                      image_url: variant.image_url,
+                      quantity: 0
+                    };
+                  }
+                  // Sum quantities from all branches
+                  acc[shapeKey].quantity += variant.quantity || 0;
+                  return acc;
+                }, {})
+              ).map((shape: any) => ({
+                ...shape,
+                available: (shape.quantity || 0) > 0
+              }))
+            : [],
           sizes: [
             ...(sizeVariants?.map(variant => ({
               id: variant.id,

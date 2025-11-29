@@ -21,43 +21,114 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin()
 
-    // Delete old definitions
+    // Delete old variants for this product
     // @ts-ignore - TypeScript has issues with schema type inference
     const { error: deleteError } = await supabaseAdmin
-      .from('product_color_shape_definitions')
+      .from('product_variants')
       .delete()
       .eq('product_id', productId)
 
     if (deleteError) {
-      console.error('❌ Error deleting old definitions:', deleteError)
-      // Continue anyway - the delete might fail if there are no existing definitions
+      console.error('❌ Error deleting old variants:', deleteError)
+      // Continue anyway - the delete might fail if there are no existing variants
     }
 
-    // Prepare color definitions
-    const colorDefinitions = (colors || []).map((color: any, index: number) => ({
-      product_id: productId,
-      variant_type: 'color' as const,
-      name: color.name,
-      color_hex: color.color,
-      image_url: color.image || null,
-      barcode: color.barcode || null,
-      sort_order: index
-    }))
+    // Get all branches
+    // @ts-ignore
+    const { data: branches } = await supabaseAdmin
+      .from('branches')
+      .select('id')
 
-    // Prepare shape definitions
-    const shapeDefinitions = (shapes || []).map((shape: any, index: number) => ({
-      product_id: productId,
-      variant_type: 'shape' as const,
-      name: shape.name || null,
-      color_hex: null,
-      image_url: shape.image_url || null,
-      barcode: shape.barcode || null,
-      sort_order: index
-    }))
+    if (!branches || branches.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No branches found' },
+        { status: 400 }
+      )
+    }
 
-    const allDefinitions = [...colorDefinitions, ...shapeDefinitions]
+    const allVariants: any[] = []
 
-    if (allDefinitions.length === 0) {
+    // Process colors - create variants for each color with quantities from locations
+    if (colors && colors.length > 0) {
+      for (const color of colors) {
+        // Group quantities by branch for this color
+        const colorQuantities = (quantities || []).filter(
+          (q: any) => q.elementType === 'color' && q.elementName === color.name
+        )
+
+        if (colorQuantities.length > 0) {
+          // Create variant for each branch that has this color
+          for (const qty of colorQuantities) {
+            allVariants.push({
+              product_id: productId,
+              branch_id: qty.locationId,
+              variant_type: 'color',
+              name: color.name,
+              color_hex: color.color || null,
+              color_name: color.name,
+              image_url: color.image || null,
+              barcode: color.barcode || null,
+              quantity: qty.quantity || 0
+            })
+          }
+        } else {
+          // If no quantities, create variant for the first branch with quantity 0
+          allVariants.push({
+            product_id: productId,
+            branch_id: branches[0].id,
+            variant_type: 'color',
+            name: color.name,
+            color_hex: color.color || null,
+            color_name: color.name,
+            image_url: color.image || null,
+            barcode: color.barcode || null,
+            quantity: 0
+          })
+        }
+      }
+    }
+
+    // Process shapes - create variants for each shape with quantities from locations
+    if (shapes && shapes.length > 0) {
+      for (const shape of shapes) {
+        // Group quantities by branch for this shape
+        const shapeQuantities = (quantities || []).filter(
+          (q: any) => q.elementType === 'shape' && q.elementName === shape.name
+        )
+
+        if (shapeQuantities.length > 0) {
+          // Create variant for each branch that has this shape
+          for (const qty of shapeQuantities) {
+            allVariants.push({
+              product_id: productId,
+              branch_id: qty.locationId,
+              variant_type: 'shape',
+              name: shape.name,
+              color_hex: null,
+              color_name: null,
+              image_url: shape.image_url || null,
+              barcode: shape.barcode || null,
+              quantity: qty.quantity || 0
+            })
+          }
+        } else {
+          // If no quantities, create variant for the first branch with quantity 0
+          allVariants.push({
+            product_id: productId,
+            branch_id: branches[0].id,
+            variant_type: 'shape',
+            name: shape.name,
+            color_hex: null,
+            color_name: null,
+            image_url: shape.image_url || null,
+            barcode: shape.barcode || null,
+            quantity: 0
+          })
+        }
+      }
+    }
+
+    if (allVariants.length === 0) {
       return NextResponse.json({
         success: true,
         message: 'No variants to save',
@@ -65,71 +136,22 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Insert new definitions using service_role_key
+    // Insert new variants using service_role_key
     // @ts-ignore - TypeScript has issues with schema type inference
-    const { data: savedDefinitions, error: insertError } = await supabaseAdmin
-      .from('product_color_shape_definitions')
-      .insert(allDefinitions)
+    const { data: savedVariants, error: insertError } = await supabaseAdmin
+      .from('product_variants')
+      .insert(allVariants)
       .select()
 
     if (insertError) {
-      console.error('❌ Error inserting variant definitions:', insertError)
+      console.error('❌ Error inserting variants:', insertError)
       return NextResponse.json(
         { success: false, error: insertError.message },
         { status: 500 }
       )
     }
 
-    console.log('✅ Saved variant definitions:', savedDefinitions)
-
-    // Save variant quantities if provided
-    if (quantities && Array.isArray(quantities) && quantities.length > 0 && savedDefinitions && savedDefinitions.length > 0) {
-      console.log('💾 Saving variant quantities...')
-
-      // Delete old quantities for these definitions
-      const definitionIds = savedDefinitions.map((d: any) => d.id)
-      await supabaseAdmin
-        .from('product_variant_quantities')
-        .delete()
-        .in('variant_definition_id', definitionIds)
-
-      // Prepare quantities to save
-      const quantitiesToSave = quantities.map((qty: any) => {
-        // Find the matching definition by name and type
-        const definition = savedDefinitions.find((d: any) =>
-          d.variant_type === qty.elementType &&
-          d.name === qty.elementName
-        )
-
-        if (!definition) {
-          console.warn(`⚠️ No definition found for: ${qty.elementName}`)
-          return null
-        }
-
-        return {
-          variant_definition_id: definition.id,
-          branch_id: qty.locationId,
-          quantity: qty.quantity || 0
-        }
-      }).filter((q: any) => q !== null)
-
-      if (quantitiesToSave.length > 0) {
-        // @ts-ignore - TypeScript has issues with schema type inference
-        const { error: qtyError } = await supabaseAdmin
-          .from('product_variant_quantities')
-          .insert(quantitiesToSave as any)
-
-        if (qtyError) {
-          console.error('❌ Error saving variant quantities:', qtyError)
-          return NextResponse.json(
-            { success: false, error: 'Failed to save quantities: ' + qtyError.message },
-            { status: 500 }
-          )
-        }
-
-        console.log('✅ Saved variant quantities:', quantitiesToSave.length)
-      }
-    }
+    console.log('✅ Saved variants:', savedVariants)
 
     // ✨ Trigger revalidation to update the website immediately
     try {
@@ -151,7 +173,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: savedDefinitions
+      data: savedVariants
     })
 
   } catch (error) {
