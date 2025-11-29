@@ -698,7 +698,7 @@ export default function ProductDetailsModal({
             'الحد الأدنى للمخزون': product.min_stock?.toString() || '0',
             'سعر الجملة': product.wholesale_price ? formatPrice(product.wholesale_price) : 'غير محدد'
           },
-          colors: colorVariants && colorVariants.length > 0
+          colors: (colorVariants && colorVariants.length > 0
             ? Object.values(
                 colorVariants.reduce((acc: any, variant: any) => {
                   const colorKey = variant.color_name || variant.name;
@@ -716,7 +716,7 @@ export default function ProductDetailsModal({
                   return acc;
                 }, {})
               ).sort((a: any, b: any) => (b.quantity || 0) - (a.quantity || 0))
-            : [], // Sort by total quantity descending
+            : []) as ProductColor[], // Sort by total quantity descending
           shapes: shapeVariants && shapeVariants.length > 0
             ? Object.values(
                 shapeVariants.reduce((acc: any, variant: any) => {
