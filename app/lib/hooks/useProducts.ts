@@ -265,21 +265,25 @@ export function useProducts() {
             console.warn('Unable to fetch inventory data (likely auth required):', err)
           }
 
-          // ✅ Fetch variants from product_variants table
+          // ✅ Fetch variants via API (bypasses RLS using service_role)
           let variantsData: any[] = []
           try {
             console.log(`🔍 Loading variants for product: ${product.name} (${product.id})`)
 
-            // Load variants directly from product_variants table
-            const { data: variants, error: variantsError } = await supabase
-              .from('product_variants')
-              .select('*')
-              .eq('product_id', product.id)
+            // Load variants via API endpoint (uses service_role to bypass RLS)
+            const response = await fetch(`/api/products/get-variants?productId=${product.id}`)
+            const result = await response.json()
 
-            console.log(`📊 Variants query result:`, { variants, variantsError })
+            console.log(`📊 Variants API result:`, result)
 
-            if (variantsError) {
+            let variants: any[] = []
+            let variantsError: any = null
+
+            if (!result.success) {
+              variantsError = result.error
               console.error('❌ Error loading variants:', variantsError)
+            } else {
+              variants = result.data || []
             }
 
             if (!variantsError && variants && variants.length > 0) {
@@ -982,40 +986,29 @@ export function useProducts() {
       )
       .subscribe()
 
-    // Variants subscription
-    const variantsChannel = supabase
-      .channel('variants_changes')
+    // ✅ Variant definitions subscription (new system)
+    const variantDefinitionsChannel = supabase
+      .channel('variant_definitions_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'product_variants' },
+        { event: '*', schema: 'public', table: 'product_color_shape_definitions' },
         async (payload: any) => {
-          if (payload.new && payload.new.product_id && (payload.new.branch_id || payload.new.warehouse_id)) {
-            const productId = payload.new.product_id
-            const locationId = payload.new.branch_id || payload.new.warehouse_id
-            
-            // Refetch variants for this product and location
-            const { data: variants } = await supabase
-              .from('product_variants')
-              .select('*')
-              .eq('product_id', productId)
-              .or(`branch_id.eq.${locationId},warehouse_id.eq.${locationId}`)
+          if (payload.new && payload.new.product_id) {
+            // When definitions change, refetch all products to update colors list
+            await fetchProducts()
+          }
+        }
+      )
+      .subscribe()
 
-            setProducts(prev => prev.map(product => {
-              if (product.id === productId) {
-                const updatedVariantsData = {
-                  ...product.variantsData,
-                  [locationId]: (variants || []).map(v => ({
-                    ...v,
-                    variant_type: v.variant_type as 'color' | 'shape'
-                  }))
-                }
-                
-                return {
-                  ...product,
-                  variantsData: updatedVariantsData
-                }
-              }
-              return product
-            }))
+    // ✅ Variant quantities subscription (new system)
+    const variantQuantitiesChannel = supabase
+      .channel('variant_quantities_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'product_variant_quantities' },
+        async (payload: any) => {
+          if (payload.new && payload.new.variant_definition_id) {
+            // When quantities change, refetch products to update variant data
+            await fetchProducts()
           }
         }
       )
@@ -1036,7 +1029,8 @@ export function useProducts() {
     return () => {
       productsChannel.unsubscribe()
       inventoryChannel.unsubscribe()
-      variantsChannel.unsubscribe()
+      variantDefinitionsChannel.unsubscribe()
+      variantQuantitiesChannel.unsubscribe()
       settingsChannel.unsubscribe()
     }
   }, [])

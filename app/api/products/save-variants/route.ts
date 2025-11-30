@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseAdmin } from '../../../lib/supabase/admin'
 
 export async function POST(request: NextRequest) {
+  // ⚠️ DEPRECATED: This endpoint uses the old product_variants system
+  // ✅ NEW SYSTEM: Use ProductVariantDefinitionsModal + ProductVariantQuantitiesModal instead
+  // Those modals save directly to:
+  //   - product_color_shape_definitions (for definitions)
+  //   - product_variant_quantities (for quantities)
+
+  console.warn('⚠️ DEPRECATED ENDPOINT: /api/products/save-variants is deprecated!')
+  console.warn('⚠️ Please use ProductVariantDefinitionsModal + ProductVariantQuantitiesModal instead')
+
+  return NextResponse.json({
+    success: false,
+    error: 'This endpoint is deprecated. Please use the new variant management system (ProductVariantDefinitionsModal + ProductVariantQuantitiesModal).',
+    deprecated: true
+  }, { status: 410 }) // 410 Gone
+
+  /* OLD CODE - DISABLED
   try {
     const body = await request.json()
     const { productId, colors, shapes, quantities } = body
@@ -186,4 +202,5 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+  */
 }
