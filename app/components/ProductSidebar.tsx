@@ -2623,9 +2623,9 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
             </div>
 
             {/* Sub-tab Content */}
-            <div className="flex-1 pt-4">
+            <div className="flex-1 pt-4 pb-8 md:pb-12">
             {activeShapeColorTab === 'شكل وصف' && (
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-y-auto scrollbar-hide max-h-[calc(100vh-280px)] pb-8">
                 {/* Shape Name Section */}
                 <div>
                   <label className="block text-white text-sm font-medium mb-2 text-right">
@@ -2820,7 +2820,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
             )}
 
             {activeShapeColorTab === 'لون المنتج' && (
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-y-auto scrollbar-hide max-h-[calc(100vh-280px)] pb-8">
                 {/* Color Name Section */}
                 <div>
                   <label className="block text-white text-sm font-medium mb-2 text-right">
@@ -2976,7 +2976,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
                 {productColors.length > 0 && (
                   <div className="space-y-3 mt-4">
                     <h4 className="text-white text-sm font-medium text-right">الألوان المضافة:</h4>
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[300px] md:max-h-[350px] overflow-y-auto scrollbar-hide pr-2 pb-2">
                       {productColors.map((color) => (
                         <div
                           key={color.id}
@@ -3094,7 +3094,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
                             {productColors.length > 0 && (
                               <div className="mb-4">
                                 <h4 className="text-white text-sm font-medium mb-3 text-right">الألوان:</h4>
-                                <div className="space-y-2">
+                                <div className="space-y-2 max-h-[300px] md:max-h-[350px] overflow-y-auto scrollbar-hide pr-2 pb-2">
                                   {productColors.map((color) => (
                                     <div key={color.id} className="bg-[#374151] rounded p-3 flex items-center gap-3">
                                       {/* Color Image */}
