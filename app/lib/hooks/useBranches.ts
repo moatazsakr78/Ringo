@@ -115,10 +115,15 @@ export function useBranches() {
       if (quantitiesError) throw quantitiesError
 
       // Step 3: Merge definitions with quantities to match old format
-      const variants = variantDefs.flatMap(def => {
+      const variants: any[] = variantDefs.flatMap(def => {
         const defQuantities = (quantities || []).filter(q => q.variant_definition_id === def.id)
 
         if (defQuantities.length === 0) {
+          // Skip variants with no quantities if branchId is specified
+          if (branchId) {
+            return []
+          }
+
           return [{
             id: def.id,
             product_id: def.product_id,
@@ -128,7 +133,7 @@ export function useBranches() {
             color_hex: def.color_hex,
             color_name: def.name,
             image_url: def.image_url,
-            branch_id: null
+            branch_id: branchId || null
           }]
         }
 
