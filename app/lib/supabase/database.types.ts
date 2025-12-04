@@ -12,7 +12,7 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  elfaroukgroup: {
+  ringo: {
     Tables: {
       auth_accounts: {
         Row: {
@@ -907,7 +907,7 @@ export type Database = {
           fully_paid: boolean | null
           id: string
           invoice_type:
-            | Database["elfaroukgroup"]["Enums"]["invoice_type_enum"]
+            | Database["ringo"]["Enums"]["invoice_type_enum"]
             | null
           notes: string | null
           order_number: string
@@ -933,7 +933,7 @@ export type Database = {
           fully_paid?: boolean | null
           id?: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["invoice_type_enum"]
+            | Database["ringo"]["Enums"]["invoice_type_enum"]
             | null
           notes?: string | null
           order_number: string
@@ -959,7 +959,7 @@ export type Database = {
           fully_paid?: boolean | null
           id?: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["invoice_type_enum"]
+            | Database["ringo"]["Enums"]["invoice_type_enum"]
             | null
           notes?: string | null
           order_number?: string
@@ -1947,7 +1947,7 @@ export type Database = {
           invoice_date: string
           invoice_number: string
           invoice_type:
-            | Database["elfaroukgroup"]["Enums"]["purchase_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["purchase_invoice_type_enum"]
             | null
           is_active: boolean | null
           net_amount: number
@@ -1970,7 +1970,7 @@ export type Database = {
           invoice_date?: string
           invoice_number: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["purchase_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["purchase_invoice_type_enum"]
             | null
           is_active?: boolean | null
           net_amount?: number
@@ -1993,7 +1993,7 @@ export type Database = {
           invoice_date?: string
           invoice_number?: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["purchase_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["purchase_invoice_type_enum"]
             | null
           is_active?: boolean | null
           net_amount?: number
@@ -2137,7 +2137,7 @@ export type Database = {
           id: string
           invoice_number: string
           invoice_type:
-            | Database["elfaroukgroup"]["Enums"]["sales_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["sales_invoice_type_enum"]
             | null
           is_updated: boolean | null
           notes: string | null
@@ -2158,7 +2158,7 @@ export type Database = {
           id?: string
           invoice_number: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["sales_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["sales_invoice_type_enum"]
             | null
           is_updated?: boolean | null
           notes?: string | null
@@ -2179,7 +2179,7 @@ export type Database = {
           id?: string
           invoice_number?: string
           invoice_type?:
-            | Database["elfaroukgroup"]["Enums"]["sales_invoice_type_enum"]
+            | Database["ringo"]["Enums"]["sales_invoice_type_enum"]
             | null
           is_updated?: boolean | null
           notes?: string | null
@@ -3052,7 +3052,7 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  elfaroukgroup: {
+  ringo: {
     Enums: {
       invoice_type_enum: ["Sale", "Purchase", "Sale Return", "Purchase Return"],
       purchase_invoice_type_enum: ["Purchase Invoice", "Purchase Return"],

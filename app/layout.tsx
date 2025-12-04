@@ -12,11 +12,11 @@ import { Providers } from './providers'
 export const metadata: Metadata = {
   title: 'El Farouk Group Store',
   description: 'El Farouk Group Store - أفضل المنتجات بأسعار مميزة',
-  applicationName: 'elfaroukgroup',
+  applicationName: 'ringo',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'elfaroukgroup',
+    title: 'ringo',
   },
   manifest: '/manifest.json',
   icons: {
