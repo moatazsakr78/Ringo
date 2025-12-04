@@ -96,7 +96,7 @@ export default function LoginPage() {
               <div className="h-20 w-20 rounded-lg flex items-center justify-center">
                 <img 
                   src={logoUrl || '/assets/logo/El Farouk Group2.png'} 
-                  alt="El Farouk Group Logo" 
+                  alt="Ringo Store Logo" 
                   className="h-full w-full object-contain rounded-lg"
                 />
               </div>

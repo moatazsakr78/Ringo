@@ -799,7 +799,7 @@ export default function TabletHome({
               <p className="text-gray-400 mb-4">متجرك المتكامل للحصول على أفضل المنتجات بأسعار مميزة وجودة عالية</p>
               <div className="space-y-2 text-gray-400">
                 <p>📞 966+123456789</p>
-                <p>✉️ info@elfarouk-store.com</p>
+                <p>✉️ info@ringo-store.com</p>
                 <p>📍 الرياض، المملكة العربية السعودية</p>
               </div>
             </div>

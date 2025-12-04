@@ -953,7 +953,7 @@ export default function MobileHome({
               <h6 className="font-semibold mb-2 text-sm text-white">تواصل معنا</h6>
               <div className="space-y-1.5 text-gray-400 text-sm">
                 <p>📞 966+123456789</p>
-                <p>✉️ info@elfarouk-store.com</p>
+                <p>✉️ info@ringo-store.com</p>
                 <p>📍 الرياض، المملكة العربية السعودية</p>
               </div>
             </div>
