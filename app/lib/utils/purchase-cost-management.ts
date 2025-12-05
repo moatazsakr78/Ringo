@@ -72,7 +72,10 @@ export async function checkProductPurchaseHistory(productId: string): Promise<Pu
 
     // إذا كان هناك فواتير شراء، لا يمكن تعديل السعر يدوياً
     const lastPurchase = purchaseItems[0]
-    const lastPurchaseDate = lastPurchase?.purchase_invoices?.invoice_date || lastPurchase?.created_at
+    const purchaseInvoice = Array.isArray(lastPurchase?.purchase_invoices)
+      ? lastPurchase.purchase_invoices[0]
+      : lastPurchase?.purchase_invoices
+    const lastPurchaseDate = purchaseInvoice?.invoice_date || lastPurchase?.created_at
 
     return {
       hasPurchaseHistory: true,
