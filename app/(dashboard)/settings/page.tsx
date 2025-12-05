@@ -1172,31 +1172,26 @@ export default function SettingsPage() {
       const response = await fetch(croppedImage);
       const blob = await response.blob();
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const filename = `logo_${timestamp}.png`;
+      // Create FormData to send to API
+      const formData = new FormData();
+      formData.append('file', blob, 'logo.png');
 
-      // Upload to Supabase Storage
-      const { data: uploadData, error: uploadError } = await (supabase as any).storage
-        .from('company-logos')
-        .upload(filename, blob, {
-          contentType: 'image/png',
-          upsert: true
-        });
+      // Upload via API route (uses service_role_key on server)
+      const uploadResponse = await fetch('/api/upload-logo', {
+        method: 'POST',
+        body: formData
+      });
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        alert('حدث خطأ أثناء رفع الصورة');
+      const result = await uploadResponse.json();
+
+      if (!uploadResponse.ok || !result.success) {
+        console.error('Upload error:', result.error, result.details);
+        alert('حدث خطأ أثناء رفع الصورة: ' + (result.details || result.error));
         return;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = (supabase as any).storage
-        .from('company-logos')
-        .getPublicUrl(filename);
-
       // Set the public URL
-      setLogoUrl(publicUrl);
+      setLogoUrl(result.publicUrl);
       setLogoShape(shape);
       setIsLogoEditorOpen(false);
       setSelectedLogoFile(null);
