@@ -22,11 +22,11 @@ export function useCompanySettings() {
   };
 
   return {
-    companyName: companySettings.name,
-    logoUrl: companySettings.logoUrl,
-    logoShape: companySettings.logoShape,
-    socialMedia: companySettings.socialMedia,
-    branches: companySettings.branches,
+    companyName: companySettings.name || '',
+    logoUrl: companySettings.logoUrl || '',
+    logoShape: companySettings.logoShape || 'square',
+    socialMedia: Array.isArray(companySettings.socialMedia) ? companySettings.socialMedia : [{ platform: '', link: '' }],
+    branches: Array.isArray(companySettings.branches) ? companySettings.branches : [],
     updateCompanySettings,
     isLoading
   };

@@ -114,18 +114,25 @@ export const SystemSettingsProvider: React.FC<SystemSettingsProviderProps> = ({ 
         setSettings(DEFAULT_SETTINGS);
       } else if (settingsData?.settings_data) {
         // Merge with defaults to ensure all properties exist
+        const data = settingsData.settings_data;
         const loadedSettings = {
           ...DEFAULT_SETTINGS,
-          ...settingsData.settings_data,
-          // Ensure nested objects are properly merged
-          currency: { ...DEFAULT_SETTINGS.currency, ...settingsData.settings_data.currency },
-          website: { ...DEFAULT_SETTINGS.website, ...settingsData.settings_data.website },
-          ui: { ...DEFAULT_SETTINGS.ui, ...settingsData.settings_data.ui },
-          system: { ...DEFAULT_SETTINGS.system, ...settingsData.settings_data.system },
-          pos: { ...DEFAULT_SETTINGS.pos, ...settingsData.settings_data.pos },
-          reports: { ...DEFAULT_SETTINGS.reports, ...settingsData.settings_data.reports },
-          security: { ...DEFAULT_SETTINGS.security, ...settingsData.settings_data.security },
-          company: { ...DEFAULT_SETTINGS.company, ...settingsData.settings_data.company }
+          ...data,
+          // Ensure nested objects are properly merged with safe checks
+          currency: { ...DEFAULT_SETTINGS.currency, ...(data.currency || {}) },
+          website: { ...DEFAULT_SETTINGS.website, ...(data.website || {}) },
+          ui: { ...DEFAULT_SETTINGS.ui, ...(data.ui || {}) },
+          system: { ...DEFAULT_SETTINGS.system, ...(data.system || {}) },
+          pos: { ...DEFAULT_SETTINGS.pos, ...(data.pos || {}) },
+          reports: { ...DEFAULT_SETTINGS.reports, ...(data.reports || {}) },
+          security: { ...DEFAULT_SETTINGS.security, ...(data.security || {}) },
+          company: {
+            ...DEFAULT_SETTINGS.company,
+            ...(data.company || {}),
+            // Ensure socialMedia and branches are always arrays
+            socialMedia: Array.isArray(data.company?.socialMedia) ? data.company.socialMedia : DEFAULT_SETTINGS.company.socialMedia,
+            branches: Array.isArray(data.company?.branches) ? data.company.branches : DEFAULT_SETTINGS.company.branches
+          }
         };
         setSettings(loadedSettings);
       } else {
