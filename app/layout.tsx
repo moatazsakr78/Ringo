@@ -20,8 +20,8 @@ export const metadata: Metadata = {
   },
   manifest: '/manifest.json',
   icons: {
-    icon: '/assets/logo/El Farouk Group2.png',
-    apple: '/assets/logo/El Farouk Group2.png',
+    icon: '/assets/logo/Ringo.png',
+    apple: '/assets/logo/Ringo.png',
   },
   other: {
     'theme-color': '#DC2626',

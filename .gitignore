@@ -177,3 +177,7 @@ temp/
 
 # Sensitive API credentials
 money-check.json
+
+# Debug files with secrets
+DEBUG_GOOGLE_OAUTH.md
+GOOGLE_OAUTH_FIX.md
