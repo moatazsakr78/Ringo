@@ -272,8 +272,8 @@ export default function SettingsPage() {
   const [companyName, setCompanyName] = useState(dbCompanyName);
   const [logoUrl, setLogoUrl] = useState(dbLogoUrl);
   const [logoShape, setLogoShape] = useState<'square' | 'circle'>(dbLogoShape);
-  const [socialMedia, setSocialMedia] = useState(dbSocialMedia);
-  const [branches, setBranches] = useState(dbBranches);
+  const [socialMedia, setSocialMedia] = useState(dbSocialMedia || [{ platform: '', link: '' }]);
+  const [branches, setBranches] = useState(dbBranches || []);
 
   // State for database branches
   const [dbBranchesFromDB, setDbBranchesFromDB] = useState<any[]>([]);
@@ -305,8 +305,8 @@ export default function SettingsPage() {
   useEffect(() => {
     setCompanyName(dbCompanyName);
     setLogoUrl(dbLogoUrl);
-    setSocialMedia(dbSocialMedia);
-    setBranches(dbBranches);
+    setSocialMedia(dbSocialMedia || [{ platform: '', link: '' }]);
+    setBranches(dbBranches || []);
   }, [dbCompanyName, dbLogoUrl, dbSocialMedia, dbBranches]);
 
   // Load branches from database
