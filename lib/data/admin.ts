@@ -15,7 +15,7 @@ import { SCHEMA_NAME } from '@/lib/config/schema';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-const supabase = createClient<Database, typeof SCHEMA_NAME>(supabaseUrl, supabaseAnonKey, {
+const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   db: {
     schema: SCHEMA_NAME // Use schema from central config
   },

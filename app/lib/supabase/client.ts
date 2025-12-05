@@ -10,12 +10,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Singleton instance for main client
-let supabaseInstance: SupabaseClient<Database, typeof SCHEMA_NAME> | null = null
+let supabaseInstance: SupabaseClient<Database> | null = null
 
 // Get singleton client instance
-export const getSupabase = (): SupabaseClient<Database, typeof SCHEMA_NAME> => {
+export const getSupabase = (): SupabaseClient<Database> => {
   if (!supabaseInstance) {
-    supabaseInstance = createClient<Database, typeof SCHEMA_NAME>(supabaseUrl, supabaseAnonKey, {
+    supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       db: {
         schema: SCHEMA_NAME // Use schema from central config
       },
