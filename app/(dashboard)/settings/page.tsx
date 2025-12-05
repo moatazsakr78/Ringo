@@ -1166,11 +1166,46 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLogoSave = (croppedImage: string, shape: 'square' | 'circle') => {
-    setLogoUrl(croppedImage);
-    setLogoShape(shape);
-    setIsLogoEditorOpen(false);
-    setSelectedLogoFile(null);
+  const handleLogoSave = async (croppedImage: string, shape: 'square' | 'circle') => {
+    try {
+      // Convert base64 to blob
+      const response = await fetch(croppedImage);
+      const blob = await response.blob();
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const filename = `logo_${timestamp}.png`;
+
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await (supabase as any).storage
+        .from('company-logos')
+        .upload(filename, blob, {
+          contentType: 'image/png',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        alert('حدث خطأ أثناء رفع الصورة');
+        return;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = (supabase as any).storage
+        .from('company-logos')
+        .getPublicUrl(filename);
+
+      // Set the public URL
+      setLogoUrl(publicUrl);
+      setLogoShape(shape);
+      setIsLogoEditorOpen(false);
+      setSelectedLogoFile(null);
+
+      alert('تم رفع اللوجو بنجاح! اضغط "حفظ الإعدادات" لتأكيد التغييرات.');
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      alert('حدث خطأ أثناء رفع اللوجو');
+    }
   };
 
   const handleLogoCancel = () => {
