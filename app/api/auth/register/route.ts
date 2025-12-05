@@ -1,16 +1,6 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin as supabase } from "@/app/lib/supabase/admin"
 import bcrypt from "bcryptjs"
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    db: {
-      schema: 'ringo' // Use ringo schema for multi-tenant architecture
-    }
-  }
-)
 
 export async function POST(req: Request) {
   try {
@@ -39,7 +29,7 @@ export async function POST(req: Request) {
       user_email: email,
       user_password: passwordHash,
       user_name: name || email.split('@')[0]
-    })
+    }) as { data: any; error: any }
 
     if (error) {
       console.error('Database error:', error)
@@ -50,9 +40,9 @@ export async function POST(req: Request) {
     }
 
     // Check if registration was successful
-    if (!data.success) {
+    if (!data || !data.success) {
       return NextResponse.json(
-        { error: data.error || "فشل إنشاء الحساب" },
+        { error: data?.error || "فشل إنشاء الحساب" },
         { status: 400 }
       )
     }

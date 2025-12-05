@@ -2,22 +2,7 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
-import { createClient } from "@supabase/supabase-js"
-
-// Create Supabase client for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    db: {
-      schema: 'ringo' // Use ringo schema for multi-tenant architecture
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  }
-)
+import { supabaseAdmin as supabase } from "@/app/lib/supabase/admin"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
@@ -49,7 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const { data: authUsers, error: authError } = await supabase
             .from('auth_users')
             .select('id, email, name, image, password_hash')
-            .eq('email', credentials.email)
+            .eq('email', credentials.email as string)
             .limit(1)
 
           if (authError) {

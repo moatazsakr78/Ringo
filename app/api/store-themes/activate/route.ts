@@ -1,24 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { auth } from '@/lib/auth.config';
+import { supabaseAdmin } from '@/app/lib/supabase/admin';
 
 // Force Node.js runtime (required for auth)
 export const runtime = 'nodejs';
-
-// Create Supabase client with service role for admin operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    db: {
-      schema: 'ringo'
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  }
-);
 
 // POST - Activate a theme
 export async function POST(request: Request) {

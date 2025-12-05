@@ -1,21 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth.config'
-import { createClient } from '@supabase/supabase-js'
-
-// Create Supabase client with service role (bypasses RLS)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    db: {
-      schema: 'ringo' // Use ringo schema for multi-tenant architecture
-    },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  }
-)
+import { supabaseAdmin } from '@/app/lib/supabase/admin'
 
 export async function GET() {
   try {

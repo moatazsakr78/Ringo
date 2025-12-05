@@ -1,26 +1,27 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
+import { SCHEMA_NAME } from '@/lib/config/schema'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 // Singleton instance for admin client
-let supabaseAdminInstance: SupabaseClient<Database, 'ringo'> | null = null
+let supabaseAdminInstance: SupabaseClient<Database, typeof SCHEMA_NAME> | null = null
 
 /**
  * Get Supabase Admin Client (Server-side only!)
  * This client bypasses RLS policies - use with caution
  * Only use in API routes with proper authorization checks
  */
-export const getSupabaseAdmin = (): SupabaseClient<Database, 'ringo'> => {
+export const getSupabaseAdmin = (): SupabaseClient<Database, typeof SCHEMA_NAME> => {
   if (!supabaseAdminInstance) {
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error('Missing Supabase admin environment variables')
     }
 
-    supabaseAdminInstance = createClient<Database, 'ringo'>(supabaseUrl, supabaseServiceRoleKey, {
+    supabaseAdminInstance = createClient<Database, typeof SCHEMA_NAME>(supabaseUrl, supabaseServiceRoleKey, {
       db: {
-        schema: 'ringo' // Use ringo schema for multi-tenant architecture
+        schema: SCHEMA_NAME // Use schema from central config
       },
       auth: {
         autoRefreshToken: false,

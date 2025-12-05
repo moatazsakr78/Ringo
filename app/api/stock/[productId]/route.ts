@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from '@/app/lib/supabase/database.types';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient<Database, 'ringo'>(supabaseUrl, supabaseAnonKey, {
-  db: {
-    schema: 'ringo' // Use ringo schema for multi-tenant architecture
-  }
-});
+import { supabase } from '@/app/lib/supabase/client';
 
 /**
  * GET /api/stock/[productId]

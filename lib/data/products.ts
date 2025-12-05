@@ -5,14 +5,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/app/lib/supabase/database.types';
+import { SCHEMA_NAME } from '@/lib/config/schema';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 // Create a server-side Supabase client
-const supabase = createClient<Database, 'ringo'>(supabaseUrl, supabaseAnonKey, {
+const supabase = createClient<Database, typeof SCHEMA_NAME>(supabaseUrl, supabaseAnonKey, {
   db: {
-    schema: 'ringo' // Use ringo schema for multi-tenant architecture
+    schema: SCHEMA_NAME // Use schema from central config
   },
   auth: {
     persistSession: false, // Don't persist sessions on server

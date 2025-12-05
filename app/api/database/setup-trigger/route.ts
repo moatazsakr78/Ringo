@@ -1,17 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+import { supabaseAdmin as supabase } from '@/app/lib/supabase/admin';
 
 export async function POST(request: NextRequest) {
   try {
-    // Create Supabase admin client
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      db: {
-        schema: 'ringo' // Use ringo schema for multi-tenant architecture
-      }
-    });
 
     // Get authorization header
     const authHeader = request.headers.get('authorization');
