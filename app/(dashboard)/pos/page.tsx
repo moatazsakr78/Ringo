@@ -90,6 +90,7 @@ import TopHeader from "../../components/layout/TopHeader";
 import RecordsSelectionModal from "../../components/RecordsSelectionModal";
 import CustomerSelectionModal from "../../components/CustomerSelectionModal";
 import BranchSelectionModal from "../../components/BranchSelectionModal";
+import PriceTypeSelectionModal, { PriceType, getPriceTypeName } from "../../components/PriceTypeSelectionModal";
 import HistoryModal from "../../components/HistoryModal";
 import AddToCartModal from "../../components/AddToCartModal";
 import ColorSelectionModal from "../../components/ColorSelectionModal";
@@ -100,6 +101,7 @@ import QuickAddProductModal from "../../components/QuickAddProductModal";
 import ColumnsControlModal from "../../components/ColumnsControlModal";
 import PaymentSplit from "../../components/PaymentSplit";
 import POSTabletView from "../../components/POSTabletView";
+import DiscountModal from "../../components/DiscountModal";
 import { useProductsAdmin } from "../../../lib/hooks/useProductsAdmin";
 import { Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
@@ -130,6 +132,8 @@ import {
   BuildingStorefrontIcon,
   ArrowUturnLeftIcon,
   PrinterIcon,
+  CurrencyDollarIcon,
+  ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
 
 function POSPageContent() {
@@ -203,6 +207,10 @@ function POSPageContent() {
   // Returns State - simple toggle
   const [isReturnMode, setIsReturnMode] = useState(false);
 
+  // Price Type Selection State
+  const [selectedPriceType, setSelectedPriceType] = useState<PriceType>("price");
+  const [isPriceTypeModalOpen, setIsPriceTypeModalOpen] = useState(false);
+
   // Transfer Mode States
   const [isTransferMode, setIsTransferMode] = useState(false);
   const [transferFromLocation, setTransferFromLocation] = useState<any>(null);
@@ -221,6 +229,11 @@ function POSPageContent() {
   // Payment Split States
   const [paymentSplitData, setPaymentSplitData] = useState<any[]>([]);
   const [creditAmount, setCreditAmount] = useState<number>(0);
+
+  // Discount States
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [cartDiscount, setCartDiscount] = useState<number>(0);
+  const [cartDiscountType, setCartDiscountType] = useState<"percentage" | "fixed">("percentage");
 
   // Use persistent selections hook
   const {
@@ -820,6 +833,28 @@ function POSPageContent() {
     });
   }, [products, isLoading]);
 
+  // Helper function to get product price based on selected price type
+  // لو السعر مش موجود بيرجع 0 مش سعر البيع - علشان المستخدم يلاحظ إن السعر ناقص
+  const getProductPriceByType = useCallback((product: any): number => {
+    if (!product) return 0;
+    switch (selectedPriceType) {
+      case "price":
+        return product.price || 0;
+      case "wholesale_price":
+        return product.wholesale_price || 0;
+      case "price1":
+        return product.price1 || 0;
+      case "price2":
+        return product.price2 || 0;
+      case "price3":
+        return product.price3 || 0;
+      case "price4":
+        return product.price4 || 0;
+      default:
+        return product.price || 0;
+    }
+  }, [selectedPriceType]);
+
   // OPTIMIZED: Memoized POS Cart Functions
   const handleAddToCart = useCallback(
     (product: any, quantity: number, selectedColor?: string) => {
@@ -868,12 +903,13 @@ function POSPageContent() {
           newCart = newCartItems;
         } else {
           // New product - create new cart item
+          const productPrice = getProductPriceByType(product);
           const newCartItem = {
             id: product.id.toString(),
             product: product,
             quantity: quantity,
-            price: product.price || 0,
-            total: (product.price || 0) * quantity,
+            price: productPrice,
+            total: productPrice * quantity,
             selectedColors: selectedColor
               ? { [selectedColor]: quantity }
               : undefined,
@@ -888,8 +924,8 @@ function POSPageContent() {
         return newCart;
       });
     },
-    [updateActiveTabCart],
-  ); // Empty dependency array since we only need cartItems state
+    [updateActiveTabCart, getProductPriceByType],
+  );
 
   // OPTIMIZED: Remove from Cart
   const removeFromCart = useCallback((itemId: string) => {
@@ -904,7 +940,68 @@ function POSPageContent() {
   const clearCart = useCallback(() => {
     setCartItems([]);
     clearActiveTabCart();
+    // Reset discount when clearing cart
+    setCartDiscount(0);
+    setCartDiscountType("percentage");
   }, [clearActiveTabCart]);
+
+  // Discount Functions
+  const handleApplyItemDiscount = useCallback((itemId: string, discount: number, discountType: "percentage" | "fixed") => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, discount, discountType }
+          : item
+      )
+    );
+  }, []);
+
+  const handleApplyCartDiscount = useCallback((discount: number, discountType: "percentage" | "fixed") => {
+    setCartDiscount(discount);
+    setCartDiscountType(discountType);
+  }, []);
+
+  const handleRemoveItemDiscount = useCallback((itemId: string) => {
+    setCartItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? { ...item, discount: undefined, discountType: undefined }
+          : item
+      )
+    );
+  }, []);
+
+  const handleRemoveCartDiscount = useCallback(() => {
+    setCartDiscount(0);
+    setCartDiscountType("percentage");
+  }, []);
+
+  // Calculate total with discounts
+  const calculateTotalWithDiscounts = useCallback(() => {
+    // First calculate items total with item-level discounts
+    let itemsTotal = cartItems.reduce((sum, item) => {
+      let itemTotal = item.price * item.quantity;
+      if (item.discount) {
+        if (item.discountType === "percentage") {
+          itemTotal -= (itemTotal * item.discount) / 100;
+        } else {
+          itemTotal -= item.discount;
+        }
+      }
+      return sum + Math.max(0, itemTotal);
+    }, 0);
+
+    // Then apply cart-level discount
+    if (cartDiscount > 0) {
+      if (cartDiscountType === "percentage") {
+        itemsTotal -= (itemsTotal * cartDiscount) / 100;
+      } else {
+        itemsTotal -= cartDiscount;
+      }
+    }
+
+    return Math.max(0, itemsTotal);
+  }, [cartItems, cartDiscount, cartDiscountType]);
 
   const handleColorSelection = (
     selections: { [key: string]: number },
@@ -918,7 +1015,7 @@ function POSPageContent() {
       price:
         isPurchaseMode && purchasePrice !== undefined
           ? purchasePrice
-          : modalProduct.price || 0,
+          : getProductPriceByType(modalProduct),
     };
 
     // البحث عن المنتج في السلة
@@ -1187,6 +1284,8 @@ function POSPageContent() {
       // Reset to default customer after sales (not purchase or transfer)
       if (!isPurchaseMode && !isTransferMode) {
         await resetToDefaultCustomer();
+        // Reset price type to default (سعر البيع) after invoice
+        setSelectedPriceType("price");
       }
 
       // Exit return mode after successful return
@@ -2114,6 +2213,24 @@ function POSPageContent() {
                   </button>
                 )}
 
+                {/* Price Type Button */}
+                {!isPurchaseMode && !isTransferMode && (
+                  <button
+                    onClick={() => setIsPriceTypeModalOpen(true)}
+                    className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all relative ${
+                      selectedPriceType !== "price"
+                        ? "text-blue-400 hover:text-blue-300"
+                        : "text-gray-300 hover:text-white"
+                    }`}
+                  >
+                    <CurrencyDollarIcon className="h-5 w-5 mb-1" />
+                    <span className="text-sm">السعر</span>
+                    {selectedPriceType !== "price" && (
+                      <div className="w-1 h-1 bg-blue-400 rounded-full mt-1"></div>
+                    )}
+                  </button>
+                )}
+
                 {/* Separator */}
                 <div className="h-8 w-px bg-gray-600 mx-2"></div>
 
@@ -2153,6 +2270,24 @@ function POSPageContent() {
                   <HomeIcon className="h-5 w-5 mb-1" />
                   <span className="text-sm">عرض المجموعات</span>
                 </button>
+
+                {/* Discount Button */}
+                {!isPurchaseMode && !isTransferMode && (
+                  <button
+                    onClick={() => setIsDiscountModalOpen(true)}
+                    className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
+                      cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)
+                        ? "text-orange-400 hover:text-orange-300"
+                        : "text-gray-300 hover:text-white"
+                    }`}
+                  >
+                    <ReceiptPercentIcon className="h-5 w-5 mb-1" />
+                    <span className="text-sm">خصم</span>
+                    {(cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)) && (
+                      <div className="w-1 h-1 bg-orange-400 rounded-full mt-1"></div>
+                    )}
+                  </button>
+                )}
 
                 <button
                   onClick={() => setShowPrintReceiptModal(true)}
@@ -2296,6 +2431,24 @@ function POSPageContent() {
                 </button>
               )}
 
+              {/* Price Type Button - Mobile */}
+              {!isPurchaseMode && !isTransferMode && (
+                <button
+                  onClick={() => setIsPriceTypeModalOpen(true)}
+                  className={`flex items-center gap-2 px-3 py-2 border border-gray-600 rounded cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative ${
+                    selectedPriceType !== "price"
+                      ? "bg-blue-600 text-white hover:bg-blue-700 border-blue-500"
+                      : "bg-[#2B3544] text-gray-300 hover:text-white hover:bg-[#374151]"
+                  }`}
+                >
+                  <CurrencyDollarIcon className="h-4 w-4" />
+                  <span className="text-xs">السعر</span>
+                  {selectedPriceType !== "price" && (
+                    <div className="w-1 h-1 bg-blue-300 rounded-full absolute -top-1 -right-1"></div>
+                  )}
+                </button>
+              )}
+
               {/* Other Action Buttons */}
               <button
                 onClick={() => setShowColumnsModal(true)}
@@ -2332,6 +2485,24 @@ function POSPageContent() {
                 <HomeIcon className="h-4 w-4" />
                 <span className="text-xs">عرض المجموعات</span>
               </button>
+
+              {/* Discount Button - Mobile */}
+              {!isPurchaseMode && !isTransferMode && (
+                <button
+                  onClick={() => setIsDiscountModalOpen(true)}
+                  className={`flex items-center gap-2 px-3 py-2 border border-gray-600 rounded cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative ${
+                    cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)
+                      ? "bg-orange-600 text-white hover:bg-orange-700 border-orange-500"
+                      : "bg-[#2B3544] text-gray-300 hover:text-white hover:bg-[#374151]"
+                  }`}
+                >
+                  <ReceiptPercentIcon className="h-4 w-4" />
+                  <span className="text-xs">خصم</span>
+                  {(cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)) && (
+                    <div className="w-1 h-1 bg-orange-300 rounded-full absolute -top-1 -right-1"></div>
+                  )}
+                </button>
+              )}
 
               <button
                 onClick={() => setShowPrintReceiptModal(true)}
@@ -2438,6 +2609,16 @@ function POSPageContent() {
                   {selections.record ? selections.record.name : "غير محدد"}
                 </span>
               </span>
+
+              {/* Price Type Display */}
+              {!isPurchaseMode && !isTransferMode && (
+                <span className="text-gray-300 whitespace-nowrap">
+                  السعر:{" "}
+                  <span className={`font-medium ${selectedPriceType !== "price" ? "text-blue-400" : "text-white"}`}>
+                    {getPriceTypeName(selectedPriceType)}
+                  </span>
+                </span>
+              )}
 
               {/* Clear all button - if any selections exist */}
               {(selections.customer ||
@@ -2644,7 +2825,21 @@ function POSPageContent() {
                 </span>
               </div>
 
-              {/* 7. Clear All Button */}
+              {/* 7. Price Type Info - Mobile */}
+              {!isPurchaseMode && !isTransferMode && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className="text-xs text-gray-400">السعر:</span>
+                  <span className={`text-xs px-2 py-1 rounded border ${
+                    selectedPriceType !== "price"
+                      ? "text-blue-400 bg-blue-600/20 border-blue-500"
+                      : "text-white bg-[#2B3544] border-gray-600"
+                  }`}>
+                    {getPriceTypeName(selectedPriceType)}
+                  </span>
+                </div>
+              )}
+
+              {/* 8. Clear All Button */}
               {(selections.customer ||
                 selections.branch ||
                 selections.record) && (
@@ -2847,7 +3042,7 @@ function POSPageContent() {
                     {/* Payment Split Component - Only show in sales mode (not transfer or purchase) */}
                     {!isTransferMode && !isPurchaseMode && !isReturnMode && (
                       <PaymentSplit
-                        totalAmount={cartTotal}
+                        totalAmount={calculateTotalWithDiscounts()}
                         onPaymentsChange={(payments, credit) => {
                           setPaymentSplitData(payments);
                           setCreditAmount(credit);
@@ -2861,10 +3056,28 @@ function POSPageContent() {
                       <div className="flex-shrink-0">
                         {!isTransferMode ? (
                           <div className="text-right">
-                            <div className="text-white text-sm font-medium">الإجمالي:</div>
-                            <div className="text-green-400 font-bold text-lg">
-                              {formatPrice(cartTotal, "system")}
-                            </div>
+                            {(cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)) ? (
+                              <>
+                                <div className="flex items-center gap-2 justify-end">
+                                  <span className="text-gray-400 text-xs line-through">
+                                    {formatPrice(cartTotal, "system")}
+                                  </span>
+                                  <span className="text-orange-400 text-xs">
+                                    خصم {cartDiscount > 0 ? (cartDiscountType === "percentage" ? `${cartDiscount}%` : `${cartDiscount} ج.م`) : ""}
+                                  </span>
+                                </div>
+                                <div className="text-green-400 font-bold text-lg">
+                                  {formatPrice(calculateTotalWithDiscounts(), "system")}
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-white text-sm font-medium">الإجمالي:</div>
+                                <div className="text-green-400 font-bold text-lg">
+                                  {formatPrice(cartTotal, "system")}
+                                </div>
+                              </>
+                            )}
                           </div>
                         ) : (
                           <div className="text-right">
@@ -3016,7 +3229,7 @@ function POSPageContent() {
                                 {/* Price */}
                                 <div className="flex justify-center mb-2">
                                   <span className="text-blue-400 font-medium text-sm">
-                                    {(product.price || 0).toFixed(2)}
+                                    {getProductPriceByType(product).toFixed(2)}
                                   </span>
                                 </div>
 
@@ -3278,7 +3491,7 @@ function POSPageContent() {
               {/* Payment Split Component - Only show in sales mode (not transfer or purchase) */}
               {!isTransferMode && !isPurchaseMode && !isReturnMode && (
                 <PaymentSplit
-                  totalAmount={cartTotal}
+                  totalAmount={calculateTotalWithDiscounts()}
                   onPaymentsChange={(payments, credit) => {
                     setPaymentSplitData(payments);
                     setCreditAmount(credit);
@@ -3292,10 +3505,28 @@ function POSPageContent() {
                 <div className="flex-shrink-0">
                   {!isTransferMode ? (
                     <div className="text-right">
-                      <div className="text-white text-sm font-medium">الإجمالي:</div>
-                      <div className="text-green-400 font-bold text-lg">
-                        {formatPrice(cartTotal, "system")}
-                      </div>
+                      {(cartDiscount > 0 || cartItems.some(item => item.discount && item.discount > 0)) ? (
+                        <>
+                          <div className="flex items-center gap-2 justify-end">
+                            <span className="text-gray-400 text-xs line-through">
+                              {formatPrice(cartTotal, "system")}
+                            </span>
+                            <span className="text-orange-400 text-xs">
+                              خصم {cartDiscount > 0 ? (cartDiscountType === "percentage" ? `${cartDiscount}%` : `${cartDiscount} ج.م`) : ""}
+                            </span>
+                          </div>
+                          <div className="text-green-400 font-bold text-lg">
+                            {formatPrice(calculateTotalWithDiscounts(), "system")}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-white text-sm font-medium">الإجمالي:</div>
+                          <div className="text-green-400 font-bold text-lg">
+                            {formatPrice(cartTotal, "system")}
+                          </div>
+                        </>
+                      )}
                     </div>
                   ) : (
                     <div className="text-right">
@@ -3437,6 +3668,27 @@ function POSPageContent() {
         isOpen={isTransferLocationModalOpen}
         onClose={() => setIsTransferLocationModalOpen(false)}
         onConfirm={handleTransferLocationConfirm}
+      />
+
+      {/* Price Type Selection Modal */}
+      <PriceTypeSelectionModal
+        isOpen={isPriceTypeModalOpen}
+        onClose={() => setIsPriceTypeModalOpen(false)}
+        selectedPriceType={selectedPriceType}
+        onSelectPriceType={setSelectedPriceType}
+      />
+
+      {/* Discount Modal */}
+      <DiscountModal
+        isOpen={isDiscountModalOpen}
+        onClose={() => setIsDiscountModalOpen(false)}
+        cartItems={cartItems}
+        cartDiscount={cartDiscount}
+        cartDiscountType={cartDiscountType}
+        onApplyItemDiscount={handleApplyItemDiscount}
+        onApplyCartDiscount={handleApplyCartDiscount}
+        onRemoveItemDiscount={handleRemoveItemDiscount}
+        onRemoveCartDiscount={handleRemoveCartDiscount}
       />
 
       {/* Quick Add Product Modal */}
