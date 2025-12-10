@@ -118,6 +118,8 @@ export default function ExcelProductModal({
     failed: number
     errors: string[]
   } | null>(null)
+  const [importCompleted, setImportCompleted] = useState(false) // New state to track completion
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false) // New state for success popup
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // History state
@@ -131,6 +133,20 @@ export default function ExcelProductModal({
       loadImportHistory()
     }
   }, [activeTab, isOpen])
+
+  // Reset import states when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setImportCompleted(false)
+      setShowSuccessMessage(false)
+      setImportResults(null)
+      setSelectedFile(null)
+      setFileColumns([])
+      setColumnMapping({})
+      setPreviewData([])
+      setImportProgress(0)
+    }
+  }, [isOpen])
 
   const loadImportHistory = async () => {
     setIsLoadingHistory(true)
@@ -419,6 +435,14 @@ export default function ExcelProductModal({
 
       if (successCount > 0) {
         onImportComplete()
+        setImportCompleted(true)
+        setShowSuccessMessage(true)
+
+        // Auto close after 3 seconds on successful import
+        setTimeout(() => {
+          setShowSuccessMessage(false)
+          onClose()
+        }, 3000)
       }
 
     } catch (error: any) {
@@ -803,8 +827,36 @@ export default function ExcelProductModal({
                 </div>
               )}
 
+              {/* Success Message Popup */}
+              {showSuccessMessage && importResults && importResults.success > 0 && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60]">
+                  <div className="bg-[#2B3544] rounded-2xl p-8 text-center max-w-md mx-4 animate-pulse-once shadow-2xl border border-green-500/30">
+                    <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircleIcon className="w-12 h-12 text-green-400" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">تم الاستيراد بنجاح!</h3>
+                    <p className="text-gray-400 mb-4">
+                      تم استيراد <span className="text-green-400 font-bold">{importResults.success}</span> منتج بنجاح
+                      {importResults.failed > 0 && (
+                        <span className="text-yellow-400"> ({importResults.failed} فشل)</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-500">سيتم إغلاق النافذة تلقائياً...</p>
+                    <button
+                      onClick={() => {
+                        setShowSuccessMessage(false)
+                        onClose()
+                      }}
+                      className="mt-4 px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                    >
+                      إغلاق الآن
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Import Results */}
-              {importResults && (
+              {importResults && !showSuccessMessage && (
                 <div className={`p-4 rounded-lg ${
                   importResults.failed === 0 ? 'bg-green-500/10 border border-green-500/30' :
                   importResults.success === 0 ? 'bg-red-500/10 border border-red-500/30' :
@@ -845,11 +897,15 @@ export default function ExcelProductModal({
               {/* Import Button */}
               <button
                 onClick={handleImport}
-                disabled={isImporting || !selectedFile || !columnMapping['name']}
-                className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+                disabled={isImporting || importCompleted || !selectedFile || !columnMapping['name']}
+                className={`w-full ${
+                  importCompleted
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed'
+                } text-white py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors`}
               >
                 <DocumentArrowUpIcon className="w-5 h-5" />
-                {isImporting ? 'جاري الاستيراد...' : 'استيراد المنتجات'}
+                {isImporting ? 'جاري الاستيراد...' : importCompleted ? 'تم الاستيراد بنجاح ✓' : 'استيراد المنتجات'}
               </button>
             </div>
           )}
