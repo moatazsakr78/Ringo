@@ -209,10 +209,9 @@ const getCustomersTableColumns = (formatPrice: (value: number) => string) => [
   {
     id: 'index',
     header: '#',
-    accessor: 'index',
+    accessor: '#',
     width: 60,
-    visible: true,
-    cell: (info: any) => info.row.index + 1
+    visible: true
   },
   {
     id: 'customer_name',
@@ -309,10 +308,9 @@ const getCategoriesTableColumns = (formatPrice: (value: number) => string) => [
   {
     id: 'index',
     header: '#',
-    accessor: 'index',
+    accessor: '#',
     width: 60,
-    visible: true,
-    cell: (info: any) => info.row.index + 1
+    visible: true
   },
   {
     id: 'category_name',
@@ -606,37 +604,54 @@ function ReportsPageContent() {
   // Define columns for users report
   const usersTableColumns = useMemo(() => [
     {
+      id: 'index',
+      header: '#',
+      accessor: '#',
+      width: 60,
+      visible: true
+    },
+    {
       id: 'user_name',
       header: 'اسم المستخدم',
       accessor: 'user_name',
-      cell: (info: any) => info.getValue() || '-'
+      width: 180,
+      visible: true,
+      render: (value: string) => <span className="text-white font-medium">{value || '-'}</span>
     },
     {
       id: 'role',
       header: 'الدور',
       accessor: 'role',
-      cell: (info: any) => info.getValue() || '-'
+      width: 120,
+      visible: true,
+      render: (value: string) => <span className="text-gray-300">{value || '-'}</span>
     },
     {
       id: 'total_invoices',
       header: 'إجمالي الفواتير',
       accessor: 'total_invoices',
-      cell: (info: any) => (info.getValue() || 0).toLocaleString()
+      width: 120,
+      visible: true,
+      render: (value: number) => <span className="text-blue-400 font-medium">{(value || 0).toLocaleString()}</span>
     },
     {
       id: 'total_amount',
       header: 'إجمالي المبلغ',
       accessor: 'total_amount',
-      cell: (info: any) => `EGP ${(info.getValue() || 0).toFixed(2)}`
+      width: 140,
+      visible: true,
+      render: (value: number) => <span className="text-white font-medium">{`EGP ${(value || 0).toFixed(2)}`}</span>
     },
     {
       id: 'total_profit',
       header: 'الربح',
       accessor: 'total_profit',
-      cell: (info: any) => {
-        const profit = info.getValue() || 0;
+      width: 140,
+      visible: true,
+      render: (value: number) => {
+        const profit = value || 0;
         const colorClass = profit >= 0 ? 'text-green-400' : 'text-red-400';
-        return `<span class="${colorClass}">EGP ${profit.toFixed(2)}</span>`;
+        return <span className={`${colorClass} font-medium`}>{`EGP ${profit.toFixed(2)}`}</span>;
       }
     }
   ], []);
