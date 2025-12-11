@@ -1700,8 +1700,8 @@ export default function CustomerOrdersPage() {
                           </button>
                         )}
 
-                        {/* Edit Order Button - For pending and processing orders */}
-                        {(order.status === 'pending' || order.status === 'processing') && (
+                        {/* Edit Order Button - For all orders except delivered and shipped (invoice created) */}
+                        {!['delivered', 'shipped'].includes(order.status) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

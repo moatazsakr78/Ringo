@@ -6,6 +6,7 @@ interface OrderItem {
   product_id: string
   quantity: number
   price: number
+  notes?: string
 }
 
 interface CustomerData {
@@ -173,7 +174,8 @@ export async function POST(request: Request) {
       order_id: orderResult.id,
       product_id: item.product_id,
       quantity: item.quantity,
-      unit_price: item.price
+      unit_price: item.price,
+      notes: item.notes || null
     }))
 
     const { error: itemsError } = await supabaseAdmin

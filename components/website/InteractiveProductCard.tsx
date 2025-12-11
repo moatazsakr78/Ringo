@@ -507,29 +507,56 @@ export default function InteractiveProductCard({
               {hasUserVoted ? 'عرض الإحصائيات 📊' : 'صوت 🗳️'}
             </button>
           ) : (
-            <button
-              onClick={async (e) => {
-                e.stopPropagation();
-                const productToAdd = {
-                  ...currentProduct,
-                  selectedColor: selectedColor || (product.colors && product.colors.length > 0 ? product.colors[0] : null),
-                  selectedShape: selectedShape || (product.shapes && product.shapes.length > 0 ? product.shapes[0] : null),
-                  selectedSize: selectedSize,
-                  price: getDisplayPrice() // Use the display price based on user role
-                };
-                await onAddToCart(productToAdd);
-              }}
-              className={`w-full mt-3 rounded-lg font-medium transition-colors text-white px-4 py-2 text-sm`}
-              style={{backgroundColor: 'var(--primary-color)'}}
-              onMouseEnter={(e) => {
-                (e.target as HTMLButtonElement).style.backgroundColor = 'var(--primary-hover-color)';
-              }}
-              onMouseLeave={(e) => {
-                (e.target as HTMLButtonElement).style.backgroundColor = 'var(--primary-color)';
-              }}
-            >
-              أضف للسلة
-            </button>
+            <div className="flex gap-2 mt-3">
+              {/* Add to Cart Button */}
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const productToAdd = {
+                    ...currentProduct,
+                    selectedColor: selectedColor || (product.colors && product.colors.length > 0 ? product.colors[0] : null),
+                    selectedShape: selectedShape || (product.shapes && product.shapes.length > 0 ? product.shapes[0] : null),
+                    selectedSize: selectedSize,
+                    note: note || undefined, // Include note if available
+                    price: getDisplayPrice() // Use the display price based on user role
+                  };
+                  await onAddToCart(productToAdd);
+                }}
+                className={`flex-1 rounded-lg font-medium transition-colors text-white px-4 py-2 text-sm`}
+                style={{backgroundColor: 'var(--primary-color)'}}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLButtonElement).style.backgroundColor = 'var(--primary-hover-color)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLButtonElement).style.backgroundColor = 'var(--primary-color)';
+                }}
+              >
+                إضافة
+              </button>
+
+              {/* Note Button for Desktop/Tablet */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  setShowNoteModal(true);
+                }}
+                className="w-10 h-10 rounded-lg font-medium transition-colors flex items-center justify-center"
+                style={{backgroundColor: '#D1D5DB', color: '#374151'}}
+                onMouseEnter={(e) => {
+                  (e.target as HTMLButtonElement).style.backgroundColor = '#9CA3AF';
+                }}
+                onMouseLeave={(e) => {
+                  (e.target as HTMLButtonElement).style.backgroundColor = '#D1D5DB';
+                }}
+                title="إضافة ملاحظة"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+            </div>
           )}
         </>
       )}
@@ -562,11 +589,13 @@ export default function InteractiveProductCard({
               <button
                 onClick={async (e) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   const productToAdd = {
                     ...currentProduct,
                     selectedColor: selectedColor || (product.colors && product.colors.length > 0 ? product.colors[0] : null),
                     selectedShape: selectedShape || (product.shapes && product.shapes.length > 0 ? product.shapes[0] : null),
                     selectedSize: selectedSize,
+                    note: note || undefined, // Include note if available
                     price: getDisplayPrice() // Use the display price based on user role
                   };
                   await onAddToCart(productToAdd);
@@ -587,6 +616,7 @@ export default function InteractiveProductCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   setShowNoteModal(true);
                 }}
                 className="flex-1 rounded-lg font-medium transition-colors p-1.5"
@@ -609,40 +639,53 @@ export default function InteractiveProductCard({
       )}
       {/* Note Modal */}
       {showNoteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-             onClick={(e) => {
-               if (e.target === e.currentTarget) {
-                 setShowNoteModal(false);
-               }
-             }}>
-          <div className="bg-white rounded-xl p-6 w-full max-w-sm mx-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (e.target === e.currentTarget) {
+              setShowNoteModal(false);
+            }
+          }}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-sm mx-4"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
             <h3 className="text-lg font-bold text-center mb-6 text-gray-800">إضافة ملاحظة</h3>
-            
+
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
               placeholder="أدخل ملاحظتك هنا..."
               className="w-full h-32 p-4 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 focus:border-blue-500 resize-none text-right"
               style={{ fontFamily: 'Cairo, sans-serif' }}
             />
-            
+
             <div className="flex gap-3 mt-4">
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
+                  e.preventDefault();
                   setShowNoteModal(false);
                 }}
                 className="flex-1 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
               >
                 إلغاء
               </button>
-              <button 
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Here you would save the note with the product
+                  e.preventDefault();
+                  // Note is saved and will be included when adding to cart
                   console.log('Note saved:', note, 'for product:', product.name);
                   setShowNoteModal(false);
-                  setNote('');
+                  // Don't reset note - keep it so it can be added with the product
                 }}
                 className="flex-1 py-3 text-white rounded-lg font-medium transition-colors"
                 style={{backgroundColor: 'var(--primary-color)'}}

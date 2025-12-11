@@ -97,10 +97,11 @@ export default function TabletHome({
     if (!selectedProduct) return;
 
     try {
-      console.log('🛒 Tablet: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity);
+      console.log('🛒 Tablet: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity, 'Note:', selectedProduct.note);
       const selectedColorName = selectedProduct.selectedColor?.name || undefined;
       const selectedShapeName = selectedProduct.selectedShape?.name || undefined;
-      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName);
+      const productNote = selectedProduct.note || undefined;
+      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName, undefined, productNote);
       console.log('✅ Tablet: Product added successfully');
 
       // Show success message

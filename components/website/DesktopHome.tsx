@@ -94,10 +94,11 @@ export default function DesktopHome({
     if (!selectedProduct) return;
 
     try {
-      console.log('🛒 Desktop: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity);
+      console.log('🛒 Desktop: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity, 'Note:', selectedProduct.note);
       const selectedColorName = selectedProduct.selectedColor?.name || undefined;
       const selectedShapeName = selectedProduct.selectedShape?.name || undefined;
-      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName);
+      const productNote = selectedProduct.note || undefined;
+      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName, undefined, productNote);
       console.log('✅ Desktop: Product added successfully');
     } catch (error) {
       console.error('❌ Desktop: Error adding product to cart:', error);

@@ -81,6 +81,7 @@ export interface Product {
   specifications?: Record<string, string>;
   isFeatured?: boolean;
   suggestedProducts?: string[];
+  note?: string; // Customer note for the product
 }
 
 export interface Category {

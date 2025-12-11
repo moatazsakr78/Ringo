@@ -96,10 +96,11 @@ export default function MobileHome({
     if (!selectedProduct) return;
 
     try {
-      console.log('🛒 Mobile: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity);
+      console.log('🛒 Mobile: Adding product to cart:', selectedProduct.name, 'Quantity:', quantity, 'Note:', selectedProduct.note);
       const selectedColorName = selectedProduct.selectedColor?.name || undefined;
       const selectedShapeName = selectedProduct.selectedShape?.name || undefined;
-      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName);
+      const productNote = selectedProduct.note || undefined;
+      await addToCart(String(selectedProduct.id), quantity, selectedProduct.price, selectedColorName, selectedShapeName, undefined, productNote);
       console.log('✅ Mobile: Product added successfully');
     } catch (error) {
       console.error('❌ Mobile: Error adding product to cart:', error);

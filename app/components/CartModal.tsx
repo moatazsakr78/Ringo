@@ -466,7 +466,8 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
           items: orderData.items.map((item: CartItemData) => ({
             product_id: item.product_id,
             quantity: item.quantity,
-            price: item.price
+            price: item.price,
+            notes: item.notes || null
           })),
           customer: orderData.customer,
           delivery_method: orderData.delivery_method,
@@ -865,14 +866,15 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                                 
                                 {/* Notes */}
                                 <td className="p-4">
-                                  <button className="text-blue-600 hover:text-blue-800 transition-colors flex items-center">
-                                    <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                    </svg>
-                                    <span className="text-sm">ملاحظات</span>
-                                  </button>
+                                  {group.items.some(item => item.notes) ? (
+                                    <div className="text-sm text-gray-700 max-w-[150px]">
+                                      {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">-</span>
+                                  )}
                                 </td>
-                                
+
                                 {/* Delete */}
                                 <td className="p-4">
                                   <button
@@ -1293,14 +1295,15 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                                   
                                   {/* Notes */}
                                   <td className="p-4">
-                                    <button className="text-blue-600 hover:text-blue-800 transition-colors flex items-center">
-                                      <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                      </svg>
-                                      <span className="text-sm">ملاحظات</span>
-                                    </button>
+                                    {group.items.some(item => item.notes) ? (
+                                      <div className="text-sm text-gray-700 max-w-[150px]">
+                                        {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )}
                                   </td>
-                                  
+
                                   {/* Delete */}
                                   <td className="p-4">
                                     <button
@@ -1435,9 +1438,13 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                             {/* Notes */}
                             <div className="bg-white rounded-lg p-2 text-center">
                               <div className="text-xs text-gray-500 mb-1">ملاحظات</div>
-                              <button className="text-blue-600 hover:text-blue-800 transition-colors text-xs">
-                                ⛝ ملاحظات
-                              </button>
+                              {group.items.some(item => item.notes) ? (
+                                <div className="text-xs text-gray-700 truncate">
+                                  {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">-</span>
+                              )}
                             </div>
                           </div>
                         </div>

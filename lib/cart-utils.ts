@@ -28,6 +28,8 @@ export type CartItemUpdate = Database['public']['Tables']['cart_items']['Update'
 
 // Cart item interface with joined product data
 export interface CartItemData extends CartItemRow {
+  // Customer notes for the item
+  notes?: string | null;
   // Joined product data
   products?: {
     name: string;

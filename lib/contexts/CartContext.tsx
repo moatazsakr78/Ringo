@@ -12,6 +12,7 @@ interface CartItem {
   selected_color?: string;
   selected_shape?: string;
   selected_size?: string;
+  notes?: string;
   products?: {
     name: string;
     product_code: string | null;
@@ -21,18 +22,20 @@ interface CartItem {
 
 interface CartContextType {
   cartItems: CartItem[];
-  addToCart: (productId: string, quantity: number, price: number, selectedColor?: string, selectedShape?: string, selectedSize?: string) => Promise<void>;
+  addToCart: (productId: string, quantity: number, price: number, selectedColor?: string, selectedShape?: string, selectedSize?: string, notes?: string) => Promise<void>;
   removeFromCart: (itemId: string) => Promise<void>;
   updateQuantity: (itemId: string, quantity: number) => Promise<void>;
+  updateItemNotes: (itemId: string, notes: string) => Promise<void>;
   clearCart: () => Promise<void>;
   syncWithDatabase: () => Promise<void>;
 }
 
-type CartAction = 
+type CartAction =
   | { type: 'SET_CART'; payload: CartItem[] }
   | { type: 'ADD_ITEM'; payload: CartItem }
   | { type: 'REMOVE_ITEM'; payload: string }
   | { type: 'UPDATE_QUANTITY'; payload: { itemId: string; quantity: number } }
+  | { type: 'UPDATE_NOTES'; payload: { itemId: string; notes: string } }
   | { type: 'CLEAR_CART' };
 
 function cartReducer(state: CartItem[], action: CartAction): CartItem[] {
@@ -70,7 +73,14 @@ function cartReducer(state: CartItem[], action: CartAction): CartItem[] {
           ? { ...item, quantity: action.payload.quantity }
           : item
       );
-    
+
+    case 'UPDATE_NOTES':
+      return state.map(item =>
+        item.id === action.payload.itemId
+          ? { ...item, notes: action.payload.notes }
+          : item
+      );
+
     case 'CLEAR_CART':
       return [];
     
@@ -103,6 +113,7 @@ export function CartProvider({ children }: CartProviderProps) {
         selected_color: item.selected_color || undefined,
         selected_shape: item.selected_shape || undefined,
         selected_size: item.selected_size || undefined,
+        notes: item.notes || undefined,
         products: item.products
       }));
       
@@ -113,7 +124,7 @@ export function CartProvider({ children }: CartProviderProps) {
   };
 
   // Local cart operations (immediate UI updates + database sync)
-  const addToCart = async (productId: string, quantity: number, price: number, selectedColor?: string, selectedShape?: string, selectedSize?: string) => {
+  const addToCart = async (productId: string, quantity: number, price: number, selectedColor?: string, selectedShape?: string, selectedSize?: string, notes?: string) => {
     // 1. Immediate UI update
     const newItem: CartItem = {
       id: `temp_${Date.now()}_${Math.random()}`, // Temporary ID for local state
@@ -122,15 +133,16 @@ export function CartProvider({ children }: CartProviderProps) {
       price,
       selected_color: selectedColor,
       selected_shape: selectedShape,
-      selected_size: selectedSize
+      selected_size: selectedSize,
+      notes: notes
     };
-    
+
     dispatch({ type: 'ADD_ITEM', payload: newItem });
-    
+
     // 2. Sync with database and refresh
     try {
       const sessionId = CartSession.getSessionId();
-      await CartService.addToCart(sessionId, productId, quantity, price, selectedColor, selectedShape, selectedSize);
+      await CartService.addToCart(sessionId, productId, quantity, price, selectedColor, selectedShape, selectedSize, notes);
       // Refresh cart from database to ensure accuracy
       await syncWithDatabase();
     } catch (error) {
@@ -155,7 +167,7 @@ export function CartProvider({ children }: CartProviderProps) {
   const updateQuantity = async (itemId: string, quantity: number) => {
     // 1. Immediate UI update
     dispatch({ type: 'UPDATE_QUANTITY', payload: { itemId, quantity } });
-    
+
     // 2. Sync with database and refresh
     try {
       await CartService.updateCartItemQuantity(itemId, quantity);
@@ -163,6 +175,20 @@ export function CartProvider({ children }: CartProviderProps) {
       await syncWithDatabase();
     } catch (error) {
       console.error('Error syncing quantity update:', error);
+    }
+  };
+
+  const updateItemNotes = async (itemId: string, notes: string) => {
+    // 1. Immediate UI update
+    dispatch({ type: 'UPDATE_NOTES', payload: { itemId, notes } });
+
+    // 2. Sync with database and refresh
+    try {
+      await CartService.updateCartItemNotes(itemId, notes);
+      // Refresh cart from database to ensure accuracy
+      await syncWithDatabase();
+    } catch (error) {
+      console.error('Error syncing notes update:', error);
     }
   };
 
@@ -191,6 +217,7 @@ export function CartProvider({ children }: CartProviderProps) {
     addToCart,
     removeFromCart,
     updateQuantity,
+    updateItemNotes,
     clearCart,
     syncWithDatabase
   };

@@ -52,7 +52,8 @@ export class CartService {
     price: number,
     selectedColor?: string,
     selectedShape?: string,
-    selectedSize?: string
+    selectedSize?: string,
+    notes?: string
   ): Promise<CartItemData | null> {
     try {
       console.log('🏪 CartService.addToCart called with:', {
@@ -62,7 +63,8 @@ export class CartService {
         price,
         selectedColor,
         selectedShape,
-        selectedSize
+        selectedSize,
+        notes
       });
       // Check if item already exists in cart (handle null values properly)
       const { data: existingItems } = await supabase
@@ -70,7 +72,7 @@ export class CartService {
         .select('*')
         .eq('session_id', sessionId)
         .eq('product_id', productId);
-      
+
       // Find matching item considering null/empty string equivalence
       const existingItem = existingItems?.find(item => {
         const itemColor = item.selected_color || '';
@@ -81,10 +83,10 @@ export class CartService {
         const inputSize = selectedSize || '';
         return itemColor === inputColor && itemShape === inputShape && itemSize === inputSize;
       });
-      
+
       if (existingItem) {
-        // Update quantity if item exists
-        const updateResult = await this.updateCartItemQuantity(existingItem.id, existingItem.quantity + quantity);
+        // Update quantity and notes if item exists
+        const updateResult = await this.updateCartItemQuantityAndNotes(existingItem.id, existingItem.quantity + quantity, notes || existingItem.notes);
         return updateResult;
       } else {
         // Insert new item
@@ -97,7 +99,8 @@ export class CartService {
             price,
             selected_color: selectedColor,
             selected_shape: selectedShape,
-            selected_size: selectedSize
+            selected_size: selectedSize,
+            notes: notes || null
           })
           .select(`
             *,
@@ -143,7 +146,7 @@ export class CartService {
         const success = await this.removeFromCart(itemId);
         return success ? null : null;
       }
-      
+
       const { data, error } = await supabase
         .from('cart_items')
         .update({ quantity: newQuantity })
@@ -158,19 +161,90 @@ export class CartService {
           )
         `)
         .single();
-      
+
       if (error) {
         console.error('Error updating cart item:', error);
         return null;
       }
-      
-      
+
+
       // Clear cache for all sessions (since we don't know which session this item belongs to)
       CartCache.clear();
-      
+
       return data;
     } catch (error) {
       console.error('Error in updateCartItemQuantity:', error);
+      return null;
+    }
+  }
+
+  // Update cart item quantity and notes
+  static async updateCartItemQuantityAndNotes(itemId: string, newQuantity: number, notes?: string): Promise<CartItemData | null> {
+    try {
+      if (newQuantity <= 0) {
+        const success = await this.removeFromCart(itemId);
+        return success ? null : null;
+      }
+
+      const { data, error } = await supabase
+        .from('cart_items')
+        .update({ quantity: newQuantity, notes: notes || null })
+        .eq('id', itemId)
+        .select(`
+          *,
+          products!cart_items_product_id_fkey(
+            id,
+            name,
+            product_code,
+            main_image_url
+          )
+        `)
+        .single();
+
+      if (error) {
+        console.error('Error updating cart item:', error);
+        return null;
+      }
+
+      // Clear cache for all sessions (since we don't know which session this item belongs to)
+      CartCache.clear();
+
+      return data;
+    } catch (error) {
+      console.error('Error in updateCartItemQuantityAndNotes:', error);
+      return null;
+    }
+  }
+
+  // Update cart item notes only
+  static async updateCartItemNotes(itemId: string, notes: string): Promise<CartItemData | null> {
+    try {
+      const { data, error } = await supabase
+        .from('cart_items')
+        .update({ notes: notes || null })
+        .eq('id', itemId)
+        .select(`
+          *,
+          products!cart_items_product_id_fkey(
+            id,
+            name,
+            product_code,
+            main_image_url
+          )
+        `)
+        .single();
+
+      if (error) {
+        console.error('Error updating cart item notes:', error);
+        return null;
+      }
+
+      // Clear cache for all sessions
+      CartCache.clear();
+
+      return data;
+    } catch (error) {
+      console.error('Error in updateCartItemNotes:', error);
       return null;
     }
   }
