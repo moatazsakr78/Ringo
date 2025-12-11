@@ -105,6 +105,7 @@ import ColumnsControlModal from "../../components/ColumnsControlModal";
 import PaymentSplit from "../../components/PaymentSplit";
 import POSTabletView from "../../components/POSTabletView";
 import DiscountModal from "../../components/DiscountModal";
+import PostponedInvoicesModal from "../../components/PostponedInvoicesModal";
 import { useProductsAdmin } from "../../../lib/hooks/useProductsAdmin";
 import { Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
@@ -165,12 +166,16 @@ function POSPageContent() {
     activeTab: activePOSTab,
     activeTabId,
     addTab,
+    addTabWithCustomer,
     closeTab,
     switchTab,
     updateActiveTabCart,
     updateActiveTabSelections,
     updateActiveTabMode,
     clearActiveTabCart,
+    postponeTab,
+    restoreTab,
+    postponedTabs,
     isLoading: isLoadingTabs,
   } = usePOSTabs();
 
@@ -239,18 +244,73 @@ function POSPageContent() {
   const [cartDiscount, setCartDiscount] = useState<number>(0);
   const [cartDiscountType, setCartDiscountType] = useState<"percentage" | "fixed">("percentage");
 
-  // Use persistent selections hook
+  // Postponed Invoices States
+  const [isPostponedModalOpen, setIsPostponedModalOpen] = useState(false);
+  const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+
+  // Use persistent selections hook for main tab defaults only
   const {
-    selections,
+    selections: globalSelections,
     isLoaded: selectionsLoaded,
-    setRecord,
-    setCustomer,
-    setBranch,
-    clearSelections,
+    setRecord: setGlobalRecord,
+    setCustomer: setGlobalCustomer,
+    setBranch: setGlobalBranch,
+    clearSelections: clearGlobalSelections,
     resetToDefaultCustomer,
-    hasRequiredForCart,
-    hasRequiredForSale,
+    hasRequiredForCart: globalHasRequiredForCart,
+    hasRequiredForSale: globalHasRequiredForSale,
   } = usePersistentSelections();
+
+  // Get selections from active tab (tab-specific selections)
+  const selections = useMemo(() => {
+    // For main tab, use global selections
+    if (activeTabId === 'main') {
+      return globalSelections;
+    }
+    // For other tabs, use tab-specific selections
+    return activePOSTab?.selections || { customer: null, branch: null, record: null };
+  }, [activeTabId, activePOSTab?.selections, globalSelections]);
+
+  // Functions to update selections (tab-aware)
+  const setRecord = useCallback((record: any) => {
+    if (activeTabId === 'main') {
+      setGlobalRecord(record);
+    } else {
+      updateActiveTabSelections({ ...activePOSTab?.selections, record });
+    }
+  }, [activeTabId, activePOSTab?.selections, setGlobalRecord, updateActiveTabSelections]);
+
+  const setCustomer = useCallback((customer: any) => {
+    if (activeTabId === 'main') {
+      setGlobalCustomer(customer);
+    } else {
+      updateActiveTabSelections({ ...activePOSTab?.selections, customer });
+    }
+  }, [activeTabId, activePOSTab?.selections, setGlobalCustomer, updateActiveTabSelections]);
+
+  const setBranch = useCallback((branch: any) => {
+    if (activeTabId === 'main') {
+      setGlobalBranch(branch);
+    } else {
+      updateActiveTabSelections({ ...activePOSTab?.selections, branch });
+    }
+  }, [activeTabId, activePOSTab?.selections, setGlobalBranch, updateActiveTabSelections]);
+
+  const clearSelections = useCallback(() => {
+    if (activeTabId === 'main') {
+      clearGlobalSelections();
+    } else {
+      updateActiveTabSelections({ customer: null, branch: null, record: null });
+    }
+  }, [activeTabId, clearGlobalSelections, updateActiveTabSelections]);
+
+  const hasRequiredForCart = useCallback(() => {
+    return selections.branch !== null;
+  }, [selections.branch]);
+
+  const hasRequiredForSale = useCallback(() => {
+    return selections.record && selections.customer && selections.branch;
+  }, [selections.record, selections.customer, selections.branch]);
 
   // Categories state
   const [categories, setCategories] = useState<Category[]>([]);
@@ -673,7 +733,20 @@ function POSPageContent() {
   };
 
   const handleCustomerSelect = (customer: any) => {
-    setCustomer(customer);
+    // If we're in main tab, create a new tab with customer name
+    // Otherwise, just update the current tab's customer
+    if (activeTabId === 'main') {
+      // Create new tab with customer, inheriting selections from main tab
+      addTabWithCustomer(customer, {
+        customer: globalSelections.customer,
+        branch: globalSelections.branch,
+        record: globalSelections.record,
+        priceType: selectedPriceType,
+      });
+    } else {
+      // Update current tab's customer
+      setCustomer(customer);
+    }
     setIsCustomerModalOpen(false);
     console.log("Selected customer:", customer);
   };
@@ -862,6 +935,18 @@ function POSPageContent() {
       console.log(`POS: Preloaded ${stats.preloaded} images in background`);
     });
   }, [products, isLoading]);
+
+  // Close tab context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      if (tabContextMenu) {
+        setTabContextMenu(null);
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [tabContextMenu]);
 
   // Helper function to get product price based on selected price type
   // لو السعر مش موجود بيرجع 0 مش سعر البيع - علشان المستخدم يلاحظ إن السعر ناقص
@@ -2049,7 +2134,13 @@ function POSPageContent() {
                 className="w-full px-4 py-2 bg-[#374151] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && newTabName.trim()) {
-                    addTab(newTabName.trim());
+                    // Inherit selections from main tab
+                    addTab(newTabName.trim(), {
+                      customer: globalSelections.customer,
+                      branch: globalSelections.branch,
+                      record: globalSelections.record,
+                      priceType: selectedPriceType,
+                    });
                     setNewTabName("");
                     setShowAddTabModal(false);
                   }
@@ -2069,7 +2160,13 @@ function POSPageContent() {
                 <button
                   onClick={() => {
                     if (newTabName.trim()) {
-                      addTab(newTabName.trim());
+                      // Inherit selections from main tab
+                      addTab(newTabName.trim(), {
+                        customer: globalSelections.customer,
+                        branch: globalSelections.branch,
+                        record: globalSelections.record,
+                        priceType: selectedPriceType,
+                      });
                       setNewTabName("");
                       setShowAddTabModal(false);
                     }
@@ -2393,6 +2490,24 @@ function POSPageContent() {
                     )}
                   </button>
                 )}
+
+                {/* Postponed Invoices Button */}
+                <button
+                  onClick={() => setIsPostponedModalOpen(true)}
+                  className={`relative flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
+                    postponedTabs.length > 0
+                      ? "text-orange-400 hover:text-orange-300"
+                      : "text-gray-300 hover:text-white"
+                  }`}
+                >
+                  <ClockIcon className="h-5 w-5 mb-1" />
+                  <span className="text-sm">الفواتير المؤجلة</span>
+                  {postponedTabs.length > 0 && (
+                    <div className="absolute top-0 right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center text-xs text-white font-bold">
+                      {postponedTabs.length}
+                    </div>
+                  )}
+                </button>
 
                 <button
                   onClick={() => setShowPrintReceiptModal(true)}
@@ -2759,6 +2874,13 @@ function POSPageContent() {
                       ? 'bg-[#F97316] text-white'
                       : 'text-gray-300 hover:text-white hover:bg-[#4B5563]'
                   }`}
+                  onContextMenu={(e) => {
+                    // Only show context menu for non-main tabs
+                    if (tab.id !== 'main') {
+                      e.preventDefault();
+                      setTabContextMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+                    }
+                  }}
                 >
                   <button
                     onClick={() => switchTab(tab.id)}
@@ -2791,6 +2913,39 @@ function POSPageContent() {
                 <PlusIcon className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Tab Context Menu for Postponing */}
+            {tabContextMenu && (
+              <div
+                className="fixed z-50 bg-[#2B3544] border border-gray-600 rounded-lg shadow-xl py-1 min-w-[160px]"
+                style={{ top: tabContextMenu.y, left: tabContextMenu.x }}
+                onClick={() => setTabContextMenu(null)}
+              >
+                <button
+                  onClick={() => {
+                    const tab = posTabs.find(t => t.id === tabContextMenu.tabId);
+                    if (tab && tab.cartItems && tab.cartItems.length > 0) {
+                      postponeTab(tabContextMenu.tabId);
+                    }
+                    setTabContextMenu(null);
+                  }}
+                  className="w-full px-4 py-2 text-right text-sm text-gray-300 hover:bg-orange-500/20 hover:text-orange-400 flex items-center gap-2 transition-colors"
+                >
+                  <ClockIcon className="h-4 w-4" />
+                  تأجيل الفاتورة
+                </button>
+                <button
+                  onClick={() => {
+                    closeTab(tabContextMenu.tabId);
+                    setTabContextMenu(null);
+                  }}
+                  className="w-full px-4 py-2 text-right text-sm text-gray-300 hover:bg-red-500/20 hover:text-red-400 flex items-center gap-2 transition-colors"
+                >
+                  <XMarkIcon className="h-4 w-4" />
+                  إغلاق الفاتورة
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Desktop Toolbar - Original Design (hidden on mobile) */}
@@ -3794,6 +3949,15 @@ function POSPageContent() {
         onApplyCartDiscount={handleApplyCartDiscount}
         onRemoveItemDiscount={handleRemoveItemDiscount}
         onRemoveCartDiscount={handleRemoveCartDiscount}
+      />
+
+      {/* Postponed Invoices Modal */}
+      <PostponedInvoicesModal
+        isOpen={isPostponedModalOpen}
+        onClose={() => setIsPostponedModalOpen(false)}
+        postponedTabs={postponedTabs}
+        onRestoreTab={restoreTab}
+        onDeleteTab={closeTab}
       />
 
       {/* Quick Add Product Modal */}

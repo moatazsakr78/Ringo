@@ -86,7 +86,9 @@ export class CartService {
 
       if (existingItem) {
         // Update quantity and notes if item exists
-        const updateResult = await this.updateCartItemQuantityAndNotes(existingItem.id, existingItem.quantity + quantity, notes || existingItem.notes);
+        // Cast to any to access notes property (added via migration but not in generated types)
+        const existingNotes = (existingItem as any).notes;
+        const updateResult = await this.updateCartItemQuantityAndNotes(existingItem.id, existingItem.quantity + quantity, notes || existingNotes);
         return updateResult;
       } else {
         // Insert new item
@@ -221,7 +223,7 @@ export class CartService {
     try {
       const { data, error } = await supabase
         .from('cart_items')
-        .update({ notes: notes || null })
+        .update({ notes: notes || null } as any)
         .eq('id', itemId)
         .select(`
           *,

@@ -9,6 +9,16 @@ import { egyptianGovernorates } from '@/app/lib/data/governorates'
 import { supabase } from '@/app/lib/supabase/client'
 import { Customer } from '@/app/lib/hooks/useCustomers'
 
+// Price type options
+const priceTypeOptions = [
+  { value: 'price', label: 'سعر البيع' },
+  { value: 'wholesale_price', label: 'سعر الجملة' },
+  { value: 'price1', label: 'سعر 1' },
+  { value: 'price2', label: 'سعر 2' },
+  { value: 'price3', label: 'سعر 3' },
+  { value: 'price4', label: 'سعر 4' },
+]
+
 interface EditCustomerModalProps {
   isOpen: boolean
   onClose: () => void
@@ -20,7 +30,9 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  
+  const [records, setRecords] = useState<{ id: string; name: string }[]>([])
+  const [isLoadingRecords, setIsLoadingRecords] = useState(true)
+
   const [formData, setFormData] = useState({
     name: '',
     group: '',
@@ -30,14 +42,47 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
     phone: '',
     backupPhone: '',
     governorate: '',
-    address: ''
+    address: '',
+    defaultRecordId: '',
+    defaultPriceType: 'price'
   })
 
   const { groups, isLoading: groupsLoading } = useCustomerGroups()
 
+  // Fetch records for the dropdown
+  useEffect(() => {
+    const fetchRecords = async () => {
+      try {
+        setIsLoadingRecords(true)
+        const { data, error } = await supabase
+          .from('records')
+          .select('id, name')
+          .order('name')
+
+        if (error) throw error
+        setRecords(data || [])
+      } catch (err) {
+        console.error('Error fetching records:', err)
+      } finally {
+        setIsLoadingRecords(false)
+      }
+    }
+
+    if (isOpen) {
+      fetchRecords()
+    }
+  }, [isOpen])
+
   const tabs = [
-    { id: 'details', label: 'تفاصيل العميل', active: true }
+    { id: 'details', label: 'تفاصيل العميل' },
+    { id: 'sales', label: 'ربط البيع' }
   ]
+
+  // Convert records to options format
+  const recordOptions = records.map(record => ({
+    value: record.id,
+    label: record.name
+  }))
 
   // Convert customer groups to options format
   const customerGroupOptions = groups.flatMap(group => {
@@ -76,10 +121,13 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
         phone: customer.phone || '',
         backupPhone: customer.backup_phone || '',
         governorate: governorate?.id || '',
-        address: customer.address || ''
+        address: customer.address || '',
+        defaultRecordId: (customer as any).default_record_id || '',
+        defaultPriceType: (customer as any).default_price_type || 'price'
       })
       setError(null)
       setSuccess(null)
+      setActiveTab('details')
     }
   }, [customer, isOpen])
 
@@ -136,7 +184,9 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
         category: formData.group ? customerGroupOptions.find(opt => opt.value === formData.group)?.label : null,
         account_balance: formData.accountBalance ? parseFloat(formData.accountBalance) : 0,
         credit_limit: formData.allowedLimit ? parseFloat(formData.allowedLimit) : 1000,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        default_record_id: formData.defaultRecordId || null,
+        default_price_type: formData.defaultPriceType || 'price'
       }
 
       // Update customer in database
@@ -180,11 +230,14 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
         phone: customer.phone || '',
         backupPhone: customer.backup_phone || '',
         governorate: governorate?.id || '',
-        address: customer.address || ''
+        address: customer.address || '',
+        defaultRecordId: (customer as any).default_record_id || '',
+        defaultPriceType: (customer as any).default_price_type || 'price'
       })
     }
     setError(null)
     setSuccess(null)
+    setActiveTab('details')
   }
 
   const handleCancel = () => {
@@ -248,20 +301,23 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
 
         {/* Content Area - Scrollable */}
         <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-4">
-          
+
           {/* Error/Success Messages */}
           {error && (
             <div className="bg-red-900/20 border border-red-500 text-red-400 px-4 py-3 rounded text-right text-sm">
               {error}
             </div>
           )}
-          
+
           {success && (
             <div className="bg-green-900/20 border border-green-500 text-green-400 px-4 py-3 rounded text-right text-sm">
               {success}
             </div>
           )}
-          
+
+          {/* Tab: تفاصيل العميل */}
+          {activeTab === 'details' && (
+            <>
           {/* Customer Name */}
           <div className="space-y-2">
             <label className="block text-white text-sm font-medium text-right">
@@ -402,6 +458,55 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
               className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm resize-none"
             />
           </div>
+            </>
+          )}
+
+          {/* Tab: ربط البيع */}
+          {activeTab === 'sales' && (
+            <>
+              {/* Default Record */}
+              <div className="space-y-2">
+                <label className="block text-white text-sm font-medium text-right">
+                  السجل الافتراضي
+                </label>
+                {isLoadingRecords ? (
+                  <div className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-gray-400 text-right text-sm">
+                    جاري التحميل...
+                  </div>
+                ) : (
+                  <SearchableSelect
+                    options={recordOptions}
+                    value={formData.defaultRecordId}
+                    onChange={(value) => handleSelectChange('defaultRecordId', value)}
+                    placeholder="-- اختر السجل --"
+                    searchPlaceholder="بحث في السجلات..."
+                    name="defaultRecordId"
+                  />
+                )}
+                <p className="text-gray-400 text-xs text-right">
+                  السجل الذي سيتم استخدامه تلقائياً عند اختيار هذا العميل في نقطة البيع
+                </p>
+              </div>
+
+              {/* Default Price Type */}
+              <div className="space-y-2">
+                <label className="block text-white text-sm font-medium text-right">
+                  نوع السعر الافتراضي
+                </label>
+                <SearchableSelect
+                  options={priceTypeOptions}
+                  value={formData.defaultPriceType}
+                  onChange={(value) => handleSelectChange('defaultPriceType', value)}
+                  placeholder="-- اختر نوع السعر --"
+                  searchPlaceholder="بحث..."
+                  name="defaultPriceType"
+                />
+                <p className="text-gray-400 text-xs text-right">
+                  نوع السعر الذي سيتم استخدامه تلقائياً عند البيع لهذا العميل
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Action Buttons */}

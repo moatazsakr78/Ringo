@@ -13,6 +13,7 @@ export interface POSTab {
     customer: any;
     branch: any;
     record: any;
+    priceType?: 'price' | 'wholesale_price' | 'price1' | 'price2' | 'price3' | 'price4';
   };
   isPurchaseMode?: boolean;
   isTransferMode?: boolean;
@@ -21,19 +22,32 @@ export interface POSTab {
   selectedWarehouse?: any;
   transferFromLocation?: any;
   transferToLocation?: any;
+  isPostponed?: boolean;
+  postponedAt?: string;
+}
+
+interface InheritedSelections {
+  customer?: any;
+  branch?: any;
+  record?: any;
+  priceType?: string;
 }
 
 interface UsePOSTabsReturn {
   tabs: POSTab[];
   activeTab: POSTab | undefined;
   activeTabId: string;
-  addTab: (title: string) => void;
+  addTab: (title: string, inheritedSelections?: InheritedSelections) => void;
+  addTabWithCustomer: (customer: any, inheritedSelections?: InheritedSelections) => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
   updateActiveTabCart: (cartItems: any[]) => void;
   updateActiveTabSelections: (selections: any) => void;
   updateActiveTabMode: (updates: Partial<POSTab>) => void;
   clearActiveTabCart: () => void;
+  postponeTab: (tabId: string) => void;
+  restoreTab: (tabId: string) => void;
+  postponedTabs: POSTab[];
   isLoading: boolean;
   isSaving: boolean;
   lastSaved: Date | null;
@@ -128,7 +142,7 @@ export function usePOSTabs(): UsePOSTabsReturn {
   // ============================================
   // TAB MANAGEMENT FUNCTIONS
   // ============================================
-  const addTab = useCallback((title: string) => {
+  const addTab = useCallback((title: string, inheritedSelections?: InheritedSelections) => {
     const newTabId = `pos-${Date.now()}`;
     setTabs(prev => {
       const newTabs = [
@@ -139,9 +153,51 @@ export function usePOSTabs(): UsePOSTabsReturn {
           active: true,
           cartItems: [],
           selections: {
-            customer: null,
-            branch: null,
-            record: null,
+            customer: inheritedSelections?.customer || null,
+            branch: inheritedSelections?.branch || null,
+            record: inheritedSelections?.record || null,
+            priceType: inheritedSelections?.priceType as any || 'price',
+          },
+        },
+      ];
+      // Instant save
+      saveState(newTabs, newTabId);
+      return newTabs;
+    });
+    setActiveTabId(newTabId);
+  }, [saveState]);
+
+  // Add tab with customer already selected
+  // Uses customer's default record and price type if available
+  // Falls back to inherited selections (from main tab)
+  const addTabWithCustomer = useCallback((customer: any, inheritedSelections?: InheritedSelections) => {
+    const newTabId = `pos-${Date.now()}`;
+    const title = customer?.name || 'فاتورة جديدة';
+
+    // Get customer's default record if set
+    let customerRecord = null;
+    if (customer?.default_record_id) {
+      customerRecord = { id: customer.default_record_id };
+    } else if (inheritedSelections?.record) {
+      customerRecord = inheritedSelections.record;
+    }
+
+    // Get customer's default price type if set
+    const customerPriceType = customer?.default_price_type || inheritedSelections?.priceType || 'price';
+
+    setTabs(prev => {
+      const newTabs = [
+        ...prev.map(tab => ({ ...tab, active: false })),
+        {
+          id: newTabId,
+          title,
+          active: true,
+          cartItems: [],
+          selections: {
+            customer: customer,
+            branch: inheritedSelections?.branch || null,
+            record: customerRecord,
+            priceType: customerPriceType as any,
           },
         },
       ];
@@ -240,6 +296,75 @@ export function usePOSTabs(): UsePOSTabsReturn {
       return newTabs;
     });
   }, [activeTabId, saveState]);
+
+  // ============================================
+  // POSTPONE TAB: Mark tab as postponed and switch to another tab
+  // ============================================
+  const postponeTab = useCallback((tabId: string) => {
+    // Cannot postpone the main tab
+    if (tabId === 'main') return;
+
+    setTabs(prev => {
+      const tabToPostpone = prev.find(tab => tab.id === tabId);
+      if (!tabToPostpone || tabToPostpone.cartItems.length === 0) return prev;
+
+      // Mark tab as postponed
+      const newTabs = prev.map(tab => {
+        if (tab.id === tabId) {
+          return {
+            ...tab,
+            isPostponed: true,
+            postponedAt: new Date().toISOString(),
+            active: false,
+          };
+        }
+        return tab;
+      });
+
+      // If the postponed tab was active, switch to main tab
+      let newActiveId = activeTabId;
+      if (activeTabId === tabId) {
+        newActiveId = 'main';
+        // Mark main as active
+        const finalTabs = newTabs.map(tab => ({
+          ...tab,
+          active: tab.id === 'main',
+        }));
+        saveState(finalTabs, newActiveId);
+        setActiveTabId(newActiveId);
+        return finalTabs;
+      }
+
+      saveState(newTabs, activeTabId);
+      return newTabs;
+    });
+  }, [activeTabId, saveState]);
+
+  // ============================================
+  // RESTORE TAB: Restore a postponed tab and switch to it
+  // ============================================
+  const restoreTab = useCallback((tabId: string) => {
+    setTabs(prev => {
+      const newTabs = prev.map(tab => {
+        if (tab.id === tabId) {
+          return {
+            ...tab,
+            isPostponed: false,
+            postponedAt: undefined,
+            active: true,
+          };
+        }
+        return { ...tab, active: false };
+      });
+
+      saveState(newTabs, tabId);
+      setActiveTabId(tabId);
+      return newTabs;
+    });
+  }, [saveState]);
+
+  // Get postponed tabs
+  const postponedTabs = tabs.filter(tab => tab.isPostponed === true);
 
   // ============================================
   // LOAD STATE: localStorage first, then DB sync
@@ -364,17 +489,24 @@ export function usePOSTabs(): UsePOSTabsReturn {
     };
   }, [tabs, activeTabId]);
 
+  // Filter out postponed tabs from active tabs display
+  const activeTabs = tabs.filter(tab => !tab.isPostponed);
+
   return {
-    tabs,
+    tabs: activeTabs,
     activeTab,
     activeTabId,
     addTab,
+    addTabWithCustomer,
     closeTab,
     switchTab,
     updateActiveTabCart,
     updateActiveTabSelections,
     updateActiveTabMode,
     clearActiveTabCart,
+    postponeTab,
+    restoreTab,
+    postponedTabs,
     isLoading,
     isSaving,
     lastSaved,
