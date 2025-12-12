@@ -239,6 +239,9 @@ function POSPageContent() {
   const [paymentSplitData, setPaymentSplitData] = useState<any[]>([]);
   const [creditAmount, setCreditAmount] = useState<number>(0);
 
+  // Change Calculator States (حساب الباقي)
+  const [paidAmount, setPaidAmount] = useState<string>("");
+
   // Discount States
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
   const [cartDiscount, setCartDiscount] = useState<number>(0);
@@ -1424,6 +1427,9 @@ function POSPageContent() {
 
       // Clear cart after successful invoice creation
       clearCart();
+
+      // Reset paid amount (change calculator)
+      setPaidAmount("");
 
       // Close tab if not the main tab
       if (activeTabId !== 'main') {
@@ -2912,6 +2918,7 @@ function POSPageContent() {
               >
                 <PlusIcon className="w-4 h-4" />
               </button>
+
             </div>
 
             {/* Tab Context Menu for Postponing */}
@@ -2990,6 +2997,25 @@ function POSPageContent() {
                   </button>
                 </div>
               </div>
+
+              {/* Right Side - Change Calculator */}
+              {!isTransferMode && !isPurchaseMode && (
+                <div className="flex flex-col items-end">
+                  <input
+                    type="number"
+                    value={paidAmount}
+                    onChange={(e) => setPaidAmount(e.target.value)}
+                    placeholder="المدفوع"
+                    className="w-24 px-2 py-1 bg-[#2B3544] border border-gray-600 rounded text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-left"
+                    dir="ltr"
+                  />
+                  {paidAmount && parseFloat(paidAmount) > 0 && (
+                    <span className="text-orange-400 text-xs font-medium mt-1">
+                      الباقي: {(parseFloat(paidAmount) - calculateTotalWithDiscounts()).toFixed(0)}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
