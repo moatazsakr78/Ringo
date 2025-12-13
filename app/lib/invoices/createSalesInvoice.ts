@@ -358,6 +358,95 @@ export async function createSalesInvoice({
     // No need to update account_balance in customers table
     // The balance is computed in real-time from sales and customer_payments tables
 
+    // Update cash drawer balance
+    // Calculate cash amount from payments (cash payments go to drawer)
+    let cashToDrawer = 0
+
+    if (paymentSplitData && paymentSplitData.length > 0) {
+      // If there's split payment data, find cash payments
+      for (const payment of paymentSplitData) {
+        if (payment.amount > 0 && payment.paymentMethodId) {
+          // Get payment method to check if it's cash
+          const { data: paymentMethodData } = await supabase
+            .from('payment_methods')
+            .select('name')
+            .eq('id', payment.paymentMethodId)
+            .single()
+
+          // If payment method is cash (نقدي or cash), add to drawer
+          if (paymentMethodData?.name?.toLowerCase() === 'cash' ||
+              paymentMethodData?.name === 'نقدي' ||
+              paymentMethodData?.name === 'كاش') {
+            cashToDrawer += payment.amount
+          }
+        }
+      }
+    } else if (paymentMethod === 'cash' || paymentMethod === 'نقدي') {
+      // If no split payment and payment method is cash, entire amount goes to drawer
+      // For returns, this will be negative (money out of drawer)
+      cashToDrawer = totalAmount - (creditAmount || 0)
+    }
+
+    // Update drawer if there's cash to add/remove
+    if (cashToDrawer !== 0) {
+      try {
+        // Get or create drawer for this record
+        let { data: drawer, error: drawerError } = await supabase
+          .from('cash_drawers')
+          .select('*')
+          .eq('record_id', selections.record.id)
+          .single()
+
+        if (drawerError && drawerError.code === 'PGRST116') {
+          // Drawer doesn't exist, create it
+          const { data: newDrawer, error: createError } = await supabase
+            .from('cash_drawers')
+            .insert({ record_id: selections.record.id, current_balance: 0 })
+            .select()
+            .single()
+
+          if (!createError) {
+            drawer = newDrawer
+          }
+        }
+
+        if (drawer) {
+          // Calculate new balance (for returns, cashToDrawer is negative)
+          const newBalance = (drawer.current_balance || 0) + cashToDrawer
+
+          // Update drawer balance
+          await supabase
+            .from('cash_drawers')
+            .update({
+              current_balance: newBalance,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', drawer.id)
+
+          // Create transaction record
+          await supabase
+            .from('cash_drawer_transactions')
+            .insert({
+              drawer_id: drawer.id,
+              record_id: selections.record.id,
+              transaction_type: isReturn ? 'return' : 'sale',
+              amount: cashToDrawer,
+              balance_after: newBalance,
+              sale_id: salesData.id,
+              notes: isReturn
+                ? `مرتجع - فاتورة رقم ${invoiceNumber}`
+                : `بيع - فاتورة رقم ${invoiceNumber}`,
+              performed_by: 'system'
+            })
+
+          console.log(`✅ Cash drawer updated: ${cashToDrawer >= 0 ? '+' : ''}${cashToDrawer}, new balance: ${newBalance}`)
+        }
+      } catch (drawerError) {
+        console.warn('Failed to update cash drawer:', drawerError)
+        // Don't throw error here as the sale was created successfully
+      }
+    }
+
     return {
       success: true,
       invoiceId: salesData.id,

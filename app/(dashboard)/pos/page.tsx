@@ -106,6 +106,7 @@ import PaymentSplit from "../../components/PaymentSplit";
 import POSTabletView from "../../components/POSTabletView";
 import DiscountModal from "../../components/DiscountModal";
 import PostponedInvoicesModal from "../../components/PostponedInvoicesModal";
+import CashDrawerModal from "../../components/CashDrawerModal";
 import { useProductsAdmin } from "../../../lib/hooks/useProductsAdmin";
 import { Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
@@ -250,6 +251,9 @@ function POSPageContent() {
   // Postponed Invoices States
   const [isPostponedModalOpen, setIsPostponedModalOpen] = useState(false);
   const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+
+  // Cash Drawer States
+  const [isCashDrawerModalOpen, setIsCashDrawerModalOpen] = useState(false);
 
   // Use persistent selections hook for main tab defaults only
   const {
@@ -2515,6 +2519,21 @@ function POSPageContent() {
                   )}
                 </button>
 
+                {/* Cash Drawer Button */}
+                <button
+                  onClick={() => setIsCashDrawerModalOpen(true)}
+                  disabled={!selections.record}
+                  className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
+                    selections.record
+                      ? "text-green-400 hover:text-green-300"
+                      : "text-gray-500 cursor-not-allowed"
+                  }`}
+                  title={selections.record ? `درج ${selections.record.name}` : "يجب اختيار سجل أولاً"}
+                >
+                  <CurrencyDollarIcon className="h-5 w-5 mb-1" />
+                  <span className="text-sm">الدرج</span>
+                </button>
+
                 <button
                   onClick={() => setShowPrintReceiptModal(true)}
                   className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
@@ -3984,6 +4003,13 @@ function POSPageContent() {
         postponedTabs={postponedTabs}
         onRestoreTab={restoreTab}
         onDeleteTab={closeTab}
+      />
+
+      {/* Cash Drawer Modal */}
+      <CashDrawerModal
+        isOpen={isCashDrawerModalOpen}
+        onClose={() => setIsCashDrawerModalOpen(false)}
+        record={selections.record}
       />
 
       {/* Quick Add Product Modal */}

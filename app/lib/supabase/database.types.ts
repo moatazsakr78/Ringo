@@ -14,6 +14,77 @@ export type Database = {
   }
   elfaroukgroup: {
     Tables: {
+      cash_drawers: {
+        Row: {
+          id: string
+          record_id: string
+          current_balance: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          record_id: string
+          current_balance?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          record_id?: string
+          current_balance?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      cash_drawer_transactions: {
+        Row: {
+          id: string
+          drawer_id: string
+          record_id: string
+          transaction_type: string
+          amount: number
+          balance_after: number
+          sale_id: string | null
+          notes: string | null
+          performed_by: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          drawer_id: string
+          record_id: string
+          transaction_type: string
+          amount: number
+          balance_after: number
+          sale_id?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          drawer_id?: string
+          record_id?: string
+          transaction_type?: string
+          amount?: number
+          balance_after?: number
+          sale_id?: string | null
+          notes?: string | null
+          performed_by?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_drawer_transactions_drawer_id_fkey"
+            columns: ["drawer_id"]
+            isOneToOne: false
+            referencedRelation: "cash_drawers"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       auth_accounts: {
         Row: {
           access_token: string | null
