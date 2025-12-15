@@ -341,8 +341,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           discount,
           notes,
           product:products(
+            id,
             name,
             barcode,
+            main_image_url,
             category:categories(name)
           )
         `)
@@ -496,8 +498,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           discount,
           notes,
           product:products(
+            id,
             name,
             barcode,
+            main_image_url,
             category:categories(name)
           )
         `)
@@ -1480,7 +1484,40 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                       {/* Action Buttons - Only for invoices tab */}
                       {activeTab === 'invoices' && (
                         <>
-                          <button className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-lg transition-all whitespace-nowrap">
+                          <button
+                            onClick={() => {
+                              // Get the selected sale
+                              const selectedSale = sales[selectedTransaction]
+                              if (!selectedSale) {
+                                alert('يرجى اختيار فاتورة للتعديل')
+                                return
+                              }
+
+                              // Store invoice data in localStorage for the POS page to read (localStorage is shared between tabs)
+                              const editData = {
+                                saleId: selectedSale.id,
+                                invoiceNumber: selectedSale.invoice_number,
+                                customerId: customer.id,
+                                customerName: customer.name,
+                                customerPhone: customer.phone,
+                                items: saleItems.map(item => ({
+                                  productId: item.product?.id,
+                                  productName: item.product?.name,
+                                  quantity: item.quantity,
+                                  unitPrice: item.unit_price,
+                                  discount: item.discount || 0,
+                                  barcode: item.product?.barcode,
+                                  main_image_url: item.product?.main_image_url
+                                }))
+                              }
+                              localStorage.setItem('pos_edit_invoice', JSON.stringify(editData))
+
+                              // Open POS in a new window with edit mode
+                              window.open(`/pos?edit=true&saleId=${selectedSale.id}`, '_blank')
+                            }}
+                            disabled={sales.length === 0 || selectedTransaction >= sales.length || isLoadingItems}
+                            className="flex items-center gap-2 px-3 py-2.5 text-sm text-gray-300 hover:text-white disabled:text-gray-500 disabled:cursor-not-allowed hover:bg-gray-600/30 rounded-lg transition-all whitespace-nowrap"
+                          >
                             <PencilSquareIcon className="h-4 w-4" />
                             <span>تحرير</span>
                           </button>
@@ -1515,7 +1552,40 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                   <div className="flex items-center gap-8">
                     {/* Action Buttons - Same style as customer list */}
                     <div className="flex items-center gap-1">
-                      <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
+                      <button
+                        onClick={() => {
+                          // Get the selected sale
+                          const selectedSale = sales[selectedTransaction]
+                          if (!selectedSale) {
+                            alert('يرجى اختيار فاتورة للتعديل')
+                            return
+                          }
+
+                          // Store invoice data in localStorage for the POS page to read (localStorage is shared between tabs)
+                          const editData = {
+                            saleId: selectedSale.id,
+                            invoiceNumber: selectedSale.invoice_number,
+                            customerId: customer.id,
+                            customerName: customer.name,
+                            customerPhone: customer.phone,
+                            items: saleItems.map(item => ({
+                              productId: item.product?.id,
+                              productName: item.product?.name,
+                              quantity: item.quantity,
+                              unitPrice: item.unit_price,
+                              discount: item.discount || 0,
+                              barcode: item.product?.barcode,
+                              main_image_url: item.product?.main_image_url
+                            }))
+                          }
+                          localStorage.setItem('pos_edit_invoice', JSON.stringify(editData))
+
+                          // Open POS in a new window with edit mode
+                          window.open(`/pos?edit=true&saleId=${selectedSale.id}`, '_blank')
+                        }}
+                        disabled={sales.length === 0 || selectedTransaction >= sales.length || isLoadingItems}
+                        className="flex flex-col items-center p-2 text-gray-300 hover:text-white disabled:text-gray-500 disabled:cursor-not-allowed cursor-pointer min-w-[80px] transition-colors"
+                      >
                         <PencilSquareIcon className="h-5 w-5 mb-1" />
                         <span className="text-sm">تحرير الفاتورة</span>
                       </button>

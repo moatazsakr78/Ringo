@@ -255,6 +255,11 @@ function POSPageContent() {
   // Cash Drawer States
   const [isCashDrawerModalOpen, setIsCashDrawerModalOpen] = useState(false);
 
+  // Edit Invoice Mode States
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editInvoiceData, setEditInvoiceData] = useState<any>(null);
+  const [editItemsLoaded, setEditItemsLoaded] = useState(false);
+
   // Use persistent selections hook for main tab defaults only
   const {
     selections: globalSelections,
@@ -347,6 +352,166 @@ function POSPageContent() {
     checkDevice();
     window.addEventListener('resize', checkDevice);
     return () => window.removeEventListener('resize', checkDevice);
+  }, []);
+
+  // Edit Mode: Check URL params, load invoice data, and fetch sale items
+  useEffect(() => {
+    const initEditMode = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isEdit = urlParams.get('edit') === 'true';
+      const saleId = urlParams.get('saleId');
+
+      if (!isEdit || !saleId) {
+        return;
+      }
+
+      // Set edit mode
+      setIsEditMode(true);
+
+      // Read edit data from localStorage for customer info (localStorage is shared between tabs)
+      const editDataStr = localStorage.getItem('pos_edit_invoice');
+      let customerData: any = null;
+      let localStorageItems: any[] = [];
+
+      if (editDataStr) {
+        try {
+          const editData = JSON.parse(editDataStr);
+          customerData = editData;
+          localStorageItems = editData.items || [];
+
+          // Set customer for the tab
+          if (editData.customerId) {
+            setGlobalCustomer({
+              id: editData.customerId,
+              name: editData.customerName,
+              phone: editData.customerPhone
+            });
+          }
+
+          // Clear localStorage after reading
+          localStorage.removeItem('pos_edit_invoice');
+        } catch (error) {
+          console.error('Error parsing edit invoice data:', error);
+        }
+      }
+
+      // Set edit invoice data with saleId
+      setEditInvoiceData({
+        ...customerData,
+        saleId: saleId
+      });
+
+      // Fetch sale items from database
+      try {
+        const { data: saleItemsData, error } = await supabase
+          .from('sale_items')
+          .select(`
+            id,
+            quantity,
+            unit_price,
+            discount,
+            product_id,
+            product:products(
+              id,
+              name,
+              barcode,
+              main_image_url,
+              price,
+              cost_price,
+              wholesale_price,
+              half_wholesale_price,
+              category:categories(name)
+            )
+          `)
+          .eq('sale_id', saleId);
+
+        // Also fetch sale info for invoice number
+        const { data: saleData } = await supabase
+          .from('sales')
+          .select('invoice_number, customer_id')
+          .eq('id', saleId)
+          .single();
+
+        // Update edit invoice data with invoice number
+        setEditInvoiceData((prev: any) => ({
+          ...prev,
+          saleId: saleId,
+          invoiceNumber: saleData?.invoice_number || ''
+        }));
+
+        // Build cart items from fetched data
+        let newCartItems: any[] = [];
+
+        if (!error && saleItemsData && saleItemsData.length > 0) {
+          saleItemsData.forEach((item: any) => {
+            const productData = item.product;
+
+            if (productData) {
+              newCartItems.push({
+                id: `edit-${item.id}-${Date.now()}-${Math.random()}`,
+                product: productData,
+                quantity: item.quantity,
+                price: item.unit_price,
+                totalPrice: item.unit_price * item.quantity,
+                discount: item.discount || 0,
+                isEditItem: true
+              });
+            }
+          });
+        }
+
+        // Fallback to localStorage items if database query failed or returned empty
+        if (newCartItems.length === 0 && localStorageItems.length > 0) {
+          newCartItems = localStorageItems.map((item: any, index: number) => ({
+            id: `edit-local-${index}-${Date.now()}-${Math.random()}`,
+            product: {
+              id: item.productId,
+              name: item.productName,
+              barcode: item.barcode,
+              main_image_url: item.main_image_url
+            },
+            quantity: item.quantity,
+            price: item.unitPrice,
+            totalPrice: item.unitPrice * item.quantity,
+            discount: item.discount || 0,
+            isEditItem: true
+          }));
+        }
+
+        if (newCartItems.length > 0) {
+          setCartItems(newCartItems);
+          updateActiveTabCart(newCartItems);
+          setEditItemsLoaded(true);
+        } else {
+          setEditItemsLoaded(true);
+        }
+      } catch (error) {
+        console.error('Error loading edit items:', error);
+
+        // Fallback to localStorage items if exception occurred
+        if (localStorageItems.length > 0) {
+          const fallbackItems = localStorageItems.map((item: any, index: number) => ({
+            id: `edit-local-${index}-${Date.now()}-${Math.random()}`,
+            product: {
+              id: item.productId,
+              name: item.productName,
+              barcode: item.barcode,
+              main_image_url: item.main_image_url
+            },
+            quantity: item.quantity,
+            price: item.unitPrice,
+            totalPrice: item.unitPrice * item.quantity,
+            discount: item.discount || 0,
+            isEditItem: true
+          }));
+          setCartItems(fallbackItems);
+          updateActiveTabCart(fallbackItems);
+          setEditItemsLoaded(true);
+        }
+      }
+    };
+
+    initEditMode();
   }, []);
 
   // Generate dynamic table columns based on branches - same as Products page
@@ -822,11 +987,19 @@ function POSPageContent() {
       return;
     }
 
+    // Don't sync if we're in edit mode - let edit mode handle its own cart items
+    // Check both state and URL params to handle race condition
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditFromUrl = urlParams.get('edit') === 'true';
+
+    if (isEditMode || isEditFromUrl) {
+      return;
+    }
+
     if (activePOSTab) {
-      console.log('POS: Syncing cart from active tab:', activePOSTab.id, 'Items:', activePOSTab.cartItems?.length || 0);
       setCartItems(activePOSTab.cartItems || []);
     }
-  }, [activeTabId, activePOSTab, isLoadingTabs]);
+  }, [activeTabId, activePOSTab, isLoadingTabs, isEditMode]);
 
   // Sync modes and selections from active tab after loading
   useEffect(() => {
@@ -1265,6 +1438,99 @@ function POSPageContent() {
     setIsProcessingInvoice(true);
 
     try {
+      // Handle Edit Mode - Update existing invoice
+      if (isEditMode && editInvoiceData) {
+        const saleId = editInvoiceData.saleId;
+
+        // Get the original sale total
+        const { data: originalSale } = await supabase
+          .from('sales')
+          .select('total_amount, customer_id')
+          .eq('id', saleId)
+          .single();
+
+        const originalTotal = originalSale?.total_amount || 0;
+
+        // Calculate new total from cart
+        const newTotal = cartItems.reduce((sum, item) => {
+          const itemTotal = item.totalPrice || (item.price * item.quantity);
+          return sum + itemTotal;
+        }, 0);
+
+        // Delete old sale items
+        const { error: deleteError } = await supabase
+          .from('sale_items')
+          .delete()
+          .eq('sale_id', saleId);
+
+        if (deleteError) {
+          throw new Error(`خطأ في حذف المنتجات القديمة: ${deleteError.message}`);
+        }
+
+        // Insert new sale items
+        const newSaleItems = cartItems.map(item => ({
+          sale_id: saleId,
+          product_id: item.product.id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.totalPrice || (item.price * item.quantity),
+          discount: item.discount || 0
+        }));
+
+        const { error: insertError } = await supabase
+          .from('sale_items')
+          .insert(newSaleItems);
+
+        if (insertError) {
+          throw new Error(`خطأ في إضافة المنتجات الجديدة: ${insertError.message}`);
+        }
+
+        // Update sale total
+        const { error: updateError } = await supabase
+          .from('sales')
+          .update({
+            total_amount: newTotal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', saleId);
+
+        if (updateError) {
+          throw new Error(`خطأ في تحديث الفاتورة: ${updateError.message}`);
+        }
+
+        // Calculate the difference and update customer balance
+        const totalDifference = newTotal - originalTotal;
+        if (originalSale?.customer_id && totalDifference !== 0) {
+          // Get current customer balance
+          const { data: customerData } = await supabase
+            .from('customers')
+            .select('account_balance')
+            .eq('id', originalSale.customer_id)
+            .single();
+
+          if (customerData) {
+            const newBalance = (customerData.account_balance || 0) + totalDifference;
+            await supabase
+              .from('customers')
+              .update({ account_balance: newBalance })
+              .eq('id', originalSale.customer_id);
+          }
+        }
+
+        // Success! Show message and close window
+        alert(`تم تعديل الفاتورة رقم ${editInvoiceData.invoiceNumber} بنجاح`);
+
+        // Clear cart and reset edit mode
+        clearCart();
+        setIsEditMode(false);
+        setEditInvoiceData(null);
+
+        // Close the window since it was opened for editing
+        window.close();
+
+        return;
+      }
+
       if (isTransferMode) {
         // Handle transfer invoice creation
         // Transform cartItems to match TransferCartItem interface
@@ -2561,7 +2827,27 @@ function POSPageContent() {
                 {/* Separator */}
                 <div className="h-8 w-px bg-gray-600 mx-1"></div>
 
-                {isPurchaseMode ? (
+                {isEditMode ? (
+                  <div className="flex items-center gap-2 bg-amber-900/30 px-3 py-1 rounded-lg border border-amber-600/50">
+                    <span className="text-amber-400 text-sm font-medium">
+                      تعديل فاتورة رقم: {editInvoiceData?.invoiceNumber}
+                    </span>
+                    <div className="text-xs text-gray-300">
+                      العميل: {editInvoiceData?.customerName}
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm('هل تريد إلغاء التعديل؟')) {
+                          window.close();
+                        }
+                      }}
+                      className="flex flex-col items-center p-2 text-red-400 hover:text-red-300 cursor-pointer min-w-[60px] transition-all"
+                    >
+                      <XMarkIcon className="h-4 w-4" />
+                      <span className="text-xs">إلغاء</span>
+                    </button>
+                  </div>
+                ) : isPurchaseMode ? (
                   <div className="flex items-center gap-2">
                     <span className="text-green-400 text-sm font-medium">
                       وضع الشراء مفعل
@@ -3344,8 +3630,8 @@ function POSPageContent() {
 
                   {/* Cart Footer */}
                   <div className="p-4 border-t border-gray-600 bg-[#2B3544] flex-shrink-0">
-                    {/* Payment Split Component - Only show in sales mode (not transfer or purchase) */}
-                    {!isTransferMode && !isPurchaseMode && !isReturnMode && (
+                    {/* Payment Split Component - Only show in sales mode (not transfer, purchase, or edit mode) */}
+                    {!isTransferMode && !isPurchaseMode && !isReturnMode && !isEditMode && (
                       <PaymentSplit
                         totalAmount={calculateTotalWithDiscounts()}
                         onPaymentsChange={(payments, credit) => {
@@ -3402,13 +3688,15 @@ function POSPageContent() {
                           isProcessingInvoice
                         }
                         className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed text-white ${
-                          isTransferMode
-                            ? "bg-orange-600 hover:bg-orange-700"
-                            : isReturnMode
-                              ? "bg-red-600 hover:bg-red-700"
-                              : isPurchaseMode
-                                ? "bg-purple-600 hover:bg-purple-700"
-                                : "bg-blue-600 hover:bg-blue-700"
+                          isEditMode
+                            ? "bg-amber-600 hover:bg-amber-700"
+                            : isTransferMode
+                              ? "bg-orange-600 hover:bg-orange-700"
+                              : isReturnMode
+                                ? "bg-red-600 hover:bg-red-700"
+                                : isPurchaseMode
+                                  ? "bg-purple-600 hover:bg-purple-700"
+                                  : "bg-blue-600 hover:bg-blue-700"
                         }`}
                         onClick={handleCreateInvoice}
                       >
@@ -3418,15 +3706,17 @@ function POSPageContent() {
                             ? "السلة فارغة"
                             : !hasAllRequiredSelections()
                               ? "يجب إكمال التحديدات"
-                              : isTransferMode
-                                ? `تأكيد النقل (${cartItems.length}) [Y]`
-                                : isReturnMode
-                                  ? isPurchaseMode
-                                    ? `مرتجع شراء (${cartItems.length}) [Y]`
-                                    : `مرتجع بيع (${cartItems.length}) [Y]`
-                                  : isPurchaseMode
-                                    ? `تأكيد الشراء (${cartItems.length}) [Y]`
-                                    : `تأكيد الطلب (${cartItems.length}) [Y]`}
+                              : isEditMode
+                                ? `تعديل الفاتورة (${cartItems.length}) [Y]`
+                                : isTransferMode
+                                  ? `تأكيد النقل (${cartItems.length}) [Y]`
+                                  : isReturnMode
+                                    ? isPurchaseMode
+                                      ? `مرتجع شراء (${cartItems.length}) [Y]`
+                                      : `مرتجع بيع (${cartItems.length}) [Y]`
+                                    : isPurchaseMode
+                                      ? `تأكيد الشراء (${cartItems.length}) [Y]`
+                                      : `تأكيد الطلب (${cartItems.length}) [Y]`}
                       </button>
                     </div>
                   </div>
@@ -3780,7 +4070,7 @@ function POSPageContent() {
                         {!isTransferMode && (
                           <div className="mt-2 text-left">
                             <span className="text-green-400 font-bold text-sm">
-                              {item.total.toFixed(2)} {systemCurrency}
+                              {(item.totalPrice || (item.price * item.quantity) || 0).toFixed(2)} {systemCurrency}
                             </span>
                           </div>
                         )}
@@ -3793,8 +4083,8 @@ function POSPageContent() {
 
             {/* Cart Footer */}
             <div className="p-4 border-t border-gray-600 bg-[#2B3544] flex-shrink-0">
-              {/* Payment Split Component - Only show in sales mode (not transfer or purchase) */}
-              {!isTransferMode && !isPurchaseMode && !isReturnMode && (
+              {/* Payment Split Component - Only show in sales mode (not transfer, purchase, or edit mode) */}
+              {!isTransferMode && !isPurchaseMode && !isReturnMode && !isEditMode && (
                 <PaymentSplit
                   totalAmount={calculateTotalWithDiscounts()}
                   onPaymentsChange={(payments, credit) => {
@@ -3851,13 +4141,15 @@ function POSPageContent() {
                   isProcessingInvoice
                 }
                 className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed text-white ${
-                  isTransferMode
-                    ? "bg-orange-600 hover:bg-orange-700"
-                    : isReturnMode
-                      ? "bg-red-600 hover:bg-red-700"
-                      : isPurchaseMode
-                        ? "bg-purple-600 hover:bg-purple-700"
-                        : "bg-blue-600 hover:bg-blue-700"
+                  isEditMode
+                    ? "bg-amber-600 hover:bg-amber-700"
+                    : isTransferMode
+                      ? "bg-orange-600 hover:bg-orange-700"
+                      : isReturnMode
+                        ? "bg-red-600 hover:bg-red-700"
+                        : isPurchaseMode
+                          ? "bg-purple-600 hover:bg-purple-700"
+                          : "bg-blue-600 hover:bg-blue-700"
                 }`}
                 onClick={handleCreateInvoice}
               >
@@ -3867,15 +4159,17 @@ function POSPageContent() {
                     ? "السلة فارغة"
                     : !hasAllRequiredSelections()
                       ? "يجب إكمال التحديدات"
-                      : isTransferMode
-                        ? `تأكيد النقل (${cartItems.length}) [Y]`
-                        : isReturnMode
-                          ? isPurchaseMode
-                            ? `مرتجع شراء (${cartItems.length}) [Y]`
-                            : `مرتجع بيع (${cartItems.length}) [Y]`
-                          : isPurchaseMode
-                            ? `تأكيد الشراء (${cartItems.length}) [Y]`
-                            : `تأكيد الطلب (${cartItems.length}) [Y]`}
+                      : isEditMode
+                        ? `تعديل الفاتورة (${cartItems.length}) [Y]`
+                        : isTransferMode
+                          ? `تأكيد النقل (${cartItems.length}) [Y]`
+                          : isReturnMode
+                            ? isPurchaseMode
+                              ? `مرتجع شراء (${cartItems.length}) [Y]`
+                              : `مرتجع بيع (${cartItems.length}) [Y]`
+                            : isPurchaseMode
+                              ? `تأكيد الشراء (${cartItems.length}) [Y]`
+                              : `تأكيد الطلب (${cartItems.length}) [Y]`}
               </button>
               </div>
             </div>
