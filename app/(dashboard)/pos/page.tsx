@@ -1469,7 +1469,7 @@ function POSPageContent() {
     // Check if required selections are made before allowing cart operations
     if (isPurchaseMode) {
       if (!selectedSupplier || !selectedWarehouse || !selections.record) {
-        alert("يجب تحديد المورد والمخزن والسجل أولاً قبل إضافة المنتجات للسلة");
+        alert("يجب تحديد المورد والمخزن والخزنة أولاً قبل إضافة المنتجات للسلة");
         return;
       }
     } else if (isTransferMode) {
@@ -1508,17 +1508,17 @@ function POSPageContent() {
         return;
       }
       if (!selections.record) {
-        alert("يجب تحديد السجل أولاً قبل إنشاء فاتورة النقل");
+        alert("يجب تحديد الخزنة أولاً قبل إنشاء فاتورة النقل");
         return;
       }
     } else if (isPurchaseMode) {
       if (!hasRequiredForPurchase()) {
-        alert("يجب تحديد السجل والمورد والمخزن قبل تأكيد الطلب");
+        alert("يجب تحديد الخزنة والمورد والمخزن قبل تأكيد الطلب");
         return;
       }
     } else {
       if (!hasRequiredForSale()) {
-        alert("يجب تحديد السجل والعميل والفرع قبل تأكيد الطلب");
+        alert("يجب تحديد الخزنة والعميل والفرع قبل تأكيد الطلب");
         return;
       }
     }
@@ -3581,7 +3581,7 @@ function POSPageContent() {
                   className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-all relative"
                 >
                   <DocumentTextIcon className="h-5 w-5 mb-1" />
-                  <span className="text-sm">السجل</span>
+                  <span className="text-sm">الخزنة</span>
                   {!selections.record && (
                     <div className="w-1 h-1 bg-red-400 rounded-full mt-1"></div>
                   )}
@@ -3852,7 +3852,7 @@ function POSPageContent() {
                 className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative"
               >
                 <DocumentTextIcon className="h-4 w-4" />
-                <span className="text-xs">السجل</span>
+                <span className="text-xs">الخزنة</span>
                 {!selections.record && (
                   <div className="w-1 h-1 bg-red-400 rounded-full absolute -top-1 -right-1"></div>
                 )}
@@ -4101,7 +4101,7 @@ function POSPageContent() {
 
               {/* Record */}
               <span className="text-gray-300 whitespace-nowrap">
-                السجل:{" "}
+                الخزنة:{" "}
                 <span className="text-white font-medium">
                   {selections.record ? selections.record.name : "غير محدد"}
                 </span>
@@ -4376,7 +4376,7 @@ function POSPageContent() {
 
               {/* 6. Record Info */}
               <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-gray-400">السجل:</span>
+                <span className="text-xs text-gray-400">الخزنة:</span>
                 <span className="text-xs text-white bg-[#2B3544] px-2 py-1 rounded border border-gray-600">
                   {selections.record?.name || "غير محدد"}
                 </span>

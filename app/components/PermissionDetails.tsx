@@ -20,7 +20,7 @@ interface PermissionDetailsProps {
 
 const pagePermissionsData: { [key: string]: PagePermission[] } = {
   'pos': [
-    { id: 'pos-register', name: 'السجل', description: 'الوصول إلى سجل المبيعات ومراجعة العمليات', enabled: true, category: 'feature' },
+    { id: 'pos-register', name: 'الخزنة', description: 'الوصول إلى الخزنة ومراجعة العمليات', enabled: true, category: 'feature' },
     { id: 'pos-branch-transfer', name: 'تحويل فرع', description: 'تحويل المبيعات والمخزون بين الفروع', enabled: true, category: 'feature' },
     { id: 'pos-purchase-mode', name: 'وضع الشراء', description: 'تفعيل وضع الشراء لعمليات المشتريات', enabled: false, category: 'feature' },
     { id: 'pos-inventory-transfer', name: 'نقل البضاعة', description: 'نقل البضائع والمنتجات بين المواقع', enabled: true, category: 'feature' }
@@ -63,10 +63,10 @@ const pagePermissionsData: { [key: string]: PagePermission[] } = {
     { id: 'orders-print-invoice', name: 'طباعة الفاتورة', description: 'طباعة فواتير الطلبات', enabled: true, category: 'button' }
   ],
   'records': [
-    { id: 'records-add', name: 'إضافة سجل', description: 'إضافة سجلات جديدة', enabled: true, category: 'button' },
-    { id: 'records-edit', name: 'تعديل سجل', description: 'تعديل السجلات الموجودة', enabled: true, category: 'button' },
-    { id: 'records-delete', name: 'حذف سجل', description: 'حذف السجلات', enabled: false, category: 'button' },
-    { id: 'records-search', name: 'البحث في السجلات', description: 'البحث والتصفية في السجلات', enabled: true, category: 'feature' }
+    { id: 'records-add', name: 'إضافة خزنة', description: 'إضافة خزن جديدة', enabled: true, category: 'button' },
+    { id: 'records-edit', name: 'تعديل خزنة', description: 'تعديل الخزن الموجودة', enabled: true, category: 'button' },
+    { id: 'records-delete', name: 'حذف خزنة', description: 'حذف الخزن', enabled: false, category: 'button' },
+    { id: 'records-search', name: 'البحث في الخزن', description: 'البحث والتصفية في الخزن', enabled: true, category: 'feature' }
   ],
   'store-customer-orders': [
     { id: 'store-orders-view', name: 'عرض طلبات المتجر', description: 'عرض طلبات عملاء المتجر', enabled: true, category: 'view' },

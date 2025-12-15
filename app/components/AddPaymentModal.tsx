@@ -85,7 +85,7 @@ export default function AddPaymentModal({
     }
 
     if (!recordId) {
-      alert('يرجى اختيار السجل')
+      alert('يرجى اختيار الخزنة')
       return
     }
 
@@ -231,10 +231,10 @@ export default function AddPaymentModal({
             {/* Record Selection */}
             <div>
               <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
-                السجل <span className="text-red-400">*</span>
+                الخزنة <span className="text-red-400">*</span>
               </label>
               {isLoadingRecords ? (
-                <div className="text-gray-400 text-sm text-center py-2">جاري تحميل السجلات...</div>
+                <div className="text-gray-400 text-sm text-center py-2">جاري تحميل الخزنةات...</div>
               ) : records.length === 0 ? (
                 <div className="text-red-400 text-sm text-center py-2">
                   لا توجد سجلات نشطة. يرجى إنشاء سجل أولاً.

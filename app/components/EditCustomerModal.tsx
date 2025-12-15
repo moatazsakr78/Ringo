@@ -467,7 +467,7 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
               {/* Default Record */}
               <div className="space-y-2">
                 <label className="block text-white text-sm font-medium text-right">
-                  السجل الافتراضي
+                  الخزنة الافتراضية
                 </label>
                 {isLoadingRecords ? (
                   <div className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-gray-400 text-right text-sm">
@@ -478,13 +478,13 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
                     options={recordOptions}
                     value={formData.defaultRecordId}
                     onChange={(value) => handleSelectChange('defaultRecordId', value)}
-                    placeholder="-- اختر السجل --"
-                    searchPlaceholder="بحث في السجلات..."
+                    placeholder="-- اختر الخزنة --"
+                    searchPlaceholder="بحث في الخزن..."
                     name="defaultRecordId"
                   />
                 )}
                 <p className="text-gray-400 text-xs text-right">
-                  السجل الذي سيتم استخدامه تلقائياً عند اختيار هذا العميل في نقطة البيع
+                  الخزنة التي سيتم استخدامه تلقائياً عند اختيار هذا العميل في نقطة البيع
                 </p>
               </div>
 

@@ -28,7 +28,7 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
       '/inventory': 'المخزون',
       '/customers': 'العملاء',
       '/suppliers': 'الموردين',
-      '/records': 'السجلات',
+      '/records': 'الخزن',
       '/reports': 'التقارير',
       '/permissions': 'الصلاحيات',
       '/settings': 'الإعدادات',

@@ -1,5 +1,4 @@
 import { supabase } from '../supabase/client'
-import { getTransferRecordId, ensureTransferRecordExists } from '../utils/transfer-record-manager'
 
 export interface TransferCartItem {
   id: string
@@ -46,22 +45,27 @@ export async function createTransferInvoice({
 
     // Generate transfer invoice number
     const invoiceNumber = `TR-${Date.now()}`
-    
-    // Ensure transfer record exists and get its ID
-    await ensureTransferRecordExists()
-    const transferRecordId = await getTransferRecordId()
-    
-    if (!transferRecordId) {
-      throw new Error('فشل في إنشاء أو العثور على سجل النقل')
+
+    // Use the passed record or get the main record
+    let finalRecord = record
+
+    if (!finalRecord) {
+      // Get the main/primary record
+      const { data: mainRecord, error: recordError } = await supabase
+        .from('records')
+        .select('id, name')
+        .eq('is_primary', true)
+        .not('name', 'ilike', '%نقل%')
+        .single()
+
+      if (recordError || !mainRecord) {
+        throw new Error('فشل في العثور على الخزنة الرئيسية')
+      }
+
+      finalRecord = mainRecord
     }
 
-    // Always use the transfer record for transfer invoices, regardless of selected record
-    const finalRecord = { 
-      id: transferRecordId, 
-      name: 'سجل النقل' 
-    }
-
-    console.log('استخدام سجل النقل الافتراضي:', finalRecord)
+    console.log('استخدام الخزنة:', finalRecord)
 
     // Create transfer invoice in purchase_invoices table (we'll use it for transfer invoices too)
     const { data: transferInvoice, error: invoiceError } = await supabase

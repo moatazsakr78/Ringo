@@ -551,7 +551,7 @@ export default function PermissionsPage() {
         { id: 'customers', name: 'العملاء' },
         { id: 'suppliers', name: 'الموردين' },
         { id: 'customer-orders', name: 'طلبات العملاء' },
-        { id: 'records', name: 'السجلات' },
+        { id: 'records', name: 'الخزن' },
         { id: 'reports', name: 'التقارير (غير مكتملة)' },
         { id: 'permissions', name: 'الصلاحيات' }
       ]
@@ -1120,7 +1120,7 @@ export default function PermissionsPage() {
                         <div>• المنتجات</div>
                         <div>• المخزون</div>
                         <div>• العملاء والموردين</div>
-                        <div>• طلبات العملاء والسجلات</div>
+                        <div>• طلبات العملاء والخزن</div>
                         <div>• صفحات المتجر الإلكتروني</div>
                       </div>
                     </div>

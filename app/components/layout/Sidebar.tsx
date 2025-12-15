@@ -28,7 +28,7 @@ const allSidebarItems = [
   { href: '/customers', label: 'العملاء', icon: UserGroupIcon },
   { href: '/suppliers', label: 'الموردين', icon: TruckIcon },
   { href: '/customer-orders', label: 'طلبات العملاء', icon: ClipboardDocumentListIcon },
-  { href: '/records', label: 'السجلات', icon: DocumentTextIcon },
+  { href: '/records', label: 'الخزن', icon: DocumentTextIcon },
   { href: '/reports', label: 'التقارير', icon: ChartBarIcon },
   { href: '/permissions', label: 'الصلاحيات', icon: ShieldCheckIcon },
   { href: '/settings', label: 'الإعدادات', icon: CogIcon },

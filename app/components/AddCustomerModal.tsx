@@ -60,8 +60,8 @@ export default function AddCustomerModal({ isOpen, onClose }: AddCustomerModalPr
         if (error) throw error
         setRecords(data || [])
 
-        // Set default record to 'السجل الرئيسي' if exists
-        const defaultRecord = data?.find(r => r.name === 'السجل الرئيسي')
+        // Set default record to 'الخزنة الرئيسية' if exists
+        const defaultRecord = data?.find(r => r.name === 'الخزنة الرئيسية')
         if (defaultRecord) {
           setFormData(prev => ({ ...prev, defaultRecordId: defaultRecord.id }))
         }
@@ -196,7 +196,7 @@ export default function AddCustomerModal({ isOpen, onClose }: AddCustomerModalPr
 
   const resetForm = () => {
     // Find default record
-    const defaultRecord = records.find(r => r.name === 'السجل الرئيسي')
+    const defaultRecord = records.find(r => r.name === 'الخزنة الرئيسية')
     setFormData({
       name: '',
       group: '',
@@ -440,7 +440,7 @@ export default function AddCustomerModal({ isOpen, onClose }: AddCustomerModalPr
               {/* Default Record */}
               <div className="space-y-2">
                 <label className="block text-white text-sm font-medium text-right">
-                  السجل الافتراضي
+                  الخزنة الافتراضية
                 </label>
                 {isLoadingRecords ? (
                   <div className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-gray-400 text-right text-sm">
@@ -451,13 +451,13 @@ export default function AddCustomerModal({ isOpen, onClose }: AddCustomerModalPr
                     options={recordOptions}
                     value={formData.defaultRecordId}
                     onChange={(value) => handleSelectChange('defaultRecordId', value)}
-                    placeholder="-- اختر السجل --"
-                    searchPlaceholder="بحث في السجلات..."
+                    placeholder="-- اختر الخزنة --"
+                    searchPlaceholder="بحث في الخزن..."
                     name="defaultRecordId"
                   />
                 )}
                 <p className="text-gray-400 text-xs text-right">
-                  السجل الذي سيتم استخدامه تلقائياً عند اختيار هذا العميل في نقطة البيع
+                  الخزنة التي سيتم استخدامه تلقائياً عند اختيار هذا العميل في نقطة البيع
                 </p>
               </div>
 

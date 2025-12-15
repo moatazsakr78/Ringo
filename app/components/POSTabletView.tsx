@@ -294,7 +294,7 @@ export default function POSTabletView({
 
             {/* Record */}
             <span className="text-gray-300 whitespace-nowrap">
-              السجل:{' '}
+              الخزنة:{' '}
               <span className="text-white font-medium">
                 {selections.record ? selections.record.name : 'غير محدد'}
               </span>
@@ -373,7 +373,7 @@ export default function POSTabletView({
               className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md transition-all relative"
             >
               <DocumentTextIcon className="h-4 w-4" />
-              <span>السجل</span>
+              <span>الخزنة</span>
               {!selections.record && (
                 <div className="w-1.5 h-1.5 bg-red-400 rounded-full absolute top-1 right-1"></div>
               )}

@@ -1,142 +1,131 @@
 'use client'
 
-import { 
+import {
   PlusIcon,
   MagnifyingGlassIcon,
-  ClipboardDocumentListIcon,
+  BanknotesIcon,
   PencilIcon,
   TrashIcon
 } from '@heroicons/react/24/outline'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase/client'
-import { ensureTransferRecordExists, linkTransferInvoicesToRecord } from '../../lib/utils/transfer-record-manager'
 import Sidebar from '../../components/layout/Sidebar'
 import TopHeader from '../../components/layout/TopHeader'
-import RecordDetailsModal from '../../components/RecordDetailsModal'
-import AddRecordModal from '../../components/AddRecordModal'
-import EditRecordModal from '../../components/EditRecordModal'
+import SafeDetailsModal from '../../components/SafeDetailsModal'
+import AddSafeModal from '../../components/AddSafeModal'
+import EditSafeModal from '../../components/EditSafeModal'
 
-export default function RecordsPage() {
+export default function SafesPage() {
   const router = useRouter()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
-  const [isRecordDetailsModalOpen, setIsRecordDetailsModalOpen] = useState(false)
-  const [isAddRecordModalOpen, setIsAddRecordModalOpen] = useState(false)
-  const [isEditRecordModalOpen, setIsEditRecordModalOpen] = useState(false)
-  const [selectedRecord, setSelectedRecord] = useState<any>(null)
-  const [recordToEdit, setRecordToEdit] = useState<any>(null)
-  const [records, setRecords] = useState<any[]>([])
-  const [activeRecordsCount, setActiveRecordsCount] = useState(0)
+  const [isSafeDetailsModalOpen, setIsSafeDetailsModalOpen] = useState(false)
+  const [isAddSafeModalOpen, setIsAddSafeModalOpen] = useState(false)
+  const [isEditSafeModalOpen, setIsEditSafeModalOpen] = useState(false)
+  const [selectedSafe, setSelectedSafe] = useState<any>(null)
+  const [safeToEdit, setSafeToEdit] = useState<any>(null)
+  const [safes, setSafes] = useState<any[]>([])
+  const [activeSafesCount, setActiveSafesCount] = useState(0)
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
   }
 
-  const openRecordDetails = (record: any) => {
-    setSelectedRecord(record)
-    setIsRecordDetailsModalOpen(true)
+  const openSafeDetails = (safe: any) => {
+    setSelectedSafe(safe)
+    setIsSafeDetailsModalOpen(true)
   }
 
-  const closeRecordDetails = () => {
-    setIsRecordDetailsModalOpen(false)
-    setSelectedRecord(null)
+  const closeSafeDetails = () => {
+    setIsSafeDetailsModalOpen(false)
+    setSelectedSafe(null)
   }
 
-  const openAddRecordModal = () => {
-    setIsAddRecordModalOpen(true)
+  const openAddSafeModal = () => {
+    setIsAddSafeModalOpen(true)
   }
 
-  const closeAddRecordModal = () => {
-    setIsAddRecordModalOpen(false)
+  const closeAddSafeModal = () => {
+    setIsAddSafeModalOpen(false)
   }
 
-  const openEditRecordModal = (record: any) => {
-    setRecordToEdit(record)
-    setIsEditRecordModalOpen(true)
+  const openEditSafeModal = (safe: any) => {
+    setSafeToEdit(safe)
+    setIsEditSafeModalOpen(true)
   }
 
-  const closeEditRecordModal = () => {
-    setIsEditRecordModalOpen(false)
-    setRecordToEdit(null)
+  const closeEditSafeModal = () => {
+    setIsEditSafeModalOpen(false)
+    setSafeToEdit(null)
   }
 
-  const handleDeleteRecord = async (record: any) => {
-    // Prevent deletion of primary record or transfer record
-    if (record.is_primary) {
-      if (record.name === 'سجل النقل') {
-        alert('لا يمكن حذف سجل النقل الافتراضي')
-      } else {
-        alert('لا يمكن حذف السجل الرئيسي')
-      }
+  const handleDeleteSafe = async (safe: any) => {
+    // Prevent deletion of primary safe
+    if (safe.is_primary) {
+      alert('لا يمكن حذف الخزنة الرئيسية')
       return
     }
 
-    if (window.confirm(`هل أنت متأكد من حذف السجل "${record.name}"؟`)) {
+    if (window.confirm(`هل أنت متأكد من حذف الخزنة "${safe.name}"؟`)) {
       try {
         const { error } = await supabase
           .from('records')
           .delete()
-          .eq('id', record.id)
+          .eq('id', safe.id)
 
         if (error) {
-          console.error('Error deleting record:', error)
-          alert('حدث خطأ أثناء حذف السجل')
+          console.error('Error deleting safe:', error)
+          alert('حدث خطأ أثناء حذف الخزنة')
           return
         }
 
         // The real-time subscription will automatically update the UI
       } catch (error) {
-        console.error('Error deleting record:', error)
-        alert('حدث خطأ أثناء حذف السجل')
+        console.error('Error deleting safe:', error)
+        alert('حدث خطأ أثناء حذف الخزنة')
       }
     }
   }
 
 
-  const fetchRecords = async () => {
+  const fetchSafes = async () => {
     try {
-      // Ensure transfer record exists first
-      await ensureTransferRecordExists()
-      
-      // Link any orphaned transfer invoices to the transfer record
-      await linkTransferInvoicesToRecord()
-
       const { data, error } = await supabase
         .from('records')
         .select('*')
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('Error fetching records:', error)
+        console.error('Error fetching safes:', error)
         return
       }
 
-      setRecords(data || [])
-      setActiveRecordsCount(data?.filter((record: any) => record.is_active).length || 0)
+      setSafes(data || [])
+      setActiveSafesCount(data?.filter((safe: any) => safe.is_active).length || 0)
     } catch (error) {
-      console.error('Error fetching records:', error)
+      console.error('Error fetching safes:', error)
     }
   }
 
-  const handleRecordAdded = () => {
-    fetchRecords()
+  const handleSafeAdded = () => {
+    fetchSafes()
   }
 
-  const handleRecordUpdated = () => {
-    fetchRecords()
+  const handleSafeUpdated = () => {
+    fetchSafes()
   }
 
   useEffect(() => {
-    fetchRecords()
+    fetchSafes()
 
     // Set up real-time subscription
     const channel = supabase
-      .channel('records_changes')
-      .on('postgres_changes', 
+      .channel('safes_changes')
+      .on('postgres_changes',
         { event: '*', schema: 'public', table: 'records' },
         (payload: any) => {
           console.log('Real-time update:', payload)
-          fetchRecords()
+          fetchSafes()
         }
       )
       .subscribe()
@@ -159,30 +148,30 @@ export default function RecordsPage() {
     <div className="h-screen bg-[#2B3544] overflow-hidden">
       {/* Top Header */}
       <TopHeader onMenuClick={toggleSidebar} isMenuOpen={isSidebarOpen} />
-      
+
       {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />
-      
+
       {/* Main Content Container */}
       <div className="h-full pt-12 overflow-y-auto scrollbar-hide bg-pos-dark text-white" dir="rtl">
       {/* Header */}
       <div className="bg-pos-darker p-4 flex items-center justify-between border-b border-gray-700">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => router.push('/payment-methods')}
             className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-purple-700 transition-colors"
           >
-            <ClipboardDocumentListIcon className="h-4 w-4" />
+            <BanknotesIcon className="h-4 w-4" />
             طرق الدفع
           </button>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-medium text-gray-300">
-            إدارة وعرض جميع السجلات المالية
+            إدارة وعرض جميع الخزن المالية
           </h1>
-          <h1 className="text-xl font-bold">السجلات</h1>
-          <ClipboardDocumentListIcon className="h-6 w-6 text-purple-600" />
+          <h1 className="text-xl font-bold">الخزن</h1>
+          <BanknotesIcon className="h-6 w-6 text-purple-600" />
         </div>
       </div>
 
@@ -199,25 +188,25 @@ export default function RecordsPage() {
           </div>
         </div>
 
-        {/* Active Records */}
+        {/* Active Safes */}
         <div className="bg-pos-darker rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">السجلات النشطة</p>
-              <p className="text-2xl font-bold text-white mt-1">{activeRecordsCount}</p>
+              <p className="text-gray-400 text-sm">الخزن النشطة</p>
+              <p className="text-2xl font-bold text-white mt-1">{activeSafesCount}</p>
             </div>
             <div className="text-green-500 text-2xl">👁</div>
           </div>
         </div>
 
-        {/* Total Records */}
+        {/* Total Safes */}
         <div className="bg-pos-darker rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-400 text-sm">إجمالي السجلات</p>
-              <p className="text-2xl font-bold text-white mt-1">{records.length}</p>
+              <p className="text-gray-400 text-sm">إجمالي الخزن</p>
+              <p className="text-2xl font-bold text-white mt-1">{safes.length}</p>
             </div>
-            <div className="text-purple-500 text-2xl">📋</div>
+            <div className="text-purple-500 text-2xl">🏦</div>
           </div>
         </div>
       </div>
@@ -226,12 +215,12 @@ export default function RecordsPage() {
       <div className="px-6 pb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button 
-              onClick={openAddRecordModal}
+            <button
+              onClick={openAddSafeModal}
               className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-green-700 transition-colors"
             >
               <PlusIcon className="h-4 w-4" />
-              إضافة سجل جديد
+              إضافة خزنة جديدة
             </button>
             <button className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg text-sm font-medium">
               جميع الفروع
@@ -247,7 +236,7 @@ export default function RecordsPage() {
           <div className="relative">
             <input
               type="text"
-              placeholder="البحث في السجلات..."
+              placeholder="البحث في الخزن..."
               className="bg-gray-700 text-white placeholder-gray-400 pl-10 pr-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 w-80"
             />
             <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -255,71 +244,71 @@ export default function RecordsPage() {
         </div>
       </div>
 
-      {/* Records Table */}
+      {/* Safes Table */}
       <div className="mx-6 bg-pos-darker rounded-lg overflow-hidden">
         <table className="w-full text-sm text-right">
           <thead className="bg-gray-700 text-gray-300">
             <tr>
               <th className="p-3 text-right font-medium">#</th>
-              <th className="p-3 text-right font-medium">اسم السجل</th>
+              <th className="p-3 text-right font-medium">اسم الخزنة</th>
               <th className="p-3 text-right font-medium">الحالة</th>
               <th className="p-3 text-right font-medium">تاريخ الإنشاء</th>
               <th className="p-3 text-right font-medium">الإجراءات</th>
             </tr>
           </thead>
           <tbody className="bg-pos-darker divide-y divide-gray-700">
-            {records.map((record, index) => (
-              <tr 
-                key={record.id}
+            {safes.map((safe, index) => (
+              <tr
+                key={safe.id}
                 className="hover:bg-gray-700 transition-colors cursor-pointer"
-                onDoubleClick={() => openRecordDetails(record)}
+                onDoubleClick={() => openSafeDetails(safe)}
               >
                 <td className="p-3 text-white font-medium">{index + 1}</td>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 ${
-                      record.name === 'سجل النقل' 
-                        ? 'bg-green-600' 
-                        : record.is_primary 
-                          ? 'bg-purple-600' 
+                      safe.name === 'خزنة النقل'
+                        ? 'bg-green-600'
+                        : safe.is_primary
+                          ? 'bg-purple-600'
                           : 'bg-blue-600'
                     } rounded flex items-center justify-center text-white text-sm`}>
-                      {record.name === 'سجل النقل' ? '🔄' : '📋'}
+                      {safe.name === 'خزنة النقل' ? '🔄' : '🏦'}
                     </div>
-                    <span className="text-white font-medium">{record.name}</span>
-                    {record.is_primary && (
+                    <span className="text-white font-medium">{safe.name}</span>
+                    {safe.is_primary && (
                       <span className={`px-2 py-1 rounded-full text-xs mr-2 ${
-                        record.name === 'سجل النقل'
+                        safe.name === 'خزنة النقل'
                           ? 'bg-green-900 text-green-300'
                           : 'bg-purple-900 text-purple-300'
                       }`}>
-                        {record.name === 'سجل النقل' ? 'نقل' : 'رئيسي'}
+                        {safe.name === 'خزنة النقل' ? 'نقل' : 'رئيسية'}
                       </span>
                     )}
                   </div>
                 </td>
                 <td className="p-3">
                   <span className={`px-2 py-1 rounded-full text-xs ${
-                    record.is_active 
-                      ? 'bg-green-900 text-green-300' 
+                    safe.is_active
+                      ? 'bg-green-900 text-green-300'
                       : 'bg-red-900 text-red-300'
                   }`}>
-                    {record.is_active ? 'نشط' : 'غير نشط'}
+                    {safe.is_active ? 'نشطة' : 'غير نشطة'}
                   </span>
                 </td>
-                <td className="p-3 text-gray-400">{formatDate(record.created_at)}</td>
+                <td className="p-3 text-gray-400">{formatDate(safe.created_at)}</td>
                 <td className="p-3">
                   <div className="flex items-center gap-2">
-                    <button 
-                      onClick={() => openEditRecordModal(record)}
+                    <button
+                      onClick={() => openEditSafeModal(safe)}
                       className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center gap-1"
                     >
                       <PencilIcon className="h-3 w-3" />
                       تعديل
                     </button>
-                    {!record.is_primary && (
-                      <button 
-                        onClick={() => handleDeleteRecord(record)}
+                    {!safe.is_primary && (
+                      <button
+                        onClick={() => handleDeleteSafe(safe)}
                         className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors flex items-center gap-1"
                       >
                         <TrashIcon className="h-3 w-3" />
@@ -337,26 +326,26 @@ export default function RecordsPage() {
       <div className="p-6"></div>
       </div>
 
-      {/* Record Details Modal */}
-      <RecordDetailsModal 
-        isOpen={isRecordDetailsModalOpen} 
-        onClose={closeRecordDetails}
-        record={selectedRecord}
+      {/* Safe Details Modal */}
+      <SafeDetailsModal
+        isOpen={isSafeDetailsModalOpen}
+        onClose={closeSafeDetails}
+        safe={selectedSafe}
       />
 
-      {/* Add Record Modal */}
-      <AddRecordModal 
-        isOpen={isAddRecordModalOpen}
-        onClose={closeAddRecordModal}
-        onRecordAdded={handleRecordAdded}
+      {/* Add Safe Modal */}
+      <AddSafeModal
+        isOpen={isAddSafeModalOpen}
+        onClose={closeAddSafeModal}
+        onSafeAdded={handleSafeAdded}
       />
 
-      {/* Edit Record Modal */}
-      <EditRecordModal 
-        isOpen={isEditRecordModalOpen}
-        onClose={closeEditRecordModal}
-        onRecordUpdated={handleRecordUpdated}
-        record={recordToEdit}
+      {/* Edit Safe Modal */}
+      <EditSafeModal
+        isOpen={isEditSafeModalOpen}
+        onClose={closeEditSafeModal}
+        onSafeUpdated={handleSafeUpdated}
+        safe={safeToEdit}
       />
     </div>
   )

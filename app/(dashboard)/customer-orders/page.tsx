@@ -616,7 +616,7 @@ export default function CustomerOrdersPage() {
     if (!selectedOrderForInvoice || !nextStatus) return;
 
     if (!invoiceData.selectedBranch || !invoiceData.selectedRecord) {
-      alert('يرجى التأكد من اختيار الفرع والسجل');
+      alert('يرجى التأكد من اختيار الفرع والخزنة');
       return;
     }
 
@@ -2450,13 +2450,13 @@ export default function CustomerOrdersPage() {
 
                     {/* Record Selection */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">السجل</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">الخزنة</label>
                       <select
                         value={invoiceData.selectedRecord}
                         onChange={(e) => setInvoiceData({...invoiceData, selectedRecord: e.target.value})}
                         className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 text-gray-900"
                       >
-                        <option value="">اختر السجل</option>
+                        <option value="">اختر الخزنة</option>
                         {records.map((record) => (
                           <option key={record.id} value={record.id}>
                             {record.name}

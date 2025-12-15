@@ -161,7 +161,7 @@ export default function PaymentMethodsPage() {
               className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-purple-700 transition-colors"
             >
               <CreditCardIcon className="h-4 w-4" />
-              السجلات
+              الخزن
             </button>
           </div>
           
