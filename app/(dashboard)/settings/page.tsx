@@ -8,7 +8,8 @@ import {
   BellIcon,
   ShieldCheckIcon,
   BuildingOfficeIcon,
-  PhotoIcon
+  PhotoIcon,
+  BuildingStorefrontIcon
 } from '@heroicons/react/24/outline';
 import TopHeader from '@/app/components/layout/TopHeader';
 import Sidebar from '@/app/components/layout/Sidebar';
@@ -173,16 +174,22 @@ const settingsCategories: SettingsCategory[] = [
     description: 'إعدادات الإشعارات والتنبيهات'
   },
   {
-    id: 'security',
-    name: 'الأمان',
-    icon: ShieldCheckIcon,
-    description: 'إعدادات الأمان وكلمات المرور'
-  },
-  {
     id: 'company',
     name: 'شركتي',
     icon: BuildingOfficeIcon,
     description: 'إعدادات معلومات الشركة والعلامة التجارية'
+  },
+  {
+    id: 'store',
+    name: 'المتجر',
+    icon: BuildingStorefrontIcon,
+    description: 'إعدادات ظهور المنتجات في المتجر'
+  },
+  {
+    id: 'security',
+    name: 'الأمان',
+    icon: ShieldCheckIcon,
+    description: 'إعدادات الأمان وكلمات المرور'
   }
 ];
 
@@ -293,6 +300,11 @@ export default function SettingsPage() {
   const [isLogoEditorOpen, setIsLogoEditorOpen] = useState(false);
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
 
+  // Store Settings State
+  const [showQuantityInStore, setShowQuantityInStore] = useState(true);
+  const [showProductStarRating, setShowProductStarRating] = useState(true);
+  const [isLoadingStoreSettings, setIsLoadingStoreSettings] = useState(true);
+
   // Update pending state when database values change
   useEffect(() => {
     setPendingCurrencyMode(dbCurrencyMode);
@@ -371,6 +383,42 @@ export default function SettingsPage() {
     };
 
     loadProductDisplaySettings();
+  }, []);
+
+  // Load store settings from database
+  useEffect(() => {
+    const loadStoreSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('system_settings')
+          .select('settings_data')
+          .eq('is_active', true)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error loading store settings:', error);
+          setIsLoadingStoreSettings(false);
+          return;
+        }
+
+        if (data?.settings_data) {
+          const settingsData = data.settings_data as any;
+          if (typeof settingsData.show_quantity_in_store === 'boolean') {
+            setShowQuantityInStore(settingsData.show_quantity_in_store);
+          }
+          if (typeof settingsData.show_product_star_rating === 'boolean') {
+            setShowProductStarRating(settingsData.show_product_star_rating);
+          }
+        }
+
+        setIsLoadingStoreSettings(false);
+      } catch (err) {
+        console.error('Error loading store settings:', err);
+        setIsLoadingStoreSettings(false);
+      }
+    };
+
+    loadStoreSettings();
   }, []);
 
   // Use dynamic currency list from database
@@ -1404,6 +1452,148 @@ export default function SettingsPage() {
     );
   };
 
+  const handleStoreSettingChange = async (settingKey: string, value: boolean) => {
+    try {
+      // Update local state first
+      if (settingKey === 'show_quantity_in_store') {
+        setShowQuantityInStore(value);
+      } else if (settingKey === 'show_product_star_rating') {
+        setShowProductStarRating(value);
+      }
+
+      // Check if active settings exist
+      const { data: existingData, error: fetchError } = await supabase
+        .from('system_settings')
+        .select('id, settings_data')
+        .eq('is_active', true)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching store settings:', fetchError);
+        return;
+      }
+
+      if (existingData?.id) {
+        // Update existing settings_data
+        const currentSettings = (existingData.settings_data as any) || {};
+        const updatedSettings = {
+          ...currentSettings,
+          [settingKey]: value
+        };
+
+        const { error } = await supabase
+          .from('system_settings')
+          .update({
+            settings_data: updatedSettings,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingData.id);
+
+        if (error) {
+          console.error('Error updating store setting:', error);
+          // Revert state on error
+          if (settingKey === 'show_quantity_in_store') {
+            setShowQuantityInStore(!value);
+          } else if (settingKey === 'show_product_star_rating') {
+            setShowProductStarRating(!value);
+          }
+        }
+      } else {
+        // Insert new settings record
+        const newSettings = {
+          [settingKey]: value
+        };
+
+        const { error } = await supabase
+          .from('system_settings')
+          .insert({
+            settings_data: newSettings,
+            is_active: true
+          });
+
+        if (error) {
+          console.error('Error inserting store setting:', error);
+          // Revert state on error
+          if (settingKey === 'show_quantity_in_store') {
+            setShowQuantityInStore(!value);
+          } else if (settingKey === 'show_product_star_rating') {
+            setShowProductStarRating(!value);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error saving store setting:', err);
+    }
+  };
+
+  const renderStoreSettings = () => {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <h3 className="text-white font-medium text-lg mb-6">إعدادات المتجر</h3>
+        <p className="text-sm text-gray-400 mb-6">
+          تحكم في ما يظهر للعملاء في متجرك الإلكتروني
+        </p>
+
+        <div className="space-y-4 p-4 bg-[#374151] rounded-lg border border-gray-600">
+          {/* Show Quantity in Store Toggle */}
+          <div className="flex justify-between items-center p-3 bg-[#2B3544] rounded-lg">
+            <div className="flex-1">
+              <label className="text-white text-sm font-medium">ظهور الكمية في المتجر</label>
+              <p className="text-xs text-gray-400 mt-1">
+                عند التفعيل، سيظهر للعميل عدد القطع المتبقية من كل منتج
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showQuantityInStore}
+                onChange={(e) => handleStoreSettingChange('show_quantity_in_store', e.target.checked)}
+                disabled={isLoadingStoreSettings}
+                className="sr-only peer"
+              />
+              <div className={`w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 ${isLoadingStoreSettings ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+            </label>
+          </div>
+
+          {/* Show Product Star Rating Toggle */}
+          <div className="flex justify-between items-center p-3 bg-[#2B3544] rounded-lg">
+            <div className="flex-1">
+              <label className="text-white text-sm font-medium">ظهور نجمة المنتج</label>
+              <p className="text-xs text-gray-400 mt-1">
+                عند التفعيل، ستظهر تقييمات النجوم على المنتجات للعملاء
+              </p>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showProductStarRating}
+                onChange={(e) => handleStoreSettingChange('show_product_star_rating', e.target.checked)}
+                disabled={isLoadingStoreSettings}
+                className="sr-only peer"
+              />
+              <div className={`w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 ${isLoadingStoreSettings ? 'opacity-50 cursor-not-allowed' : ''}`}></div>
+            </label>
+          </div>
+        </div>
+
+        {/* Additional Info */}
+        <div className="p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <svg className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-blue-300 text-sm font-medium">ملاحظة</p>
+              <p className="text-gray-400 text-xs mt-1">
+                التغييرات يتم حفظها تلقائياً عند تبديل أي خيار
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderSettingsContent = () => {
     switch (selectedCategory) {
       case 'system':
@@ -1412,6 +1602,8 @@ export default function SettingsPage() {
         return renderThemeSettings();
       case 'company':
         return renderCompanySettings();
+      case 'store':
+        return renderStoreSettings();
       default:
         return renderPlaceholderContent(selectedCategory);
     }

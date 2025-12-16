@@ -1487,23 +1487,8 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
 
   if (!safe) return null
 
-  // Sample payments/transfers data - TODO: Replace with real data
-  const payments = [
-    {
-      id: 1,
-      date: '7/2/2025',
-      time: '01:22 AM',
-      amount: formatPrice(6000),
-      notes: 'تحويل داخلي'
-    },
-    {
-      id: 2,
-      date: '6/29/2025', 
-      time: '12:33 AM',
-      amount: formatPrice(7000),
-      notes: 'تسوية حسابية'
-    }
-  ]
+  // Transfers data - empty (no mock data)
+  const payments: { id: number; date: string; time: string; amount: string; notes: string }[] = []
 
   // Sample invoices data
   const transactions = [

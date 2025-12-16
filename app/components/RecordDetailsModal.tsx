@@ -1119,99 +1119,11 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
 
   if (!record) return null
 
-  // Sample account statement data - opening balance, transactions, and payments
-  const accountStatements = [
-    {
-      id: 1,
-      date: '7/15/2025',
-      time: '07:46 AM',
-      description: 'REC-175254784358 قيد محاسبي',
-      type: 'قيد محاسبي',
-      amount: `${formatPrice(1677)}+`,
-      balance: formatPrice(190322)
-    },
-    {
-      id: 2,
-      date: '7/3/2025',
-      time: '01:22 AM',
-      description: 'تحويل داخلي',
-      type: 'تحويل',
-      amount: `${formatPrice(6000)}-`,
-      balance: formatPrice(188645)
-    },
-    {
-      id: 3,
-      date: '7/2/2025',
-      time: '04:44 AM',
-      description: 'REC-175142668178 قيد محاسبي',
-      type: 'قيد محاسبي',
-      amount: `${formatPrice(210)}+`,
-      balance: formatPrice(194645)
-    },
-    {
-      id: 4,
-      date: '6/30/2025',
-      time: '12:33 AM',
-      description: 'تسوية حسابية',
-      type: 'تسوية',
-      amount: `${formatPrice(7000)}-`,
-      balance: formatPrice(194435)
-    },
-    {
-      id: 5,
-      date: '6/29/2025',
-      time: '06:05 PM',
-      description: 'REC-175120953803 قيد محاسبي',
-      type: 'قيد محاسبي',
-      amount: `${formatPrice(850)}+`,
-      balance: formatPrice(201435)
-    },
-    {
-      id: 6,
-      date: '6/29/2025',
-      time: '05:42 PM',
-      description: 'REC-175120816250 قيد محاسبي',
-      type: 'قيد محاسبي',
-      amount: `${formatPrice(100)}+`,
-      balance: formatPrice(200585)
-    },
-    {
-      id: 7,
-      date: '6/28/2025',
-      time: '11:23 PM',
-      description: 'REC-175114219445 قيد محاسبي',
-      type: 'قيد محاسبي',
-      amount: `${formatPrice(485)}+`,
-      balance: formatPrice(200485)
-    },
-    {
-      id: 8,
-      date: '6/24/2025',
-      time: '04:35 PM',
-      description: 'الرصيد الأولي',
-      type: 'رصيد أولي',
-      amount: `${formatPrice(200000)}+`,
-      balance: formatPrice(200000)
-    }
-  ]
+  // Account statement data - empty (no mock data)
+  const accountStatements: { id: number; date: string; time: string; description: string; type: string; amount: string; balance: string }[] = []
 
-  // Sample payments/transfers data
-  const payments = [
-    {
-      id: 1,
-      date: '7/2/2025',
-      time: '01:22 AM',
-      amount: formatPrice(6000),
-      notes: 'تحويل داخلي'
-    },
-    {
-      id: 2,
-      date: '6/29/2025', 
-      time: '12:33 AM',
-      amount: formatPrice(7000),
-      notes: 'تسوية حسابية'
-    }
-  ]
+  // Transfers data - empty (no mock data)
+  const payments: { id: number; date: string; time: string; amount: string; notes: string }[] = []
 
   // Sample invoices data
   const transactions = [
