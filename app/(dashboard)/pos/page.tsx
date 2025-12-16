@@ -4699,8 +4699,8 @@ function POSPageContent() {
 
                   {/* Cart Footer */}
                   <div className="p-4 border-t border-gray-600 bg-[#2B3544] flex-shrink-0">
-                    {/* Payment Split Component - Only show in sales mode (not transfer, purchase, or edit mode) */}
-                    {!isTransferMode && !isPurchaseMode && !isReturnMode && !activePOSTab?.isEditMode && (
+                    {/* Payment Split Component - Only show in sales/return mode (not transfer, purchase, or edit mode) */}
+                    {!isTransferMode && !isPurchaseMode && !activePOSTab?.isEditMode && (
                       <PaymentSplit
                         totalAmount={calculateTotalWithDiscounts()}
                         onPaymentsChange={(payments, credit) => {
@@ -4708,6 +4708,7 @@ function POSPageContent() {
                           setCreditAmount(credit);
                         }}
                         isDefaultCustomer={selections.customer?.id === '00000000-0000-0000-0000-000000000001'}
+                        isReturnMode={isReturnMode}
                       />
                     )}
 
@@ -5158,8 +5159,8 @@ function POSPageContent() {
 
             {/* Cart Footer */}
             <div className="p-4 border-t border-gray-600 bg-[#2B3544] flex-shrink-0">
-              {/* Payment Split Component - Only show in sales mode (not transfer, purchase, or edit mode) */}
-              {!isTransferMode && !isPurchaseMode && !isReturnMode && !activePOSTab?.isEditMode && (
+              {/* Payment Split Component - Only show in sales/return mode (not transfer, purchase, or edit mode) */}
+              {!isTransferMode && !isPurchaseMode && !activePOSTab?.isEditMode && (
                 <PaymentSplit
                   totalAmount={calculateTotalWithDiscounts()}
                   onPaymentsChange={(payments, credit) => {
@@ -5167,6 +5168,7 @@ function POSPageContent() {
                     setCreditAmount(credit);
                   }}
                   isDefaultCustomer={selections.customer?.id === '00000000-0000-0000-0000-000000000001'}
+                  isReturnMode={isReturnMode}
                 />
               )}
 

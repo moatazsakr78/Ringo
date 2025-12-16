@@ -785,8 +785,8 @@ export default function POSTabletView({
 
               {/* Cart Footer */}
               <div className="p-4 border-t border-gray-600 bg-[#2B3544] flex-shrink-0">
-                {/* Payment Split Component */}
-                {!isTransferMode && !isPurchaseMode && !isReturnMode && (
+                {/* Payment Split Component - show in sales and return mode */}
+                {!isTransferMode && !isPurchaseMode && (
                   <PaymentSplit
                     totalAmount={cartTotal}
                     onPaymentsChange={(payments, credit) => {
@@ -794,6 +794,7 @@ export default function POSTabletView({
                       setCreditAmount(credit)
                     }}
                     isDefaultCustomer={selections.customer?.id === '00000000-0000-0000-0000-000000000001'}
+                    isReturnMode={isReturnMode}
                   />
                 )}
 

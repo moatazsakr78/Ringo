@@ -21,12 +21,13 @@ interface PaymentSplitProps {
   totalAmount: number
   onPaymentsChange: (payments: PaymentEntry[], creditAmount: number) => void
   isDefaultCustomer?: boolean // العميل الافتراضي - لا يسمح بالآجل
+  isReturnMode?: boolean // وضع المرتجع
 }
 
 // Default customer ID constant
 const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001'
 
-export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultCustomer = false }: PaymentSplitProps) {
+export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultCustomer = false, isReturnMode = false }: PaymentSplitProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([])
   const [payments, setPayments] = useState<PaymentEntry[]>([
     {
@@ -143,8 +144,12 @@ export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultC
                 type="number"
                 value={payment.amount}
                 onChange={(e) => handleAmountChange(payment.id, e.target.value)}
-                placeholder="المبلغ"
-                className="w-full px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs h-[26px]"
+                placeholder={isReturnMode ? "مبلغ المرتجع" : "المبلغ"}
+                className={`w-full px-2 py-1 bg-gray-700 text-white rounded border focus:outline-none focus:ring-1 text-xs h-[26px] ${
+                  isReturnMode
+                    ? "border-red-500 focus:ring-red-500 text-red-400"
+                    : "border-gray-600 focus:ring-blue-500"
+                }`}
                 min="0"
                 step="0.01"
               />
