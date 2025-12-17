@@ -3804,6 +3804,7 @@ function POSPageContent() {
                 <div className="h-8 w-px bg-gray-600 mx-2"></div>
 
                 {/* Other Action Buttons */}
+                {/* زر الأعمدة مخفي مؤقتاً لتوفير المساحة
                 <button
                   onClick={() => setShowColumnsModal(true)}
                   className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
@@ -3811,6 +3812,7 @@ function POSPageContent() {
                   <TableCellsIcon className="h-5 w-5 mb-1" />
                   <span className="text-sm">الأعمدة</span>
                 </button>
+                */}
 
                 <button
                   onClick={toggleHistoryModal}
@@ -3829,15 +3831,15 @@ function POSPageContent() {
                   }`}
                 >
                   <ArrowsRightLeftIcon className="h-5 w-5 mb-1" />
-                  <span className="text-sm">نقل البضاعة</span>
+                  <span className="text-sm">نقل</span>
                 </button>
 
                 <button
                   onClick={toggleCategoriesModal}
                   className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]"
                 >
-                  <HomeIcon className="h-5 w-5 mb-1" />
-                  <span className="text-sm">عرض المجموعات</span>
+                  <Squares2X2Icon className="h-5 w-5 mb-1" />
+                  <span className="text-sm">الفئات</span>
                 </button>
 
                 {/* Discount Button */}
@@ -3868,7 +3870,7 @@ function POSPageContent() {
                   }`}
                 >
                   <ClockIcon className="h-5 w-5 mb-1" />
-                  <span className="text-sm">الفواتير المؤجلة</span>
+                  <span className="text-sm">الفواتير</span>
                   {postponedTabs.length > 0 && (
                     <div className="absolute top-0 right-2 w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center text-xs text-white font-bold">
                       {postponedTabs.length}
@@ -3902,7 +3904,7 @@ function POSPageContent() {
                   title="طباعة مراجعة للطلب الحالي"
                 >
                   <PrinterIcon className="h-5 w-5 mb-1" />
-                  <span className="text-sm">طباعة ريسيت</span>
+                  <span className="text-sm">طباعة</span>
                 </button>
 
                 <button
@@ -3981,7 +3983,7 @@ function POSPageContent() {
                     className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-all"
                   >
                     <ShoppingBagIcon className="h-5 w-5 mb-1" />
-                    <span className="text-sm">وضع الشراء</span>
+                    <span className="text-sm">شراء</span>
                   </button>
                 )}
               </div>
@@ -4072,6 +4074,7 @@ function POSPageContent() {
               )}
 
               {/* Other Action Buttons */}
+              {/* زر الأعمدة مخفي مؤقتاً لتوفير المساحة
               <button
                 onClick={() => setShowColumnsModal(true)}
                 className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors"
@@ -4079,6 +4082,7 @@ function POSPageContent() {
                 <TableCellsIcon className="h-4 w-4" />
                 <span className="text-xs">الأعمدة</span>
               </button>
+              */}
 
               <button
                 onClick={toggleHistoryModal}
@@ -4097,15 +4101,15 @@ function POSPageContent() {
                 }`}
               >
                 <ArrowsRightLeftIcon className="h-4 w-4" />
-                <span className="text-xs">نقل البضاعة</span>
+                <span className="text-xs">نقل</span>
               </button>
 
               <button
                 onClick={toggleCategoriesModal}
                 className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors"
               >
-                <HomeIcon className="h-4 w-4" />
-                <span className="text-xs">عرض المجموعات</span>
+                <Squares2X2Icon className="h-4 w-4" />
+                <span className="text-xs">الفئات</span>
               </button>
 
               {/* Discount Button - Mobile */}
@@ -4137,7 +4141,7 @@ function POSPageContent() {
                 title="طباعة مراجعة للطلب الحالي"
               >
                 <PrinterIcon className="h-4 w-4" />
-                <span className="text-xs">طباعة ريسيت</span>
+                <span className="text-xs">طباعة</span>
               </button>
 
               <button
@@ -4199,7 +4203,7 @@ function POSPageContent() {
                   className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors"
                 >
                   <ShoppingBagIcon className="h-4 w-4" />
-                  <span className="text-xs">وضع الشراء</span>
+                  <span className="text-xs">شراء</span>
                 </button>
               )}
             </div>
