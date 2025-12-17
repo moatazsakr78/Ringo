@@ -107,6 +107,7 @@ import POSTabletView from "../../components/POSTabletView";
 import DiscountModal from "../../components/DiscountModal";
 import PostponedInvoicesModal from "../../components/PostponedInvoicesModal";
 import CashDrawerModal from "../../components/CashDrawerModal";
+import ProductGridSkeleton from "../../components/ui/ProductGridSkeleton";
 import { useProductsAdmin } from "../../../lib/hooks/useProductsAdmin";
 import { Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
@@ -4847,11 +4848,9 @@ function POSPageContent() {
 
             {/* Products Display Container - Responsive: absolute for mobile, normal for desktop */}
             <div className={`${isCartOpen ? "hidden md:block" : "block"} md:h-full md:flex md:flex-col absolute inset-0 md:relative md:inset-auto flex flex-col`}>
-              {/* Loading State */}
+              {/* Loading State - Skeleton UI for faster perceived loading */}
               {isLoading && (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-white">جاري التحميل...</div>
-                </div>
+                <ProductGridSkeleton count={12} />
               )}
 
               {/* Error State */}

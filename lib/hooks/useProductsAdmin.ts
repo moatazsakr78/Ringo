@@ -109,57 +109,62 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
 
       console.time('⚡ Fetch products with inventory');
 
-      // ✨ Query 1: Fetch branches
-      const { data: branchesData, error: branchesError } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
+      // ✨ OPTIMIZED: Run branches and products queries in PARALLEL
+      const [branchesResult, productsResult] = await Promise.all([
+        // Query 1: Fetch branches
+        supabase
+          .from('branches')
+          .select('*')
+          .eq('is_active', true)
+          .order('name'),
+        // Query 2: Get all products with categories
+        supabase
+          .from('products')
+          .select(`
+            id,
+            name,
+            barcode,
+            price,
+            cost_price,
+            main_image_url,
+            sub_image_url,
+            additional_images_urls,
+            category_id,
+            is_active,
+            display_order,
+            stock,
+            min_stock,
+            max_stock,
+            unit,
+            description,
+            wholesale_price,
+            price1,
+            price2,
+            price3,
+            price4,
+            rating,
+            rating_count,
+            discount_percentage,
+            discount_amount,
+            discount_start_date,
+            discount_end_date,
+            categories (
+              id,
+              name
+            )
+          `)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true })
+      ]);
+
+      const { data: branchesData, error: branchesError } = branchesResult;
+      const { data: rawProducts, error: productsError } = productsResult;
 
       if (branchesError) {
         console.warn('Unable to fetch branches:', branchesError);
       } else {
         setBranches(branchesData || []);
       }
-
-      // ✨ Query 2: Get all products with categories
-      const { data: rawProducts, error: productsError } = await supabase
-        .from('products')
-        .select(`
-          id,
-          name,
-          barcode,
-          price,
-          cost_price,
-          main_image_url,
-          sub_image_url,
-          additional_images_urls,
-          category_id,
-          is_active,
-          display_order,
-          stock,
-          min_stock,
-          max_stock,
-          unit,
-          description,
-          wholesale_price,
-          price1,
-          price2,
-          price3,
-          price4,
-          rating,
-          rating_count,
-          discount_percentage,
-          discount_amount,
-          discount_start_date,
-          discount_end_date,
-          categories (
-            id,
-            name
-          )
-        `)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true });
 
       if (productsError) {
         throw productsError;
@@ -176,27 +181,43 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
 
       const productIds = (rawProducts as any[]).map(p => p.id);
 
-      // ✨ Query 3: Get ALL inventory for ALL products in ONE query
-      const { data: inventory, error: inventoryError } = await supabase
-        .from('inventory')
-        .select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status')
-        .in('product_id', productIds);
+      // ✨ OPTIMIZED: Run inventory, variant definitions, and videos queries in PARALLEL
+      const [inventoryResult, variantDefinitionsResult, videosResult] = await Promise.all([
+        // Query 3: Get ALL inventory for ALL products in ONE query
+        supabase
+          .from('inventory')
+          .select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status')
+          .in('product_id', productIds),
+        // Query 4a: Get ALL variant DEFINITIONS for ALL products
+        supabase
+          .from('product_color_shape_definitions')
+          .select('id, product_id, variant_type, name, color_hex, image_url, barcode, sort_order')
+          .in('product_id', productIds),
+        // Query 5: Get ALL videos for ALL products in ONE query
+        (supabase as any)
+          .from('product_videos')
+          .select('id, product_id, video_url, thumbnail_url, video_name, video_size, duration, sort_order, created_at')
+          .in('product_id', productIds)
+          .order('sort_order', { ascending: true })
+      ]);
+
+      const { data: inventory, error: inventoryError } = inventoryResult;
+      const { data: variantDefinitions, error: definitionsError } = variantDefinitionsResult;
+      const { data: videos, error: videosError } = videosResult;
 
       if (inventoryError) {
         console.warn('Error fetching inventory:', inventoryError);
       }
 
-      // ✨ Query 4a: Get ALL variant DEFINITIONS for ALL products
-      const { data: variantDefinitions, error: definitionsError } = await supabase
-        .from('product_color_shape_definitions')
-        .select('id, product_id, variant_type, name, color_hex, image_url, barcode, sort_order')
-        .in('product_id', productIds);
-
       if (definitionsError) {
         console.warn('Error fetching variant definitions:', definitionsError);
       }
 
-      // ✨ Query 4b: Get ALL variant QUANTITIES for ALL products
+      if (videosError) {
+        console.warn('Error fetching videos:', videosError);
+      }
+
+      // ✨ Query 4b: Get ALL variant QUANTITIES (depends on variant definitions)
       let variants: any[] = [];
       if (variantDefinitions && variantDefinitions.length > 0) {
         const definitionIds = variantDefinitions.map(d => d.id);
@@ -229,17 +250,6 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
         }
 
         console.log(`✅ Loaded ${variants.length} variant quantities from ${variantDefinitions.length} definitions`);
-      }
-
-      // ✨ Query 5: Get ALL videos for ALL products in ONE query
-      const { data: videos, error: videosError } = await (supabase as any)
-        .from('product_videos')
-        .select('id, product_id, video_url, thumbnail_url, video_name, video_size, duration, sort_order, created_at')
-        .in('product_id', productIds)
-        .order('sort_order', { ascending: true });
-
-      if (videosError) {
-        console.warn('Error fetching videos:', videosError);
       }
 
       console.timeEnd('⚡ Fetch products with inventory');
