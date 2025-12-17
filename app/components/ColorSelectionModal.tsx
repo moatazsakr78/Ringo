@@ -39,8 +39,8 @@ export default function ColorSelectionModal({
   const quantityInputRef = useRef<HTMLInputElement>(null)
   const [tempColorQuantities, setTempColorQuantities] = useState<{[key: string]: string}>({})
 
-  // Purchase mode specific state
-  const [purchasePrice, setPurchasePrice] = useState(product?.cost_price || product?.price || 0)
+  // Purchase mode specific state - Always use cost_price, never fall back to selling price
+  const [purchasePrice, setPurchasePrice] = useState(product?.cost_price ?? 0)
   const [isEditingPrice, setIsEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState('')
 
@@ -48,10 +48,10 @@ export default function ColorSelectionModal({
   const { formatPrice, getCurrentCurrency } = useCurrency()
   const currentCurrency = getCurrentCurrency('system')
 
-  // Reset purchase price when product changes
+  // Reset purchase price when product changes - Always use cost_price only
   useEffect(() => {
     if (product && isPurchaseMode) {
-      const initialPrice = product.cost_price || product.price || 0
+      const initialPrice = product.cost_price ?? 0
       setPurchasePrice(initialPrice)
       setTempPrice(initialPrice.toString())
     }
@@ -306,12 +306,24 @@ export default function ColorSelectionModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-[#4A5568]">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                <span className="text-white text-lg">🎨</span>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                isPurchaseMode
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-600'
+                  : isTransferMode
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-600'
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500'
+              }`}>
+                <span className="text-white text-lg">{isPurchaseMode ? '🛒' : isTransferMode ? '📦' : '🎨'}</span>
               </div>
               <div>
                 <h2 className="text-lg font-bold text-white">{product.name}</h2>
-                <p className={`text-sm ${isTransferMode ? 'text-orange-400' : 'text-blue-400'}`}>
+                <p className={`text-sm ${
+                  isPurchaseMode
+                    ? 'text-green-400'
+                    : isTransferMode
+                      ? 'text-orange-400'
+                      : 'text-blue-400'
+                }`}>
                   {isTransferMode
                     ? `وضع النقل - من: ${transferFromLocation?.name || 'غير محدد'}`
                     : isPurchaseMode
@@ -389,12 +401,61 @@ export default function ColorSelectionModal({
                 )}
               </div>
 
-              {!isTransferMode && (
+              {!isTransferMode && !isPurchaseMode && (
                 <div className="text-center mt-3">
                   <span className="text-blue-400 font-bold text-lg">{formatPrice(totalPrice, 'system')}</span>
                 </div>
               )}
             </div>
+
+            {/* Purchase Price Section - Only in Purchase Mode */}
+            {isPurchaseMode && (
+              <div className="bg-[#374151] rounded-xl p-4 border border-[#4A5568]">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-gray-300 text-sm">سعر الشراء للوحدة</label>
+                  {product.cost_price ? (
+                    <span className="text-xs text-gray-500 bg-[#2B3544] px-2 py-1 rounded">
+                      آخر سعر شراء: {formatPrice(product.cost_price, 'system')}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-orange-400 bg-orange-500/10 px-2 py-1 rounded border border-orange-500/20">
+                      لا يوجد سعر شراء سابق
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 relative">
+                    <input
+                      type="number"
+                      value={purchasePrice}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) || 0
+                        if (value >= 0) {
+                          setPurchasePrice(value)
+                        }
+                      }}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white font-bold text-lg text-center rounded-lg px-4 py-3 outline-none border-2 border-transparent focus:border-green-500 hover:bg-[#3D4A5C] transition-all"
+                      placeholder={product.cost_price ? product.cost_price.toString() : "أدخل سعر الشراء"}
+                      min="0"
+                      step="0.01"
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                      {currentCurrency}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Total Purchase Price */}
+                <div className="mt-3 pt-3 border-t border-[#4A5568]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400 text-sm">إجمالي الشراء ({totalQuantity} وحدة)</span>
+                    <span className="text-green-400 font-bold text-lg">{formatPrice(totalPrice, 'system')}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Color Selection */}
             {colors.length > 0 && (
@@ -464,13 +525,10 @@ export default function ColorSelectionModal({
               </div>
             )}
 
-            {colors.length === 0 && (
+            {colors.length === 0 && !isPurchaseMode && (
               <div className="text-center py-4">
                 <p className="text-gray-400">
-                  {isPurchaseMode
-                    ? 'في وضع الشراء، يتم تخزين الكمية كـ "غير محدد" بدون تحديد ألوان'
-                    : 'لا توجد ألوان متاحة لهذا المنتج'
-                  }
+                  لا توجد ألوان متاحة لهذا المنتج
                 </p>
               </div>
             )}

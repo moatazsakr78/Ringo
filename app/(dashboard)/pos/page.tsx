@@ -1316,7 +1316,10 @@ function POSPageContent() {
           newCart = newCartItems;
         } else {
           // New product - create new cart item
-          const productPrice = getProductPriceByType(product);
+          // في وضع الشراء نستخدم cost_price، وإلا نستخدم السعر المحدد
+          const productPrice = isPurchaseMode
+            ? (product.cost_price || 0)
+            : getProductPriceByType(product);
           const newCartItem = {
             id: product.id.toString(),
             product: product,
@@ -1337,7 +1340,7 @@ function POSPageContent() {
         return newCart;
       });
     },
-    [updateActiveTabCart, getProductPriceByType],
+    [updateActiveTabCart, getProductPriceByType, isPurchaseMode],
   );
 
   // OPTIMIZED: Remove from Cart
