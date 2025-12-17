@@ -47,10 +47,17 @@ export async function createTransferInvoice({
     const invoiceNumber = `TR-${Date.now()}`
 
     // Use the passed record or get the main record
+    // Check if "no safe" option was selected (record.id is null)
+    const hasNoSafe = record && !record.id;
     let finalRecord = record
+    let finalRecordId: string | null = null
 
-    if (!finalRecord) {
-      // Get the main/primary record
+    if (hasNoSafe) {
+      // "No safe" option selected - transfer without affecting any safe
+      console.log('⏭️ خيار "لا يوجد" محدد - النقل بدون تأثير على أي خزنة')
+      finalRecordId = null
+    } else if (!finalRecord) {
+      // No record passed - get the main/primary record
       const { data: mainRecord, error: recordError } = await supabase
         .from('records')
         .select('id, name')
@@ -63,9 +70,12 @@ export async function createTransferInvoice({
       }
 
       finalRecord = mainRecord
+      finalRecordId = mainRecord.id
+    } else {
+      finalRecordId = finalRecord.id
     }
 
-    console.log('استخدام الخزنة:', finalRecord)
+    console.log('استخدام الخزنة:', hasNoSafe ? 'لا يوجد' : finalRecord?.name)
 
     // Create transfer invoice in purchase_invoices table (we'll use it for transfer invoices too)
     const { data: transferInvoice, error: invoiceError } = await supabase
@@ -76,12 +86,14 @@ export async function createTransferInvoice({
         supplier_id: null, // No supplier for transfers
         branch_id: transferToLocation.type === 'branch' ? transferToLocation.id.toString() : null,
         warehouse_id: transferToLocation.type === 'warehouse' ? transferToLocation.id.toString() : null,
-        record_id: finalRecord.id,
+        record_id: finalRecordId,
         total_amount: 0, // Transfers have no monetary value
         discount_amount: 0,
         tax_amount: 0,
         net_amount: 0,
-        notes: `[TRANSFER] نقل من ${transferFromLocation.name} إلى ${transferToLocation.name}`,
+        notes: hasNoSafe
+          ? `[TRANSFER] نقل من ${transferFromLocation.name} إلى ${transferToLocation.name} [بدون خزنة]`
+          : `[TRANSFER] نقل من ${transferFromLocation.name} إلى ${transferToLocation.name}`,
         invoice_type: 'Purchase Invoice', // We'll identify transfers by the [TRANSFER] prefix in notes
         is_active: true
       })
@@ -244,7 +256,7 @@ export async function createTransferInvoice({
     return {
       success: true,
       invoiceNumber,
-      recordId: finalRecord.id,
+      recordId: finalRecordId,
       invoiceId: transferInvoice.id,
       transferResults,
       message: `تم إنشاء فاتورة النقل ${invoiceNumber} بنجاح ونقل ${cartItems.length} منتج من ${transferFromLocation.name} إلى ${transferToLocation.name}`

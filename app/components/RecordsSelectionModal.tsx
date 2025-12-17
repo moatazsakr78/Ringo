@@ -88,6 +88,21 @@ export default function RecordsSelectionModal({
     onClose();
   };
 
+  // Handle "No Safe" selection (لا يوجد)
+  const handleNoSafeSelect = () => {
+    if (onSelectRecord) {
+      onSelectRecord({
+        id: null as any, // Special null ID for "no safe" option
+        name: "لا يوجد",
+        branch_id: null,
+        is_primary: false,
+        is_active: true,
+        branch: null,
+      });
+    }
+    onClose();
+  };
+
   return (
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -131,6 +146,29 @@ export default function RecordsSelectionModal({
 
                 {/* Records List */}
                 <div className="space-y-2 max-h-[400px] overflow-y-auto scrollbar-hide">
+                  {/* "No Safe" Option - Always visible at top */}
+                  <button
+                    onClick={handleNoSafeSelect}
+                    className="w-full flex items-center justify-between p-4 rounded-xl transition-all bg-[#374151] text-gray-200 border-2 border-dashed border-gray-500 hover:bg-[#4B5563] hover:border-gray-400"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#2B3544] flex items-center justify-center">
+                        <XMarkIcon className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-gray-300">لا يوجد</div>
+                        <div className="text-sm text-gray-500">
+                          بدون تأثير على أي خزنة
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs bg-gray-600/50 text-gray-400 px-2 py-1 rounded-lg">
+                        اختياري
+                      </span>
+                    </div>
+                  </button>
+
                   {isLoading ? (
                     <div className="flex flex-col items-center justify-center py-12">
                       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mb-4"></div>
@@ -201,7 +239,7 @@ export default function RecordsSelectionModal({
                 {/* Footer Note */}
                 <div className="mt-6 p-3 bg-[#2B3544] rounded-lg">
                   <p className="text-sm text-gray-400 text-center">
-                    اضغط على الخزنة لاختياره • إجمالي الخزن: {records.length}
+                    اضغط على الخزنة لاختيارها • إجمالي الخزن: {records.length} + خيار "لا يوجد"
                   </p>
                 </div>
               </Dialog.Panel>

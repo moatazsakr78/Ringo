@@ -42,9 +42,12 @@ export async function createSalesInvoice({
   paymentSplitData = [],
   creditAmount = 0
 }: CreateSalesInvoiceParams) {
-  if (!selections.branch || !selections.record) {
-    throw new Error('يجب تحديد الفرع والسجل قبل إنشاء الفاتورة')
+  if (!selections.branch) {
+    throw new Error('يجب تحديد الفرع قبل إنشاء الفاتورة')
   }
+
+  // Check if "no safe" option was selected (record.id is null)
+  const hasNoSafe = !selections.record || !selections.record.id;
 
   if (!cartItems || cartItems.length === 0) {
     throw new Error('لا يمكن إنشاء فاتورة بدون منتجات')
@@ -106,10 +109,11 @@ export async function createSalesInvoice({
       payment_method: paymentMethod,
       branch_id: selections.branch.id,
       customer_id: customerId,
-      record_id: selections.record.id,
+      record_id: hasNoSafe ? null : selections.record.id,
       notes: notes || null,
       time: timeString,
-      invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice')
+      invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice'),
+      no_safe_selected: hasNoSafe
     })
 
     // Start transaction
@@ -124,8 +128,8 @@ export async function createSalesInvoice({
         payment_method: paymentMethod,
         branch_id: selections.branch.id,
         customer_id: customerId,
-        record_id: selections.record.id,
-        notes: notes || null,
+        record_id: hasNoSafe ? null : selections.record.id,
+        notes: hasNoSafe ? `${notes || ''} [بدون خزنة]`.trim() : (notes || null),
         time: timeString,
         invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice') as any
       })
@@ -182,9 +186,10 @@ export async function createSalesInvoice({
     console.log('Sale items created successfully:', saleItemsData)
 
     // Also create invoice entry for main record (السجل الرئيسي) if selected record is not the main record
+    // Skip this if "no safe" option was selected
     const MAIN_RECORD_ID = '89d38477-6a3a-4c02-95f2-ddafa5880706' // The main record ID from the database
-    
-    if (selections.record.id !== MAIN_RECORD_ID) {
+
+    if (!hasNoSafe && selections.record.id !== MAIN_RECORD_ID) {
       const { error: mainRecordError } = await supabase
         .from('sales')
         .insert({
@@ -359,6 +364,10 @@ export async function createSalesInvoice({
     // The balance is computed in real-time from sales and customer_payments tables
 
     // Update cash drawer balance
+    // Skip if "no safe" option was selected - money goes to pocket instead of drawer
+    if (hasNoSafe) {
+      console.log('⏭️ Skipping cash drawer update - "لا يوجد" (no safe) option selected')
+    } else {
     // Calculate cash amount from payments (cash payments go to drawer)
     let cashToDrawer = 0
 
@@ -450,6 +459,7 @@ export async function createSalesInvoice({
         // Don't throw error here as the sale was created successfully
       }
     }
+    } // End of else block for hasNoSafe check
 
     return {
       success: true,

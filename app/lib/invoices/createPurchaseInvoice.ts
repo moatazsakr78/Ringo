@@ -25,9 +25,12 @@ export async function createPurchaseInvoice({
   notes,
   isReturn = false
 }: CreatePurchaseInvoiceParams) {
-  if (!selections.supplier || !selections.warehouse || !selections.record) {
-    throw new Error('يجب تحديد المورد والمخزن والسجل قبل إنشاء فاتورة الشراء')
+  if (!selections.supplier || !selections.warehouse) {
+    throw new Error('يجب تحديد المورد والمخزن قبل إنشاء فاتورة الشراء')
   }
+
+  // Check if "no safe" option was selected (record.id is null)
+  const hasNoSafe = !selections.record || !selections.record.id;
 
   if (!cartItems || cartItems.length === 0) {
     throw new Error('لا يمكن إنشاء فاتورة شراء بدون منتجات')
@@ -64,10 +67,10 @@ export async function createPurchaseInvoice({
         discount_amount: discountAmount,
         net_amount: netAmount,
         payment_status: 'pending', // Can be 'pending', 'paid', 'partial'
-        notes: notes || null,
+        notes: hasNoSafe ? `${notes || ''} [بدون خزنة]`.trim() : (notes || null),
         branch_id: branchId,
         warehouse_id: warehouseId,
-        record_id: selections.record.id,
+        record_id: hasNoSafe ? null : selections.record.id,
         time: timeString,
         invoice_type: (isReturn ? 'Purchase Return' : 'Purchase Invoice') as any,
         is_active: true
@@ -102,9 +105,10 @@ export async function createPurchaseInvoice({
     }
 
     // Also create invoice entry for main record (السجل الرئيسي) if selected record is not the main record
+    // Skip this if "no safe" option was selected
     const MAIN_RECORD_ID = '89d38477-6a3a-4c02-95f2-ddafa5880706' // The main record ID from the database
-    
-    if (selections.record.id !== MAIN_RECORD_ID) {
+
+    if (!hasNoSafe && selections.record.id !== MAIN_RECORD_ID) {
       const { error: mainRecordError } = await supabase
         .from('purchase_invoices')
         .insert({
