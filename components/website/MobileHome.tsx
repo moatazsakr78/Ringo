@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProducts, Product as DatabaseProduct } from '@/app/lib/hooks/useProducts';
 import { UserInfo, Product } from './shared/types';
@@ -19,6 +19,7 @@ import { useCartBadge } from '@/lib/hooks/useCartBadge';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
+import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
 
 interface MobileHomeProps {
   userInfo: UserInfo;
@@ -420,6 +421,43 @@ export default function MobileHome({
     setIsMenuOpen(false);
     setTimeout(() => setIsMenuVisible(false), 300);
   };
+
+  // Back button handler - manages browser back button behavior
+  // This keeps users on the store page and closes modals on back press
+  const modalsConfig = useMemo(() => [
+    {
+      id: 'product-details',
+      isOpen: isProductModalOpen,
+      onClose: () => {
+        setIsProductModalOpen(false);
+        setSelectedProductId('');
+      }
+    },
+    {
+      id: 'cart',
+      isOpen: isCartModalOpen,
+      onClose: () => setIsCartModalOpen(false)
+    },
+    {
+      id: 'quantity',
+      isOpen: isQuantityModalOpen,
+      onClose: () => {
+        setIsQuantityModalOpen(false);
+        setSelectedProduct(null);
+      }
+    },
+    {
+      id: 'menu',
+      isOpen: isMenuOpen,
+      onClose: () => {
+        setIsMenuOpen(false);
+        setTimeout(() => setIsMenuVisible(false), 300);
+      }
+    }
+  ], [isProductModalOpen, isCartModalOpen, isQuantityModalOpen, isMenuOpen]);
+
+  // Initialize back button handler for store
+  useStoreBackHandler(modalsConfig);
 
   // Handle search toggle - now controls search bar visibility in header
   const toggleSearch = () => {

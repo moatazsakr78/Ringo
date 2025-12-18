@@ -328,7 +328,9 @@
       "Bash(start cmd /c \"npm run dev\")",
       "Bash(start http://localhost:3001/customers)",
       "WebSearch",
-      "WebFetch(domain:vercel.com)"
+      "WebFetch(domain:vercel.com)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "additionalDirectories": [

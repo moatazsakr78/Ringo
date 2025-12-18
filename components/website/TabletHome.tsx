@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProducts, Product as DatabaseProduct } from '@/app/lib/hooks/useProducts';
 import { UserInfo, Product } from './shared/types';
@@ -21,6 +21,7 @@ import { useCartBadge } from '@/lib/hooks/useCartBadge';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
+import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
 
 interface TabletHomeProps {
   userInfo: UserInfo;
@@ -476,6 +477,45 @@ export default function TabletHome({
     setIsProductModalOpen(false);
     setSelectedProductId('');
   };
+
+  // Back button handler - manages browser back button behavior
+  // This keeps users on the store page and closes modals on back press
+  const modalsConfig = useMemo(() => [
+    {
+      id: 'product-details',
+      isOpen: isProductModalOpen,
+      onClose: () => {
+        setIsProductModalOpen(false);
+        setSelectedProductId('');
+      }
+    },
+    {
+      id: 'cart',
+      isOpen: isCartModalOpen,
+      onClose: () => setIsCartModalOpen(false)
+    },
+    {
+      id: 'quantity',
+      isOpen: isQuantityModalOpen,
+      onClose: () => {
+        setIsQuantityModalOpen(false);
+        setSelectedProduct(null);
+      }
+    },
+    {
+      id: 'search',
+      isOpen: isSearchOverlayOpen,
+      onClose: () => setIsSearchOverlayOpen(false)
+    },
+    {
+      id: 'sidebar',
+      isOpen: isRightSidebarOpen,
+      onClose: closeRightSidebar
+    }
+  ], [isProductModalOpen, isCartModalOpen, isQuantityModalOpen, isSearchOverlayOpen, isRightSidebarOpen, closeRightSidebar]);
+
+  // Initialize back button handler for store
+  useStoreBackHandler(modalsConfig);
 
   // Show loading state during hydration or while loading data
   if (!isClient || isLoading || isThemeLoading || isCompanyLoading) {
