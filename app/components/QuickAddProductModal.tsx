@@ -27,6 +27,7 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
   const [price3, setPrice3] = useState('')
   const [price4, setPrice4] = useState('')
   const [productBarcode, setProductBarcode] = useState('')
+  const [productCode, setProductCode] = useState('')
   const [productDescription, setProductDescription] = useState('')
   const [productImage, setProductImage] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -44,6 +45,7 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
     setPrice3('')
     setPrice4('')
     setProductBarcode('')
+    setProductCode('')
     setProductDescription('')
     setProductImage(null)
   }
@@ -109,6 +111,7 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
         price_3: price3 ? parseFloat(price3) : 0,
         price_4: price4 ? parseFloat(price4) : 0,
         barcode: productBarcode.trim() || null,
+        product_code: productCode.trim() || null,
         description: productDescription.trim() || null,
         main_image_url: productImage,
         quantity: quantity,
@@ -328,6 +331,21 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
                 <ArrowPathIcon className="h-5 w-5" />
               </button>
             </div>
+          </div>
+
+          {/* Product Code */}
+          <div>
+            <label className="block text-gray-300 text-sm font-medium mb-2">
+              كود المنتج
+            </label>
+            <input
+              type="text"
+              value={productCode}
+              onChange={(e) => setProductCode(e.target.value)}
+              className="w-full bg-[#374151] border border-[#4A5568] rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+              placeholder="أدخل كود المنتج"
+              disabled={isProcessing}
+            />
           </div>
 
           {/* Main Image Upload */}
