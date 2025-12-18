@@ -2020,7 +2020,7 @@ function POSPageContent() {
     setSelectedSupplier(supplier);
 
     // إنشاء tab جديد باسم المورد
-    const tabName = `شراء: ${supplier.name}`;
+    const tabName = supplier.name;
     addTab(tabName, {
       customer: null,
       branch: globalSelections.branch,
@@ -3943,9 +3943,6 @@ function POSPageContent() {
 
                 {isPurchaseMode ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-green-400 text-sm font-medium">
-                      وضع الشراء مفعل
-                    </span>
                     <button
                       onClick={() => setShowQuickAddProductModal(true)}
                       className="flex flex-col items-center p-2 text-green-400 hover:text-green-300 cursor-pointer min-w-[80px] transition-all"
@@ -3954,11 +3951,11 @@ function POSPageContent() {
                       <span className="text-sm">منتج جديد</span>
                     </button>
                     <button
-                      onClick={exitPurchaseMode}
-                      className="flex flex-col items-center p-2 text-red-400 hover:text-red-300 cursor-pointer min-w-[80px] transition-all"
+                      onClick={handlePurchaseModeToggle}
+                      className="flex flex-col items-center p-2 text-blue-400 hover:text-blue-300 cursor-pointer min-w-[80px] transition-all"
                     >
-                      <XMarkIcon className="h-5 w-5 mb-1" />
-                      <span className="text-sm">إنهاء الوضع</span>
+                      <ShoppingBagIcon className="h-5 w-5 mb-1" />
+                      <span className="text-sm">شراء</span>
                     </button>
                   </div>
                 ) : isTransferMode ? (
@@ -4183,11 +4180,11 @@ function POSPageContent() {
                     <span className="text-xs">منتج جديد</span>
                   </button>
                   <button
-                    onClick={exitPurchaseMode}
-                    className="flex items-center gap-2 px-3 py-2 bg-red-600 border border-red-500 rounded text-white hover:bg-red-700 cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors"
+                    onClick={handlePurchaseModeToggle}
+                    className="flex items-center gap-2 px-3 py-2 bg-blue-600 border border-blue-500 rounded text-white hover:bg-blue-700 cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors"
                   >
-                    <XMarkIcon className="h-4 w-4" />
-                    <span className="text-xs">إنهاء الوضع</span>
+                    <ShoppingBagIcon className="h-4 w-4" />
+                    <span className="text-xs">شراء</span>
                   </button>
                 </>
               ) : isTransferMode ? (
@@ -4298,7 +4295,9 @@ function POSPageContent() {
                   key={tab.id}
                   className={`flex items-center border-l border-gray-600 ${
                     tab.active
-                      ? 'bg-[#F97316] text-white'
+                      ? tab.isPurchaseMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-[#F97316] text-white'
                       : 'text-gray-300 hover:text-white hover:bg-[#4B5563]'
                   }`}
                   onContextMenu={(e) => {
