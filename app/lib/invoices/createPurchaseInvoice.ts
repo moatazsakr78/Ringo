@@ -26,9 +26,16 @@ async function createNewProductInDatabase(product: any): Promise<string> {
       name: product.name,
       price: product.price || 0,
       cost_price: product.cost_price || 0,
+      wholesale_price: product.wholesale_price || 0,
+      price1: product.price_1 || 0,
+      price2: product.price_2 || 0,
+      price3: product.price_3 || 0,
+      price4: product.price_4 || 0,
       barcode: product.barcode || null,
+      product_code: product.product_code || null,
       description: product.description || null,
       main_image_url: product.main_image_url || null,
+      category_id: product.category_id || null,
       is_active: true
     })
     .select('id')

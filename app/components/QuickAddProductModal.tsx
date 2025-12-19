@@ -1,20 +1,32 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   XMarkIcon,
   PlusIcon,
   ShoppingCartIcon,
   ArrowLeftIcon,
   PhotoIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline'
+import { supabase } from '../lib/supabase/client'
+
+interface Category {
+  id: string
+  name: string
+  parent_id: string | null
+  is_active: boolean | null
+}
 
 interface QuickAddProductModalProps {
   isOpen: boolean
   onClose: () => void
   onAddToCart: (productData: any) => void
 }
+
+// Persistent category selection (survives form reset)
+let persistedCategoryId: string | null = null
 
 export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: QuickAddProductModalProps) {
   const [productName, setProductName] = useState('')
@@ -32,7 +44,67 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
   const [productImage, setProductImage] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
 
+  // Category state
+  const [categories, setCategories] = useState<Category[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(persistedCategoryId)
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const categoryDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Fetch categories on mount
+  useEffect(() => {
+    const fetchCategories = async () => {
+      setIsLoadingCategories(true)
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('is_active', true)
+          .order('name', { ascending: true })
+
+        if (error) throw error
+        setCategories(data || [])
+      } catch (err) {
+        console.error('Error fetching categories:', err)
+      } finally {
+        setIsLoadingCategories(false)
+      }
+    }
+
+    if (isOpen) {
+      fetchCategories()
+      // Restore persisted category
+      setSelectedCategoryId(persistedCategoryId)
+    }
+  }, [isOpen])
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Update persisted category when selection changes
+  const handleCategoryChange = (categoryId: string | null) => {
+    setSelectedCategoryId(categoryId)
+    persistedCategoryId = categoryId
+    setIsCategoryDropdownOpen(false)
+  }
+
+  // Get selected category name
+  const getSelectedCategoryName = () => {
+    if (!selectedCategoryId) return 'اختر الفئة'
+    const category = categories.find(c => c.id === selectedCategoryId)
+    return category?.name || 'اختر الفئة'
+  }
 
   const resetForm = () => {
     setProductName('')
@@ -114,6 +186,7 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
         product_code: productCode.trim() || null,
         description: productDescription.trim() || null,
         main_image_url: productImage,
+        category_id: selectedCategoryId,
         quantity: quantity,
         isNewProduct: true
       }
@@ -170,6 +243,60 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
               disabled={isProcessing}
               autoFocus
             />
+          </div>
+
+          {/* Category Selection */}
+          <div ref={categoryDropdownRef} className="relative">
+            <label className="block text-gray-300 text-sm font-medium mb-2">
+              الفئة
+            </label>
+            <button
+              type="button"
+              onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+              disabled={isProcessing || isLoadingCategories}
+              className="w-full bg-[#374151] border border-[#4A5568] rounded-lg px-4 py-3 text-white focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all flex items-center justify-between"
+            >
+              <span className={selectedCategoryId ? 'text-white' : 'text-gray-500'}>
+                {isLoadingCategories ? 'جاري التحميل...' : getSelectedCategoryName()}
+              </span>
+              <ChevronDownIcon className={`h-5 w-5 text-gray-400 transition-transform ${isCategoryDropdownOpen ? 'transform rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Menu */}
+            {isCategoryDropdownOpen && (
+              <div className="absolute z-50 w-full mt-1 bg-[#374151] border border-[#4A5568] rounded-lg shadow-xl max-h-60 overflow-y-auto scrollbar-hide">
+                {/* Clear Selection Option */}
+                <button
+                  type="button"
+                  onClick={() => handleCategoryChange(null)}
+                  className="w-full px-4 py-3 text-right text-gray-400 hover:bg-[#4A5568] hover:text-white transition-colors border-b border-[#4A5568]"
+                >
+                  بدون فئة
+                </button>
+
+                {/* Category List */}
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => handleCategoryChange(category.id)}
+                    className={`w-full px-4 py-3 text-right transition-colors ${
+                      selectedCategoryId === category.id
+                        ? 'bg-green-600 text-white'
+                        : 'text-white hover:bg-[#4A5568]'
+                    }`}
+                  >
+                    {category.name}
+                  </button>
+                ))}
+
+                {categories.length === 0 && !isLoadingCategories && (
+                  <div className="px-4 py-3 text-gray-400 text-center">
+                    لا توجد فئات متاحة
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Quantity */}

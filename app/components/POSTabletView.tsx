@@ -77,7 +77,7 @@ interface POSTabletViewProps {
   setShowColorSelectionModal: (show: boolean) => void
   modalProduct: any
   setModalProduct: (product: any) => void
-  handleColorSelection: (selections: { [key: string]: number }, totalQuantity: number, purchasePrice?: number) => void
+  handleColorSelection: (selections: { [key: string]: number }, totalQuantity: number, purchasePricingData?: { purchasePrice: number; salePrice: number; wholesalePrice: number; price1: number; price2: number; price3: number; price4: number; productCode: string; }) => void
   hasRequiredForCart: () => boolean
   transferFromLocation: any
 

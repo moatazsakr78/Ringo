@@ -56,7 +56,33 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
   });
   
   // Get cart data from context
-  const { cartItems, removeFromCart, updateQuantity, clearCart, syncWithDatabase } = useCart();
+  const { cartItems, removeFromCart, updateQuantity, updateItemNotes, clearCart, syncWithDatabase } = useCart();
+
+  // State for editing notes
+  const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
+  const [tempNotes, setTempNotes] = useState<string>('');
+  const notesInputRef = useRef<HTMLInputElement>(null);
+
+  // Start editing notes for an item
+  const handleStartEditNotes = (itemId: string, currentNotes: string) => {
+    setEditingNotesId(itemId);
+    setTempNotes(currentNotes || '');
+    // Focus the input after state update
+    setTimeout(() => notesInputRef.current?.focus(), 50);
+  };
+
+  // Save notes for an item
+  const handleSaveNotes = async (itemId: string) => {
+    await updateItemNotes(itemId, tempNotes);
+    setEditingNotesId(null);
+    setTempNotes('');
+  };
+
+  // Cancel editing notes
+  const handleCancelEditNotes = () => {
+    setEditingNotesId(null);
+    setTempNotes('');
+  };
   
   // Delivery and shipping states
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>('pickup');
@@ -866,13 +892,52 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                                 
                                 {/* Notes */}
                                 <td className="p-4">
-                                  {group.items.some(item => item.notes) ? (
-                                    <div className="text-sm text-gray-700 max-w-[150px]">
-                                      {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                                  {group.items.map((item, itemIndex) => (
+                                    <div key={item.id} className={itemIndex > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                                      {editingNotesId === item.id ? (
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            ref={notesInputRef}
+                                            type="text"
+                                            value={tempNotes}
+                                            onChange={(e) => setTempNotes(e.target.value)}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') handleSaveNotes(item.id);
+                                              if (e.key === 'Escape') handleCancelEditNotes();
+                                            }}
+                                            placeholder="أدخل ملاحظة..."
+                                            className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                          />
+                                          <button
+                                            onClick={() => handleSaveNotes(item.id)}
+                                            className="p-1 text-green-600 hover:text-green-700"
+                                            title="حفظ"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                          </button>
+                                          <button
+                                            onClick={handleCancelEditNotes}
+                                            className="p-1 text-red-500 hover:text-red-600"
+                                            title="إلغاء"
+                                          >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => handleStartEditNotes(item.id, item.notes || '')}
+                                          className="text-sm text-gray-700 hover:text-blue-600 hover:underline cursor-pointer max-w-[150px] text-right"
+                                          title="انقر للتعديل"
+                                        >
+                                          {item.notes || <span className="text-gray-400">+ إضافة ملاحظة</span>}
+                                        </button>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <span className="text-gray-400 text-sm">-</span>
-                                  )}
+                                  ))}
                                 </td>
 
                                 {/* Delete */}
@@ -1295,13 +1360,52 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                                   
                                   {/* Notes */}
                                   <td className="p-4">
-                                    {group.items.some(item => item.notes) ? (
-                                      <div className="text-sm text-gray-700 max-w-[150px]">
-                                        {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                                    {group.items.map((item, itemIndex) => (
+                                      <div key={item.id} className={itemIndex > 0 ? 'mt-2 pt-2 border-t border-gray-200' : ''}>
+                                        {editingNotesId === item.id ? (
+                                          <div className="flex items-center gap-1">
+                                            <input
+                                              ref={notesInputRef}
+                                              type="text"
+                                              value={tempNotes}
+                                              onChange={(e) => setTempNotes(e.target.value)}
+                                              onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleSaveNotes(item.id);
+                                                if (e.key === 'Escape') handleCancelEditNotes();
+                                              }}
+                                              placeholder="أدخل ملاحظة..."
+                                              className="w-24 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                            />
+                                            <button
+                                              onClick={() => handleSaveNotes(item.id)}
+                                              className="p-1 text-green-600 hover:text-green-700"
+                                              title="حفظ"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                              </svg>
+                                            </button>
+                                            <button
+                                              onClick={handleCancelEditNotes}
+                                              className="p-1 text-red-500 hover:text-red-600"
+                                              title="إلغاء"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <button
+                                            onClick={() => handleStartEditNotes(item.id, item.notes || '')}
+                                            className="text-sm text-gray-700 hover:text-blue-600 hover:underline cursor-pointer max-w-[150px] text-right"
+                                            title="انقر للتعديل"
+                                          >
+                                            {item.notes || <span className="text-gray-400">+ إضافة ملاحظة</span>}
+                                          </button>
+                                        )}
                                       </div>
-                                    ) : (
-                                      <span className="text-gray-400 text-sm">-</span>
-                                    )}
+                                    ))}
                                   </td>
 
                                   {/* Delete */}
@@ -1438,13 +1542,52 @@ const CartModal = ({ isOpen, onClose, onCartChange }: CartModalProps) => {
                             {/* Notes */}
                             <div className="bg-white rounded-lg p-2 text-center">
                               <div className="text-xs text-gray-500 mb-1">ملاحظات</div>
-                              {group.items.some(item => item.notes) ? (
-                                <div className="text-xs text-gray-700 truncate">
-                                  {group.items.map(item => item.notes).filter(Boolean).join(' | ')}
+                              {group.items.map((item, itemIndex) => (
+                                <div key={item.id} className={itemIndex > 0 ? 'mt-1 pt-1 border-t border-gray-100' : ''}>
+                                  {editingNotesId === item.id ? (
+                                    <div className="flex items-center gap-1 justify-center">
+                                      <input
+                                        ref={notesInputRef}
+                                        type="text"
+                                        value={tempNotes}
+                                        onChange={(e) => setTempNotes(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveNotes(item.id);
+                                          if (e.key === 'Escape') handleCancelEditNotes();
+                                        }}
+                                        placeholder="ملاحظة..."
+                                        className="w-16 px-1 py-0.5 text-[10px] border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-gray-900"
+                                      />
+                                      <button
+                                        onClick={() => handleSaveNotes(item.id)}
+                                        className="p-0.5 text-green-600 hover:text-green-700"
+                                        title="حفظ"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEditNotes}
+                                        className="p-0.5 text-red-500 hover:text-red-600"
+                                        title="إلغاء"
+                                      >
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleStartEditNotes(item.id, item.notes || '')}
+                                      className="text-xs text-gray-700 hover:text-blue-600 hover:underline cursor-pointer truncate max-w-full"
+                                      title="انقر للتعديل"
+                                    >
+                                      {item.notes || <span className="text-gray-400">+ إضافة</span>}
+                                    </button>
+                                  )}
                                 </div>
-                              ) : (
-                                <span className="text-gray-400 text-xs">-</span>
-                              )}
+                              ))}
                             </div>
                           </div>
                         </div>

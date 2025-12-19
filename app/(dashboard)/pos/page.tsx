@@ -1421,18 +1421,53 @@ function POSPageContent() {
     return Math.max(0, itemsTotal);
   }, [cartItems, cartDiscount, cartDiscountType]);
 
-  const handleColorSelection = (
+  const handleColorSelection = async (
     selections: { [key: string]: number },
     totalQuantity: number,
-    purchasePrice?: number,
+    purchasePricingData?: {
+      purchasePrice: number;
+      salePrice: number;
+      wholesalePrice: number;
+      price1: number;
+      price2: number;
+      price3: number;
+      price4: number;
+      productCode: string;
+    },
   ) => {
     if (!modalProduct) return;
+
+    // في وضع الشراء، تحديث بيانات المنتج في قاعدة البيانات
+    if (isPurchaseMode && purchasePricingData) {
+      try {
+        const { error } = await supabase
+          .from('products')
+          .update({
+            price: purchasePricingData.salePrice,
+            wholesale_price: purchasePricingData.wholesalePrice,
+            price1: purchasePricingData.price1,
+            price2: purchasePricingData.price2,
+            price3: purchasePricingData.price3,
+            price4: purchasePricingData.price4,
+            product_code: purchasePricingData.productCode || null,
+          })
+          .eq('id', modalProduct.id);
+
+        if (error) {
+          console.error('خطأ في تحديث أسعار المنتج:', error);
+        } else {
+          console.log('✅ تم تحديث أسعار المنتج بنجاح');
+        }
+      } catch (err) {
+        console.error('خطأ في تحديث أسعار المنتج:', err);
+      }
+    }
 
     const productWithPrice = {
       ...modalProduct,
       price:
-        isPurchaseMode && purchasePrice !== undefined
-          ? purchasePrice
+        isPurchaseMode && purchasePricingData?.purchasePrice !== undefined
+          ? purchasePricingData.purchasePrice
           : getProductPriceByType(modalProduct),
     };
 

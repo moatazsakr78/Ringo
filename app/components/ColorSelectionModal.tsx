@@ -4,11 +4,22 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { XMarkIcon, PlusIcon, MinusIcon, ShoppingCartIcon } from '@heroicons/react/24/outline'
 import { useCurrency } from '../../lib/hooks/useCurrency'
 
+interface PurchasePricingData {
+  purchasePrice: number
+  salePrice: number
+  wholesalePrice: number
+  price1: number
+  price2: number
+  price3: number
+  price4: number
+  productCode: string
+}
+
 interface ColorSelectionModalProps {
   isOpen: boolean
   onClose: () => void
   product: any
-  onAddToCart: (selections: any, totalQuantity: number, purchasePrice?: number) => void
+  onAddToCart: (selections: any, totalQuantity: number, purchasePricingData?: PurchasePricingData) => void
   hasRequiredForCart?: boolean
   selectedBranchId?: string
   isPurchaseMode?: boolean
@@ -44,16 +55,34 @@ export default function ColorSelectionModal({
   const [isEditingPrice, setIsEditingPrice] = useState(false)
   const [tempPrice, setTempPrice] = useState('')
 
+  // Additional pricing fields for purchase mode
+  const [salePrice, setSalePrice] = useState(product?.price ?? 0)
+  const [wholesalePrice, setWholesalePrice] = useState(product?.wholesale_price ?? 0)
+  const [price1, setPrice1] = useState(product?.price1 ?? 0)
+  const [price2, setPrice2] = useState(product?.price2 ?? 0)
+  const [price3, setPrice3] = useState(product?.price3 ?? 0)
+  const [price4, setPrice4] = useState(product?.price4 ?? 0)
+  const [productCode, setProductCode] = useState(product?.product_code ?? '')
+
   // Use dynamic currency from system settings
   const { formatPrice, getCurrentCurrency } = useCurrency()
   const currentCurrency = getCurrentCurrency('system')
 
-  // Reset purchase price when product changes - Always use cost_price only
+  // Reset purchase price and other fields when product changes - Always use cost_price only
   useEffect(() => {
     if (product && isPurchaseMode) {
       const initialPrice = product.cost_price ?? 0
       setPurchasePrice(initialPrice)
       setTempPrice(initialPrice.toString())
+
+      // Reset additional pricing fields
+      setSalePrice(product.price ?? 0)
+      setWholesalePrice(product.wholesale_price ?? 0)
+      setPrice1(product.price1 ?? 0)
+      setPrice2(product.price2 ?? 0)
+      setPrice3(product.price3 ?? 0)
+      setPrice4(product.price4 ?? 0)
+      setProductCode(product.product_code ?? '')
     }
   }, [product, isPurchaseMode])
 
@@ -253,7 +282,17 @@ export default function ColorSelectionModal({
   const handleAddToCart = useCallback(() => {
     if (totalQuantity > 0 && validationInfo.isValid) {
       if (isPurchaseMode) {
-        onAddToCart(selections, totalQuantity, purchasePrice)
+        const pricingData: PurchasePricingData = {
+          purchasePrice,
+          salePrice,
+          wholesalePrice,
+          price1,
+          price2,
+          price3,
+          price4,
+          productCode
+        }
+        onAddToCart(selections, totalQuantity, pricingData)
       } else {
         onAddToCart(selections, totalQuantity)
       }
@@ -261,7 +300,7 @@ export default function ColorSelectionModal({
       setSelections({})
       setManualQuantity(1) // إعادة تعيين الكمية اليدوية
     }
-  }, [totalQuantity, validationInfo.isValid, isPurchaseMode, onAddToCart, selections, purchasePrice, onClose])
+  }, [totalQuantity, validationInfo.isValid, isPurchaseMode, onAddToCart, selections, purchasePrice, salePrice, wholesalePrice, price1, price2, price3, price4, productCode, onClose])
 
   // Enter key shortcut to add to cart
   useEffect(() => {
@@ -453,6 +492,123 @@ export default function ColorSelectionModal({
                     <span className="text-gray-400 text-sm">إجمالي الشراء ({totalQuantity} وحدة)</span>
                     <span className="text-green-400 font-bold text-lg">{formatPrice(totalPrice, 'system')}</span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Pricing Fields - Only in Purchase Mode */}
+            {isPurchaseMode && (
+              <div className="bg-[#374151] rounded-xl p-4 border border-[#4A5568] space-y-4">
+                <h4 className="text-white font-medium text-sm border-b border-[#4A5568] pb-2 mb-3">أسعار البيع</h4>
+
+                {/* Product Code */}
+                {product.product_code && (
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-gray-400 text-xs">كود المنتج:</span>
+                    <span className="text-blue-400 text-sm font-medium bg-blue-500/10 px-2 py-1 rounded">{product.product_code}</span>
+                  </div>
+                )}
+
+                {/* Row 1: Sale Price + Wholesale Price */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر البيع</label>
+                    <input
+                      type="number"
+                      value={salePrice}
+                      onChange={(e) => setSalePrice(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر الجملة</label>
+                    <input
+                      type="number"
+                      value={wholesalePrice}
+                      onChange={(e) => setWholesalePrice(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: Price 1 + Price 2 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر 1</label>
+                    <input
+                      type="number"
+                      value={price1}
+                      onChange={(e) => setPrice1(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر 2</label>
+                    <input
+                      type="number"
+                      value={price2}
+                      onChange={(e) => setPrice2(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Price 3 + Price 4 */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر 3</label>
+                    <input
+                      type="number"
+                      value={price3}
+                      onChange={(e) => setPrice3(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 text-xs mb-1">سعر 4</label>
+                    <input
+                      type="number"
+                      value={price4}
+                      onChange={(e) => setPrice4(parseFloat(e.target.value) || 0)}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                      placeholder="0.00"
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                {/* Product Code Input */}
+                <div>
+                  <label className="block text-gray-400 text-xs mb-1">كود المنتج</label>
+                  <input
+                    type="text"
+                    value={productCode}
+                    onChange={(e) => setProductCode(e.target.value)}
+                    className="w-full bg-[#2B3544] text-white text-sm text-center rounded-lg px-2 py-2 outline-none border border-transparent focus:border-blue-500 transition-all"
+                    placeholder="أدخل كود المنتج"
+                  />
                 </div>
               </div>
             )}
