@@ -1744,7 +1744,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               </div>
 
               {/* Conditional Content Based on Active Tab and View Mode */}
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 overflow-y-auto scrollbar-hide relative">
                 {activeTab === 'statement' && (
                   <div className="h-full flex flex-col">
                     {showStatementInvoiceDetails ? (

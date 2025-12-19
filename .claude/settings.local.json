@@ -330,7 +330,8 @@
       "WebSearch",
       "WebFetch(domain:vercel.com)",
       "Bash(npx tsc --noEmit)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": [],
     "additionalDirectories": [

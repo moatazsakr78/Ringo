@@ -275,7 +275,7 @@ export function useProducts() {
 
   // Helper function to fetch and process products
   const fetchAndProcessProducts = async (selectedBranchIds: string[], branchesData: Branch[]) => {
-    // Fetch base products with categories
+    // Fetch base products with categories (excluding soft-deleted products)
     const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select(`
@@ -287,6 +287,7 @@ export function useProducts() {
         )
       `)
       .eq('is_active', true)
+      .or('is_deleted.is.null,is_deleted.eq.false')
       .order('display_order', { ascending: true })
       .order('name', { ascending: true })
 

@@ -23,6 +23,7 @@ interface SuppliersGridViewProps {
   onSupplierClick: (supplier: Supplier) => void
   onSupplierDoubleClick: (supplier: Supplier) => void
   isDefaultSupplier: (supplierId: string) => boolean
+  supplierBalances?: {[key: string]: number}
 }
 
 export default function SuppliersGridView({
@@ -30,7 +31,8 @@ export default function SuppliersGridView({
   selectedSupplier,
   onSupplierClick,
   onSupplierDoubleClick,
-  isDefaultSupplier
+  isDefaultSupplier,
+  supplierBalances = {}
 }: SuppliersGridViewProps) {
 
   const formatDate = (dateString: string | null) => {
@@ -202,12 +204,12 @@ export default function SuppliersGridView({
                 </div>
               )}
 
-              {/* Account Balance */}
+              {/* Account Balance - Use calculated balance from props */}
               <div className="flex items-center gap-2">
-                <CurrencyDollarIcon className="h-3 w-3 text-green-400 flex-shrink-0" />
+                <CurrencyDollarIcon className={`h-3 w-3 flex-shrink-0 ${(supplierBalances[supplier.id] || 0) > 0 ? 'text-red-400' : 'text-green-400'}`} />
                 <span className="text-xs text-gray-300">الرصيد:</span>
-                <span className="text-white font-medium text-xs">
-                  {formatCurrency(supplier.account_balance)} جنيه
+                <span className={`font-medium text-xs ${(supplierBalances[supplier.id] || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {formatCurrency(supplierBalances[supplier.id] || 0)} جنيه
                 </span>
               </div>
 

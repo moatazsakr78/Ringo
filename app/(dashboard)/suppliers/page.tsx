@@ -254,10 +254,105 @@ export default function SuppliersPage() {
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<{[key: string]: boolean}>({})
   const suppliersVisibilityLoadedRef = useRef(false)
-  
+  const [supplierBalances, setSupplierBalances] = useState<{[key: string]: number}>({})
+
   // Use the real-time hooks for supplier groups and suppliers
   const { groups, isLoading: groupsLoading, error: groupsError, toggleGroup } = useSupplierGroups()
   const { suppliers, isLoading: suppliersLoading, error: suppliersError, isDefaultSupplier } = useSuppliers()
+
+  // Fetch all supplier balances efficiently
+  const fetchAllSupplierBalances = useCallback(async () => {
+    if (suppliers.length === 0) return
+
+    try {
+      // Get all purchase invoices
+      const { data: allInvoices, error: invoicesError } = await supabase
+        .from('purchase_invoices')
+        .select('supplier_id, total_amount, invoice_type')
+
+      if (invoicesError) {
+        console.error('Error fetching purchase invoices:', invoicesError)
+        return
+      }
+
+      // Get all supplier payments
+      const { data: allPayments, error: paymentsError } = await supabase
+        .from('supplier_payments')
+        .select('supplier_id, amount')
+
+      if (paymentsError) {
+        console.error('Error fetching supplier payments:', paymentsError)
+        return
+      }
+
+      // Calculate balances for each supplier
+      const balances: {[key: string]: number} = {}
+
+      // Initialize all suppliers with 0 balance
+      for (const supplier of suppliers) {
+        balances[supplier.id] = 0
+      }
+
+      // Add invoices to balance (Purchase Invoice adds, Purchase Return subtracts)
+      for (const invoice of (allInvoices || [])) {
+        const supplierId = invoice.supplier_id
+        if (!supplierId) continue
+        if (!(supplierId in balances)) {
+          balances[supplierId] = 0
+        }
+        if (invoice.invoice_type === 'Purchase Invoice') {
+          balances[supplierId] += (invoice.total_amount || 0)
+        } else if (invoice.invoice_type === 'Purchase Return') {
+          balances[supplierId] -= (invoice.total_amount || 0)
+        }
+      }
+
+      // Subtract payments from balance
+      for (const payment of (allPayments || [])) {
+        const supplierId = payment.supplier_id
+        if (!supplierId) continue
+        if (!(supplierId in balances)) {
+          balances[supplierId] = 0
+        }
+        balances[supplierId] -= (payment.amount || 0)
+      }
+
+      setSupplierBalances(balances)
+    } catch (error) {
+      console.error('Error calculating supplier balances:', error)
+    }
+  }, [suppliers])
+
+  // Fetch balances when suppliers change
+  useEffect(() => {
+    if (suppliers.length > 0) {
+      fetchAllSupplierBalances()
+    }
+  }, [suppliers, fetchAllSupplierBalances])
+
+  // Set up real-time subscription for balance updates
+  useEffect(() => {
+    const invoicesChannel = supabase
+      .channel('suppliers_page_invoices')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'purchase_invoices' },
+        () => fetchAllSupplierBalances()
+      )
+      .subscribe()
+
+    const paymentsChannel = supabase
+      .channel('suppliers_page_payments')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'supplier_payments' },
+        () => fetchAllSupplierBalances()
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(invoicesChannel)
+      supabase.removeChannel(paymentsChannel)
+    }
+  }, [fetchAllSupplierBalances])
 
   // Get all columns for columns control modal
   const getAllColumns = () => {
@@ -823,6 +918,7 @@ export default function SuppliersPage() {
                     }}
                     onSupplierDoubleClick={openSupplierDetails}
                     isDefaultSupplier={isDefaultSupplier}
+                    supplierBalances={supplierBalances}
                   />
                 </div>
               ) : (

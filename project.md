@@ -90,10 +90,10 @@
    - Blue "موردين" dropdown matching design
    - Exact match to `suppliers.png` design
 
-3. **Records Page** (`/records`)
+3. **Safes Page** (`/safes`)
    - Dashboard-style summary cards
-   - Records table with filtering
-   - "إضافة سجل جديد" green button
+   - Safes table with filtering
+   - "إضافة خزنة جديدة" green button
    - Search functionality
    - Exact match to `records.png` design
 
@@ -102,7 +102,7 @@
 - `FilterDropdown` - Category and status filters
 - `CustomerTable` - Specialized customer table
 - `SupplierTable` - Specialized supplier table
-- `RecordsTable` - Records-specific table
+- `SafesTable` - Safes-specific table
 
 ### Data Integration Preparation
 - Create TypeScript interfaces for all entities
@@ -198,8 +198,8 @@
    - Account balance tracking
    - Purchase order connections
 
-6. **Records Page** (`/records`) - Sixth Priority
-   - Connect to `records` table
+6. **Safes Page** (`/safes`) - Sixth Priority
+   - Connect to `records` table (for safes data)
    - Summary cards with real-time metrics
    - Filtering and search capabilities
    - Dashboard-style data presentation

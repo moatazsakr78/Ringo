@@ -185,57 +185,8 @@ export async function createSalesInvoice({
 
     console.log('Sale items created successfully:', saleItemsData)
 
-    // Also create invoice entry for main record (السجل الرئيسي) if selected record is not the main record
-    // Skip this if "no safe" option was selected
-    const MAIN_RECORD_ID = '89d38477-6a3a-4c02-95f2-ddafa5880706' // The main record ID from the database
-
-    if (!hasNoSafe && selections.record.id !== MAIN_RECORD_ID) {
-      const { error: mainRecordError } = await supabase
-        .from('sales')
-        .insert({
-          invoice_number: `${invoiceNumber}-MAIN`,
-          total_amount: totalAmount,
-          tax_amount: taxAmount,
-          discount_amount: discountAmount,
-          profit: profit,
-          payment_method: paymentMethod,
-          branch_id: selections.branch.id,
-          customer_id: customerId,
-          record_id: MAIN_RECORD_ID, // Always add to main record
-          notes: `نسخة من الفاتورة الأصلية: ${invoiceNumber}${notes ? ` - ${notes}` : ''}`,
-          time: timeString,
-          invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice') as any
-        })
-
-      if (mainRecordError) {
-        console.warn('Failed to create main record entry:', mainRecordError.message)
-        // Don't throw error here as the main invoice was created successfully
-      } else {
-        // Get the main record sale ID for creating sale items
-        const { data: mainSaleData, error: mainSaleSelectError } = await supabase
-          .from('sales')
-          .select('id')
-          .eq('invoice_number', `${invoiceNumber}-MAIN`)
-          .single()
-
-        if (!mainSaleSelectError && mainSaleData) {
-          // Create sale items for main record
-          const mainSaleItems = saleItems.map(item => ({
-            ...item,
-            sale_id: mainSaleData.id
-          }))
-
-          const { error: mainSaleItemsError } = await supabase
-            .from('sale_items')
-            .insert(mainSaleItems)
-            .select()
-
-          if (mainSaleItemsError) {
-            console.warn('Failed to create main record sale items:', mainSaleItemsError.message)
-          }
-        }
-      }
-    }
+    // Note: Invoices are only assigned to the selected safe - no duplication to main safe
+    // Each safe shows only its own invoices
 
     // Update inventory quantities
     for (const item of cartItems) {

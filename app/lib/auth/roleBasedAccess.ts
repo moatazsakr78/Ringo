@@ -44,7 +44,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/inventory',
     '/customers',
     '/suppliers',
-    '/records',
+    '/safes',
     '/reports',
     '/settings',
   ],
@@ -67,7 +67,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/inventory',
     '/customers',
     '/suppliers',
-    '/records',
+    '/safes',
     '/reports',
     '/permissions', // الصلاحيات (للأدمن الرئيسي فقط)
     '/settings',

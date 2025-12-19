@@ -81,7 +81,7 @@ const canAccess = hasPageAccess('موظف', '/dashboard');
 - `/inventory` - Inventory management ✅
 - `/customers` - Customer management ✅
 - `/suppliers` - Supplier management ✅
-- `/records` - Records ✅
+- `/safes` - Safes (الخزن) ✅
 - `/reports` - Reports ✅
 - `/permissions` - Permissions management ✅
 

@@ -73,6 +73,9 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
   const [transfers, setTransfers] = useState<any[]>([])
   const [isLoadingTransfers, setIsLoadingTransfers] = useState(false)
 
+  // Paid amounts mapped by sale_id or purchase_invoice_id
+  const [paidAmounts, setPaidAmounts] = useState<Record<string, number>>({})
+
   // The safe balance is the actual cash drawer balance (paid amounts, not invoice totals)
   // This is fetched from the cash_drawers table
   const safeBalance = cashDrawerBalance
@@ -280,13 +283,30 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       }
       
       setSales(data || [])
-      
-      // Auto-select first sale if available
+
+      // Fetch paid amounts for all sales
       if (data && data.length > 0) {
+        const saleIds = data.map((s: any) => s.id)
+        const { data: transactions } = await supabase
+          .from('cash_drawer_transactions')
+          .select('sale_id, amount')
+          .in('sale_id', saleIds)
+          .eq('record_id', safe.id)
+
+        if (transactions) {
+          const amounts: Record<string, number> = {}
+          transactions.forEach((t: any) => {
+            if (t.sale_id) {
+              amounts[t.sale_id] = Math.abs(t.amount || 0)
+            }
+          })
+          setPaidAmounts(prev => ({ ...prev, ...amounts }))
+        }
+
         setSelectedTransaction(0)
         fetchSaleItems(data[0].id)
       }
-      
+
     } catch (error) {
       console.error('Error fetching sales:', error)
     } finally {
@@ -650,7 +670,27 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       }
       
       setPurchaseInvoices(data || [])
-      
+
+      // Fetch paid amounts for all purchase invoices
+      if (data && data.length > 0) {
+        const purchaseIds = data.map((p: any) => p.id)
+        const { data: transactions } = await supabase
+          .from('cash_drawer_transactions')
+          .select('purchase_invoice_id, amount')
+          .in('purchase_invoice_id', purchaseIds)
+          .eq('record_id', safe.id)
+
+        if (transactions) {
+          const amounts: Record<string, number> = {}
+          transactions.forEach((t: any) => {
+            if (t.purchase_invoice_id) {
+              amounts[t.purchase_invoice_id] = Math.abs(t.amount || 0)
+            }
+          })
+          setPaidAmounts(prev => ({ ...prev, ...amounts }))
+        }
+      }
+
     } catch (error) {
       console.error('Error fetching purchase invoices:', error)
     } finally {
@@ -1311,6 +1351,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       ...sale,
       transactionType: 'sale',
       amount: sale.total_amount,
+      paid_amount: paidAmounts[sale.id] || 0,
       client: sale.customer,
       clientType: 'عميل'
     }))
@@ -1319,6 +1360,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       ...purchase,
       transactionType: 'purchase',
       amount: purchase.total_amount,
+      paid_amount: paidAmounts[purchase.id] || 0,
       client: purchase.supplier,
       clientType: 'مورد'
     }))
@@ -1327,7 +1369,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
     return [...salesWithType, ...purchasesWithType].sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
-  }, [sales, purchaseInvoices])
+  }, [sales, purchaseInvoices, paidAmounts])
 
   // Create combined transaction items based on selected transaction type
   const allTransactionItems = useMemo(() => {
@@ -1929,29 +1971,31 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
     },
     {
       id: 'total_amount',
-      header: 'المبلغ الإجمالي',
+      header: 'قيمة الفاتورة',
       accessor: 'total_amount',
-      width: 150,
+      width: 130,
+      render: (value: number) => (
+        <span className="text-gray-300 font-medium">
+          {formatPrice(Math.abs(value), 'system')}
+        </span>
+      )
+    },
+    {
+      id: 'paid_amount',
+      header: 'المبلغ المدفوع',
+      accessor: 'paid_amount',
+      width: 130,
       render: (value: number, item: any) => {
-        // Purchase invoices should show as negative (money going out from safe)
-        // Purchase returns should show as positive (money coming back to safe)
-        // Sales invoices should show as positive (money coming in)
-        // Sales returns should show as negative (money going out)
         const isPurchase = item.transactionType === 'purchase'
         const isReturn = item.invoice_type === 'Purchase Return' || item.invoice_type === 'Sale Return'
-
-        // Determine if amount should be negative
-        // Purchase Invoice = negative (money out)
-        // Purchase Return = positive (money back)
-        // Sale Invoice = positive (money in)
-        // Sale Return = negative (money out)
+        // Purchase Invoice = negative (money out), Purchase Return = positive
+        // Sale Invoice = positive (money in), Sale Return = negative
         const shouldBeNegative = (isPurchase && !isReturn) || (!isPurchase && isReturn)
-        const displayAmount = shouldBeNegative ? -Math.abs(value) : Math.abs(value)
         const colorClass = shouldBeNegative ? 'text-red-400' : 'text-green-400'
 
         return (
           <span className={`${colorClass} font-medium`}>
-            {shouldBeNegative ? '-' : ''}{formatPrice(Math.abs(value), 'system')}
+            {shouldBeNegative ? '-' : '+'}{formatPrice(value || 0, 'system')}
           </span>
         )
       }
@@ -2555,7 +2599,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
               </div>
 
               {/* Conditional Content Based on Active Tab and View Mode */}
-              <div className="flex-1 overflow-hidden relative">
+              <div className="flex-1 overflow-y-auto scrollbar-hide relative">
                 {activeTab === 'statement' && (
                   <div className="h-full flex flex-col">
                     {/* Account Statement Header */}

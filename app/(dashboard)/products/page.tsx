@@ -78,6 +78,18 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [showDeleteProductConfirm, setShowDeleteProductConfirm] = useState(false)
   const [isDeletingProduct, setIsDeletingProduct] = useState(false)
+  const [productUsageStats, setProductUsageStats] = useState<{
+    salesInvoices: number;
+    salesReturns: number;
+    purchaseInvoices: number;
+    purchaseReturns: number;
+    orders: number;
+    totalQuantitySold: number;
+    currentStock: number;
+    hasUsage: boolean;
+  } | null>(null)
+  const [showFinalDeleteConfirm, setShowFinalDeleteConfirm] = useState(false)
+  const [isLoadingUsageStats, setIsLoadingUsageStats] = useState(false)
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid')
   const [showProductModal, setShowProductModal] = useState(false)
   const [modalProduct, setModalProduct] = useState<Product | null>(null)
@@ -106,7 +118,7 @@ export default function ProductsPage() {
   const [lastScrollY, setLastScrollY] = useState(0)
 
   // ✨ OPTIMIZED: Use super-optimized admin hook (reduces queries significantly!)
-  const { products, setProducts, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct } = useProductsAdmin()
+  const { products, setProducts, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct, getProductUsageStats } = useProductsAdmin()
   const { fetchBranchInventory, fetchProductVariants } = useBranches()
 
   // Device detection for tablet and mobile optimization
@@ -657,26 +669,47 @@ export default function ProductsPage() {
     }
   }
 
-  const handleDeleteProduct = () => {
-    if (selectedProduct) {
+  const handleDeleteProduct = async () => {
+    if (!selectedProduct) return
+
+    setIsLoadingUsageStats(true)
+    setProductUsageStats(null)
+
+    try {
+      // Get usage stats first
+      const stats = await getProductUsageStats(selectedProduct.id)
+      setProductUsageStats(stats)
       setShowDeleteProductConfirm(true)
+    } catch (error) {
+      console.error('Error getting product usage stats:', error)
+      alert('حدث خطأ أثناء التحقق من بيانات المنتج')
+    } finally {
+      setIsLoadingUsageStats(false)
     }
   }
 
   const confirmDeleteProduct = async () => {
     if (!selectedProduct) return
-    
+
+    // If product has usage, show final confirmation first
+    if (productUsageStats?.hasUsage && !showFinalDeleteConfirm) {
+      setShowFinalDeleteConfirm(true)
+      return
+    }
+
     setIsDeletingProduct(true)
     try {
-      await deleteProduct(selectedProduct.id)
-      
+      // Pass true to force soft delete if product has usage
+      await deleteProduct(selectedProduct.id, productUsageStats?.hasUsage || false)
+
       // Clear selection and close confirmation
       setSelectedProduct(null)
       setShowDeleteProductConfirm(false)
-      
+      setShowFinalDeleteConfirm(false)
+      setProductUsageStats(null)
+
     } catch (error) {
       console.error('Error deleting product:', error)
-      // Show specific error message if it's about invoices, otherwise show generic error
       const errorMessage = error instanceof Error ? error.message : 'حدث خطأ أثناء حذف المنتج'
       alert(errorMessage)
     } finally {
@@ -686,6 +719,8 @@ export default function ProductsPage() {
 
   const cancelDeleteProduct = () => {
     setShowDeleteProductConfirm(false)
+    setShowFinalDeleteConfirm(false)
+    setProductUsageStats(null)
   }
 
   // OPTIMIZED: Memoized columns change handler - saves to localStorage
@@ -1391,28 +1426,107 @@ export default function ProductsPage() {
         <>
           {/* Backdrop */}
           <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={cancelDeleteProduct} />
-          
+
           {/* Modal */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <div className="bg-[#3A4553] rounded-lg shadow-2xl border border-[#4A5568] max-w-md w-full">
+            <div className="bg-[#3A4553] rounded-lg shadow-2xl border border-[#4A5568] max-w-lg w-full">
               {/* Header */}
               <div className="px-6 py-4 border-b border-[#4A5568]">
-                <h3 className="text-lg font-medium text-white text-right">تأكيد الحذف</h3>
+                <h3 className="text-lg font-medium text-white text-right">
+                  {showFinalDeleteConfirm ? 'تأكيد نهائي للحذف' : 'تأكيد الحذف'}
+                </h3>
               </div>
-              
+
               {/* Content */}
               <div className="px-6 py-4">
-                <p className="text-gray-300 text-right mb-2">
-                  هل أنت متأكد من أنك تريد حذف هذا المنتج؟
-                </p>
-                <p className="text-blue-400 font-medium text-right">
-                  {selectedProduct?.name}
-                </p>
-                <p className="text-yellow-400 text-sm text-right mt-2">
-                  تحذير: لا يمكن التراجع عن هذا الإجراء
-                </p>
+                {!showFinalDeleteConfirm ? (
+                  <>
+                    <p className="text-gray-300 text-right mb-2">
+                      هل أنت متأكد من أنك تريد حذف هذا المنتج؟
+                    </p>
+                    <p className="text-blue-400 font-medium text-right mb-4">
+                      {selectedProduct?.name}
+                    </p>
+
+                    {/* Product Usage Stats */}
+                    {productUsageStats?.hasUsage && (
+                      <div className="bg-[#2B3544] rounded-lg p-4 mb-4 border border-yellow-500/30">
+                        <p className="text-yellow-400 font-medium text-right mb-3 flex items-center justify-end gap-2">
+                          <span>⚠️</span>
+                          <span>هذا المنتج موجود في:</span>
+                        </p>
+                        <div className="space-y-2 text-right">
+                          {productUsageStats.salesInvoices > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.salesInvoices}</span>
+                              <span className="text-gray-300">فواتير بيع</span>
+                            </div>
+                          )}
+                          {productUsageStats.salesReturns > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.salesReturns}</span>
+                              <span className="text-gray-300">مرتجعات بيع</span>
+                            </div>
+                          )}
+                          {productUsageStats.purchaseInvoices > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.purchaseInvoices}</span>
+                              <span className="text-gray-300">فواتير شراء</span>
+                            </div>
+                          )}
+                          {productUsageStats.purchaseReturns > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.purchaseReturns}</span>
+                              <span className="text-gray-300">مرتجعات شراء</span>
+                            </div>
+                          )}
+                          {productUsageStats.orders > 0 && (
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.orders}</span>
+                              <span className="text-gray-300">طلبات أونلاين</span>
+                            </div>
+                          )}
+                          <div className="border-t border-gray-600 pt-2 mt-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.totalQuantitySold}</span>
+                              <span className="text-gray-300">إجمالي الكمية المباعة</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-white font-medium">{productUsageStats.currentStock}</span>
+                              <span className="text-gray-300">الكمية الحالية بالمخزون</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!productUsageStats?.hasUsage && (
+                      <p className="text-yellow-400 text-sm text-right">
+                        تحذير: لا يمكن التراجع عن هذا الإجراء
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                      <p className="text-green-400 text-right flex items-center justify-end gap-2">
+                        <span>✓</span>
+                        <span>لا تقلق!</span>
+                      </p>
+                      <p className="text-gray-300 text-right mt-2">
+                        سيتم حذف المنتج من النظام فقط ولكن <span className="text-white font-medium">لن يتم حذفه من أي فواتير أو طلبات سابقة</span>.
+                      </p>
+                      <p className="text-gray-400 text-right mt-2 text-sm">
+                        الفواتير والطلبات السابقة ستظل كما هي بدون أي تغيير.
+                      </p>
+                    </div>
+                    <p className="text-white text-right font-medium">
+                      هل تريد المتابعة في حذف المنتج؟
+                    </p>
+                  </>
+                )}
               </div>
-              
+
               {/* Actions */}
               <div className="px-6 py-4 border-t border-[#4A5568] flex gap-3 justify-end">
                 <button
@@ -1430,7 +1544,7 @@ export default function ProductsPage() {
                       : 'bg-red-600 hover:bg-red-700 text-white'
                   }`}
                 >
-                  {isDeletingProduct ? 'جاري الحذف...' : 'نعم، احذف'}
+                  {isDeletingProduct ? 'جاري الحذف...' : (showFinalDeleteConfirm ? 'نعم، احذف المنتج' : (productUsageStats?.hasUsage ? 'متابعة' : 'نعم، احذف'))}
                 </button>
               </div>
             </div>

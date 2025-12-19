@@ -19,7 +19,7 @@ const adminOnlyPaths = [
   '/inventory',
   '/customers',
   '/suppliers',
-  '/records',
+  '/safes',
   '/reports',
   '/permissions',
   '/admin',

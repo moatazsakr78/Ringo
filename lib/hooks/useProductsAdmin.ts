@@ -117,7 +117,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           .select('*')
           .eq('is_active', true)
           .order('name'),
-        // Query 2: Get all products with categories
+        // Query 2: Get all products with categories (excluding soft-deleted products)
         supabase
           .from('products')
           .select(`
@@ -154,6 +154,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
             )
           `)
           .eq('is_active', true)
+          .or('is_deleted.is.null,is_deleted.eq.false')
           .order('display_order', { ascending: true })
       ]);
 
@@ -548,47 +549,185 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     }
   }, [])
 
-  // ✨ Delete product
-  const deleteProduct = useCallback(async (productId: string): Promise<void> => {
+  // ✨ Get product usage statistics before deletion
+  const getProductUsageStats = useCallback(async (productId: string): Promise<{
+    salesInvoices: number;
+    salesReturns: number;
+    purchaseInvoices: number;
+    purchaseReturns: number;
+    orders: number;
+    totalQuantitySold: number;
+    currentStock: number;
+    hasUsage: boolean;
+  }> => {
     try {
-      // Check if product exists in sales invoices
+      // Get all sale items for this product with their sale info
       const { data: saleItems, error: saleError } = await supabase
         .from('sale_items')
-        .select('id')
+        .select('id, quantity, sale_id')
         .eq('product_id', productId)
-        .limit(1)
 
-      if (saleError) throw saleError
-
-      if (saleItems && saleItems.length > 0) {
-        throw new Error('المنتج موجود في فواتير لا يمكن حذفه')
+      if (saleError) {
+        console.error('Error fetching sale_items:', saleError)
       }
 
-      // Check if product exists in purchase invoices
+      let salesInvoices = 0
+      let salesReturns = 0
+      let totalQuantitySold = 0
+
+      // If we have sale items, get their invoice types
+      if (saleItems && saleItems.length > 0) {
+        const saleIds = Array.from(new Set(saleItems.map((item: any) => item.sale_id)))
+
+        const { data: salesData, error: salesError } = await supabase
+          .from('sales')
+          .select('id, invoice_type')
+          .in('id', saleIds)
+
+        if (!salesError && salesData) {
+          const salesMap = new Map(salesData.map((s: any) => [s.id, s.invoice_type]))
+
+          for (const item of saleItems) {
+            const invoiceType = salesMap.get(item.sale_id)
+            if (invoiceType === 'Sales Return') {
+              salesReturns++
+            } else {
+              salesInvoices++
+              totalQuantitySold += (item.quantity || 0)
+            }
+          }
+        } else {
+          // If can't get invoice types, count all as sales
+          salesInvoices = saleItems.length
+          totalQuantitySold = saleItems.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)
+        }
+      }
+
+      // Get purchase invoice items count
       const { data: purchaseItems, error: purchaseError } = await supabase
         .from('purchase_invoice_items')
-        .select('id')
+        .select('id, purchase_invoice_id')
         .eq('product_id', productId)
-        .limit(1)
 
-      if (purchaseError) throw purchaseError
-
-      if (purchaseItems && purchaseItems.length > 0) {
-        throw new Error('المنتج موجود في فواتير لا يمكن حذفه')
+      if (purchaseError) {
+        console.error('Error fetching purchase_invoice_items:', purchaseError)
       }
 
-      // If no invoice references found, proceed with deletion
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
+      let purchaseInvoices = 0
+      let purchaseReturns = 0
 
-      if (error) throw error
+      // If we have purchase items, get their invoice types
+      if (purchaseItems && purchaseItems.length > 0) {
+        const purchaseIds = Array.from(new Set(purchaseItems.map((item: any) => item.purchase_invoice_id)))
+
+        const { data: purchasesData, error: purchasesError } = await supabase
+          .from('purchase_invoices')
+          .select('id, invoice_type')
+          .in('id', purchaseIds)
+
+        if (!purchasesError && purchasesData) {
+          const purchasesMap = new Map(purchasesData.map((p: any) => [p.id, p.invoice_type]))
+
+          for (const item of purchaseItems) {
+            const invoiceType = purchasesMap.get(item.purchase_invoice_id)
+            if (invoiceType === 'Purchase Return') {
+              purchaseReturns++
+            } else {
+              purchaseInvoices++
+            }
+          }
+        } else {
+          // If can't get invoice types, count all as purchases
+          purchaseInvoices = purchaseItems.length
+        }
+      }
+
+      // Get orders count
+      const { data: orderItems, error: orderError } = await supabase
+        .from('order_items')
+        .select('id')
+        .eq('product_id', productId)
+
+      if (orderError) {
+        console.error('Error fetching order_items:', orderError)
+      }
+
+      const orders = (orderItems || []).length
+
+      // Get current stock from inventory
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory')
+        .select('quantity')
+        .eq('product_id', productId)
+
+      if (inventoryError) {
+        console.error('Error fetching inventory:', inventoryError)
+      }
+
+      const currentStock = (inventoryData || []).reduce((sum: number, item: any) => sum + (item.quantity || 0), 0)
+
+      const hasUsage = salesInvoices > 0 || salesReturns > 0 || purchaseInvoices > 0 || purchaseReturns > 0 || orders > 0
+
+      return {
+        salesInvoices,
+        salesReturns,
+        purchaseInvoices,
+        purchaseReturns,
+        orders,
+        totalQuantitySold,
+        currentStock,
+        hasUsage
+      }
+    } catch (err) {
+      console.error('Error getting product usage stats:', err)
+      // Return empty stats instead of throwing to allow the flow to continue
+      return {
+        salesInvoices: 0,
+        salesReturns: 0,
+        purchaseInvoices: 0,
+        purchaseReturns: 0,
+        orders: 0,
+        totalQuantitySold: 0,
+        currentStock: 0,
+        hasUsage: false
+      }
+    }
+  }, [])
+
+  // ✨ Delete product (soft delete if in invoices, hard delete otherwise)
+  const deleteProduct = useCallback(async (productId: string, forceSoftDelete: boolean = false): Promise<void> => {
+    try {
+      const stats = await getProductUsageStats(productId)
+
+      if (stats.hasUsage) {
+        if (!forceSoftDelete) {
+          // Return an error with usage stats so the UI can show details
+          const error = new Error('PRODUCT_HAS_USAGE') as any
+          error.usageStats = stats
+          throw error
+        }
+
+        // Soft delete - just mark as deleted
+        const { error } = await supabase
+          .from('products')
+          .update({ is_deleted: true } as any)
+          .eq('id', productId)
+
+        if (error) throw error
+      } else {
+        // Hard delete - no references found
+        const { error } = await supabase
+          .from('products')
+          .delete()
+          .eq('id', productId)
+
+        if (error) throw error
+      }
     } catch (err) {
       console.error('Error deleting product:', err)
       throw err
     }
-  }, [])
+  }, [getProductUsageStats])
 
   return {
     products,
@@ -600,5 +739,6 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     createProduct, // ✨ Expose createProduct
     updateProduct, // ✨ Expose updateProduct
     deleteProduct, // ✨ Expose deleteProduct
+    getProductUsageStats, // ✨ Expose getProductUsageStats for detailed deletion info
   };
 }
