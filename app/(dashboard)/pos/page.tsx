@@ -2019,14 +2019,10 @@ function POSPageContent() {
 
   // Purchase Mode Functions
   const handlePurchaseModeToggle = () => {
-    if (isPurchaseMode) {
-      // إذا كان وضع الشراء مفعل، أظهر رسالة التأكيد للخروج
-      setShowPurchaseModeConfirm(true);
-    } else {
-      // إذا لم يكن مفعل، افتح نافذة اختيار المورد مباشرة لبدء شراء جديد
-      setIsSupplierModalForNewPurchase(true);
-      setIsSupplierModalOpen(true);
-    }
+    // دائماً افتح نافذة اختيار المورد لإضافة نافذة شراء جديدة
+    // حتى لو كان وضع الشراء مفعل بالفعل، يمكن فتح نوافذ شراء متعددة
+    setIsSupplierModalForNewPurchase(true);
+    setIsSupplierModalOpen(true);
   };
 
   const confirmPurchaseMode = () => {
@@ -3743,7 +3739,7 @@ function POSPageContent() {
   return (
     <div className="flex h-screen bg-[#2B3544]">
       {/* Top Header */}
-      <TopHeader onMenuClick={toggleSidebar} isMenuOpen={isSidebarOpen} />
+      <TopHeader onMenuClick={toggleSidebar} isMenuOpen={isSidebarOpen} pageTitle={isPurchaseMode ? 'نقطة الشراء' : 'نقطة البيع'} />
 
       {/* Sidebar */}
       <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />
