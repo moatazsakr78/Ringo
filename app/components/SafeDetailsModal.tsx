@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase/client'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import SimpleDateFilterModal, { DateFilter } from './SimpleDateFilterModal'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
+import { useAuth } from '@/lib/useAuth'
 
 interface SafeDetailsModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ type ViewMode = 'split' | 'safes-only' | 'details-only'
 
 export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsModalProps) {
   const formatPrice = useFormatPrice();
+  const { user } = useAuth();
   const [selectedTransaction, setSelectedTransaction] = useState(0) // First row selected (index 0)
   const [showSafeDetails, setShowSafeDetails] = useState(true)
   const [activeTab, setActiveTab] = useState('transactions') // 'transactions', 'payments', 'statement'
@@ -266,6 +268,9 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           customer:customers(
             name,
             phone
+          ),
+          cashier:user_profiles(
+            full_name
           )
         `)
         .eq('record_id', safe.id)
@@ -349,7 +354,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       // Get all non-sale transactions (deposits, withdrawals, adjustments)
       let query = supabase
         .from('cash_drawer_transactions')
-        .select('id, amount, transaction_type, notes, created_at, balance_after')
+        .select('id, amount, transaction_type, notes, created_at, balance_after, performed_by')
         .eq('record_id', safe.id)
         .is('sale_id', null) // Only get non-sale transactions
 
@@ -376,7 +381,8 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           amount: tx.amount,
           type: tx.transaction_type,
           notes: tx.notes || '-',
-          balance_after: tx.balance_after
+          balance_after: tx.balance_after,
+          employee_name: tx.performed_by || null
         }
       })
 
@@ -408,14 +414,17 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       // The balance_after field contains the accurate running balance after each transaction
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('cash_drawer_transactions')
-        .select('id, sale_id, amount, balance_after, transaction_type, notes, created_at')
+        .select('id, sale_id, amount, balance_after, transaction_type, notes, created_at, performed_by')
         .eq('record_id', safe.id)
         .order('created_at', { ascending: true })
 
       // 3. Get sales data for invoice details
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('id, invoice_number, total_amount, invoice_type, created_at, time, notes')
+        .select(`
+          id, invoice_number, total_amount, invoice_type, created_at, time, notes,
+          cashier:user_profiles(full_name)
+        `)
         .eq('record_id', safe.id)
 
       // Create a map of sale_id to sale data for quick lookup
@@ -491,6 +500,10 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
 
           const createdDate = tx.created_at ? new Date(tx.created_at) : new Date()
 
+          // Get employee name from sale if available, otherwise from transaction
+          const saleData = tx.sale_id ? salesMap.get(tx.sale_id) : null
+          const employeeName = saleData?.cashier?.full_name || tx.performed_by || null
+
           statements.push({
             id: tx.id,
             date: createdDate.toLocaleDateString('en-GB'),
@@ -501,7 +514,8 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
             invoiceValue: Math.abs(invoiceValue),
             balance: balanceAfter, // Use balance_after directly from database - this is the accurate balance
             created_at: tx.created_at || new Date().toISOString(),
-            isPositive: isPositive
+            isPositive: isPositive,
+            employee_name: employeeName
           })
         }
       }
@@ -640,6 +654,9 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           supplier:suppliers(
             name,
             phone
+          ),
+          creator:user_profiles(
+            full_name
           )
         `)
         .eq('record_id', safe.id)
@@ -1590,7 +1607,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           amount: transactionAmount,
           balance_after: newSourceBalance,
           notes: transactionNotes,
-          performed_by: 'system'
+          performed_by: user?.name || 'system'
         })
 
       // 4. في حالة التحويل، إضافة للخزنة المستهدفة
@@ -1636,7 +1653,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
               amount: amount,
               balance_after: newTargetBalance,
               notes: `تحويل من خزنة ${safe.name}${withdrawNotes ? ` - ${withdrawNotes}` : ''}`,
-              performed_by: 'system'
+              performed_by: user?.name || 'system'
             })
         }
       }
@@ -1895,6 +1912,13 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       accessor: 'balance',
       width: 140,
       render: (value: number) => <span className="text-blue-400 font-medium">{formatPrice(value, 'system')}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
     }
   ]
 
@@ -2063,6 +2087,13 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           : value
         return <span className="text-gray-400">{cleanNotes || '-'}</span>
       }
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'cashier.full_name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-yellow-400">{item.cashier?.full_name || item.creator?.full_name || '-'}</span>
     }
   ]
 
@@ -2130,6 +2161,13 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       accessor: 'notes',
       width: 250,
       render: (value: string) => <span className="text-gray-400">{value}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
     }
   ]
 

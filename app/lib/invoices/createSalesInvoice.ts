@@ -31,6 +31,8 @@ export interface CreateSalesInvoiceParams {
   isReturn?: boolean
   paymentSplitData?: PaymentEntry[]
   creditAmount?: number
+  userId?: string | null
+  userName?: string | null
 }
 
 export async function createSalesInvoice({
@@ -40,7 +42,9 @@ export async function createSalesInvoice({
   notes,
   isReturn = false,
   paymentSplitData = [],
-  creditAmount = 0
+  creditAmount = 0,
+  userId = null,
+  userName = null
 }: CreateSalesInvoiceParams) {
   if (!selections.branch) {
     throw new Error('يجب تحديد الفرع قبل إنشاء الفاتورة')
@@ -296,7 +300,9 @@ export async function createSalesInvoice({
               amount: payment.amount,
               payment_method: paymentMethodName,
               notes: `دفعة من فاتورة رقم ${invoiceNumber}`,
-              payment_date: new Date().toISOString().split('T')[0]
+              payment_date: new Date().toISOString().split('T')[0],
+              created_by: userId || null,
+              safe_id: selections.record?.id || null
             })
 
           if (paymentError) {
@@ -400,7 +406,7 @@ export async function createSalesInvoice({
               notes: isReturn
                 ? `مرتجع - فاتورة رقم ${invoiceNumber}`
                 : `بيع - فاتورة رقم ${invoiceNumber}`,
-              performed_by: 'system'
+              performed_by: userName || 'system'
             })
 
           console.log(`✅ Cash drawer updated: ${cashToDrawer >= 0 ? '+' : ''}${cashToDrawer}, new balance: ${newBalance}`)

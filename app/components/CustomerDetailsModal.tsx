@@ -108,7 +108,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   // Visible columns state - default all visible
   const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>([
     'index', 'invoice_number', 'created_at', 'time', 'invoice_type',
-    'customer_name', 'customer_phone', 'total_amount', 'payment_method', 'notes'
+    'customer_name', 'customer_phone', 'total_amount', 'payment_method', 'notes',
+    'safe_name', 'employee_name'
   ])
   const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>([
     'index', 'category', 'productName', 'quantity', 'barcode',
@@ -129,7 +130,9 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     { id: 'customer_phone', label: 'الهاتف', required: false },
     { id: 'total_amount', label: 'المبلغ الإجمالي', required: true },
     { id: 'payment_method', label: 'طريقة الدفع', required: false },
-    { id: 'notes', label: 'البيان', required: false }
+    { id: 'notes', label: 'البيان', required: false },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false }
   ]
 
   const allDetailsColumnDefs = [
@@ -309,6 +312,19 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     if (!customer?.id) return
 
     try {
+      // Get customer's opening balance
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('opening_balance')
+        .eq('id', customer.id)
+        .single()
+
+      if (customerError) {
+        console.error('Error fetching customer opening balance:', customerError)
+      }
+
+      const openingBalance = customerData?.opening_balance || 0
+
       // Get all sales for this customer (without date filter)
       const { data: allSales, error: salesError } = await supabase
         .from('sales')
@@ -355,8 +371,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         }
       })
 
-      // Final balance = Sales Balance + Loans - Regular Payments
-      const finalBalance = salesBalance + totalLoans - totalRegularPayments
+      // Final balance = Opening Balance + Sales Balance + Loans - Regular Payments
+      const finalBalance = openingBalance + salesBalance + totalLoans - totalRegularPayments
 
       setCustomerBalance(finalBalance)
     } catch (error) {
@@ -383,9 +399,17 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           created_at,
           time,
           invoice_type,
+          record_id,
+          cashier_id,
           customer:customers(
             name,
             phone
+          ),
+          record:records(
+            name
+          ),
+          cashier:user_profiles(
+            full_name
           )
         `)
         .eq('customer_id', customer.id)
@@ -433,7 +457,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           reference_number,
           notes,
           payment_date,
-          created_at
+          created_at,
+          created_by,
+          safe_id,
+          creator:user_profiles(full_name)
         `)
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: false })
@@ -443,7 +470,29 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         return
       }
 
-      setCustomerPayments(data || [])
+      // Get safe names for payments that have safe_id
+      const safeIds = (data || []).filter(p => p.safe_id).map(p => p.safe_id as string)
+      let safesMap = new Map<string, string>()
+
+      if (safeIds.length > 0) {
+        const { data: safesData } = await supabase
+          .from('records')
+          .select('id, name')
+          .in('id', safeIds)
+
+        if (safesData) {
+          safesData.forEach(safe => safesMap.set(safe.id, safe.name))
+        }
+      }
+
+      // Map payments with safe_name and employee_name
+      const paymentsWithInfo = (data || []).map(payment => ({
+        ...payment,
+        safe_name: payment.safe_id ? safesMap.get(payment.safe_id) || null : null,
+        employee_name: (payment as any).creator?.full_name || null
+      }))
+
+      setCustomerPayments(paymentsWithInfo)
 
     } catch (error) {
       console.error('Error fetching customer payments:', error)
@@ -526,10 +575,28 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     try {
       setIsLoadingStatements(true)
 
+      // Get customer's opening balance and created_at date
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('opening_balance, created_at')
+        .eq('id', customer.id)
+        .single()
+
+      if (customerError) {
+        console.error('Error fetching customer data:', customerError)
+      }
+
+      const openingBalance = customerData?.opening_balance || 0
+      const customerCreatedAt = customerData?.created_at ? new Date(customerData.created_at) : new Date()
+
       // Get all sales for this customer
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('id, invoice_number, total_amount, invoice_type, created_at, time')
+        .select(`
+          id, invoice_number, total_amount, invoice_type, created_at, time,
+          record:records(name),
+          cashier:user_profiles(full_name)
+        `)
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: true })
 
@@ -541,7 +608,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       // Get all payments for this customer
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('customer_payments')
-        .select('id, amount, notes, created_at, payment_date')
+        .select(`
+          id, amount, notes, created_at, payment_date, safe_id,
+          creator:user_profiles(full_name)
+        `)
         .eq('customer_id', customer.id)
         .order('created_at', { ascending: true })
 
@@ -550,14 +620,33 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         return
       }
 
-      // Get cash drawer transactions to get actual paid amounts for each sale
+      // Get safe names for payments
+      const paymentSafeIds = (paymentsData || []).filter(p => p.safe_id).map(p => p.safe_id as string)
+      let paymentSafesMap = new Map<string, string>()
+
+      if (paymentSafeIds.length > 0) {
+        const { data: safesData } = await supabase
+          .from('records')
+          .select('id, name')
+          .in('id', paymentSafeIds)
+
+        if (safesData) {
+          safesData.forEach(safe => paymentSafesMap.set(safe.id, safe.name))
+        }
+      }
+
+      // Get cash drawer transactions to get actual paid amounts and safe info for each sale
       const saleIds = salesData?.map(s => s.id) || []
       let paidAmountsMap = new Map<string, number>()
+      let saleTransactionsMap = new Map<string, any>()
 
       if (saleIds.length > 0) {
         const { data: transactionsData, error: transactionsError } = await supabase
           .from('cash_drawer_transactions')
-          .select('sale_id, amount')
+          .select(`
+            sale_id, amount, performed_by,
+            record:records(name)
+          `)
           .in('sale_id', saleIds)
           .eq('transaction_type', 'sale')
 
@@ -565,6 +654,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           for (const tx of transactionsData) {
             if (tx.sale_id) {
               paidAmountsMap.set(tx.sale_id, tx.amount || 0)
+              saleTransactionsMap.set(tx.sale_id, tx)
             }
           }
         }
@@ -584,6 +674,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           // Get actual paid amount from cash drawer transactions
           // If no transaction found, paid amount is 0 (credit sale)
           const actualPaidAmount = paidAmountsMap.get(sale.id) || 0
+          const saleTx = saleTransactionsMap.get(sale.id)
 
           statements.push({
             id: `sale-${sale.id}`,
@@ -595,7 +686,9 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
             invoiceValue: Math.abs(sale.total_amount),
             paidAmount: Math.abs(actualPaidAmount), // Use actual paid amount from transactions
             balance: 0, // Will be calculated
-            isNegative: isReturn
+            isNegative: isReturn,
+            safe_name: (sale as any).record?.name || saleTx?.record?.name || null,
+            employee_name: (sale as any).cashier?.full_name || saleTx?.performed_by || null
           })
         }
       })
@@ -606,6 +699,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           const paymentDate = new Date(payment.created_at)
           // التحقق إذا كانت سلفة من خلال الملاحظات
           const isLoan = payment.notes?.startsWith('سلفة')
+
+          // Get safe name from map and employee name from joined data
+          const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
+          const employeeName = (payment as any).creator?.full_name || null
 
           if (isLoan) {
             // السلفة تزيد الرصيد المستحق على العميل
@@ -618,7 +715,9 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
               invoiceValue: payment.amount,
               paidAmount: 0,
               balance: 0,
-              isNegative: false
+              isNegative: false,
+              safe_name: safeName,
+              employee_name: employeeName
             })
           } else {
             // الدفعة العادية تنقص الرصيد المستحق على العميل
@@ -631,7 +730,9 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
               invoiceValue: 0,
               paidAmount: payment.amount,
               balance: 0,
-              isNegative: false
+              isNegative: false,
+              safe_name: safeName,
+              employee_name: employeeName
             })
           }
         }
@@ -640,8 +741,28 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       // Sort by date
       statements.sort((a, b) => a.date.getTime() - b.date.getTime())
 
-      // Calculate running balance
-      let runningBalance = 0
+      // Add opening balance as first entry if it exists
+      const finalStatements: any[] = []
+
+      if (openingBalance !== 0) {
+        finalStatements.push({
+          id: 'opening-balance',
+          date: customerCreatedAt,
+          description: 'رصيد افتتاحي',
+          type: 'رصيد افتتاحي',
+          amount: openingBalance,
+          invoiceValue: openingBalance > 0 ? openingBalance : 0,
+          paidAmount: openingBalance < 0 ? Math.abs(openingBalance) : 0,
+          balance: openingBalance,
+          isNegative: false,
+          displayDate: customerCreatedAt.toLocaleDateString('en-GB'),
+          displayTime: customerCreatedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
+          index: 1
+        })
+      }
+
+      // Calculate running balance starting from opening balance
+      let runningBalance = openingBalance
       const statementsWithBalance = statements.map((statement, index) => {
         runningBalance += statement.amount
         return {
@@ -649,11 +770,11 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           balance: runningBalance,
           displayDate: statement.date.toLocaleDateString('en-GB'),
           displayTime: statement.date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-          index: index + 1
+          index: openingBalance !== 0 ? index + 2 : index + 1
         }
       })
 
-      setAccountStatements(statementsWithBalance)
+      setAccountStatements([...finalStatements, ...statementsWithBalance])
 
     } catch (error) {
       console.error('Error building account statement:', error)
@@ -1959,6 +2080,20 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'balance',
       width: 140,
       render: (value: number) => <span className="text-white font-medium">{formatPrice(value, 'system')}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'safe_name',
+      width: 120,
+      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
     }
   ]
 
@@ -2063,6 +2198,20 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'notes',
       width: 200,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'record.name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-cyan-400">{item.record?.name || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'cashier.full_name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-yellow-400">{item.cashier?.full_name || '-'}</span>
     }
   ].filter(col => visibleInvoiceColumns.includes(col.id))
 
@@ -2125,6 +2274,20 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'notes',
       width: 200,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'safe_name',
+      width: 120,
+      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-yellow-400">{item.employee_name || item.creator?.full_name || '-'}</span>
     }
   ]
 

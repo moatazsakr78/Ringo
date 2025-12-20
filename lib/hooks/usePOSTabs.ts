@@ -73,6 +73,7 @@ const DEFAULT_TAB: POSTab = {
     customer: null,
     branch: null,
     record: null,
+    priceType: 'price',
   },
 };
 

@@ -159,7 +159,8 @@ export default function AddCustomerModal({ isOpen, onClose }: AddCustomerModalPr
         group_id: formData.group || null,
         rank: selectedRank?.id || null,
         category: formData.group ? customerGroupOptions.find(opt => opt.value === formData.group)?.label : null,
-        account_balance: formData.accountBalance ? parseFloat(formData.accountBalance) : 0,
+        opening_balance: formData.accountBalance ? parseFloat(formData.accountBalance) : 0,
+        account_balance: 0, // Will be calculated dynamically from transactions
         credit_limit: formData.allowedLimit ? parseFloat(formData.allowedLimit) : 1000,
         is_active: true,
         default_record_id: formData.defaultRecordId || null,

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase/client'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
+import { useAuth } from '@/lib/useAuth'
 
 interface AddPaymentModalProps {
   isOpen: boolean
@@ -27,6 +28,7 @@ export default function AddPaymentModal({
   initialPaymentType = 'payment'
 }: AddPaymentModalProps) {
   const formatPrice = useFormatPrice()
+  const { user } = useAuth()
   const [amount, setAmount] = useState('')
   const [recordId, setRecordId] = useState('')
   const [paymentMethod, setPaymentMethod] = useState('cash')
@@ -156,6 +158,8 @@ export default function AddPaymentModal({
               payment_method: paymentMethod,
               notes: paymentNotes,
               payment_date: new Date().toISOString().split('T')[0],
+              created_by: user?.id || null,
+              safe_id: recordId || null,
             }
           ])
           .select()
@@ -216,7 +220,7 @@ export default function AddPaymentModal({
                   notes: paymentType === 'loan'
                     ? `سلفة لعميل: ${entityName}${notes ? ` - ${notes}` : ''}`
                     : `دفعة من عميل: ${entityName}${notes ? ` - ${notes}` : ''}`,
-                  performed_by: 'system'
+                  performed_by: user?.name || 'system'
                 })
 
               console.log(`✅ Cash drawer updated with customer ${paymentType}: ${drawerChange}, new balance: ${newBalance}`)
@@ -241,6 +245,8 @@ export default function AddPaymentModal({
               payment_method: paymentMethod,
               notes: supplierPaymentNotes,
               payment_date: new Date().toISOString().split('T')[0],
+              created_by: user?.id || null,
+              safe_id: recordId || null,
             }
           ])
           .select()
@@ -301,7 +307,7 @@ export default function AddPaymentModal({
                   notes: paymentType === 'loan'
                     ? `سلفة من مورد: ${entityName}${notes ? ` - ${notes}` : ''}`
                     : `دفعة لمورد: ${entityName}${notes ? ` - ${notes}` : ''}`,
-                  performed_by: 'system'
+                  performed_by: user?.name || 'system'
                 })
 
               console.log(`✅ Cash drawer updated with supplier ${paymentType}: ${drawerChange}, new balance: ${newBalance}`)

@@ -627,6 +627,7 @@ export type Database = {
           payment_date: string | null
           payment_method: string | null
           reference_number: string | null
+          safe_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -640,6 +641,7 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           reference_number?: string | null
+          safe_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -653,6 +655,7 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           reference_number?: string | null
+          safe_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2575,6 +2578,7 @@ export type Database = {
           payment_date: string | null
           payment_method: string | null
           reference_number: string | null
+          safe_id: string | null
           supplier_id: string
           updated_at: string | null
         }
@@ -2588,6 +2592,7 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           reference_number?: string | null
+          safe_id?: string | null
           supplier_id: string
           updated_at?: string | null
         }
@@ -2601,6 +2606,7 @@ export type Database = {
           payment_date?: string | null
           payment_method?: string | null
           reference_number?: string | null
+          safe_id?: string | null
           supplier_id?: string
           updated_at?: string | null
         }

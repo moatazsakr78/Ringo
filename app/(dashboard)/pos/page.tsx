@@ -86,6 +86,7 @@ function EditableField({
 }
 
 import { supabase } from "../../lib/supabase/client";
+import { useAuth } from "@/lib/useAuth";
 import { Category } from "../../types";
 import ResizableTable from "../../components/tables/ResizableTable";
 import Sidebar from "../../components/layout/Sidebar";
@@ -151,6 +152,7 @@ function POSPageContent() {
   const systemCurrency = useSystemCurrency();
   const formatPrice = useFormatPrice();
   const { companyName, logoUrl } = useCompanySettings();
+  const { user } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -224,8 +226,29 @@ function POSPageContent() {
   const [isReturnMode, setIsReturnMode] = useState(false);
 
   // Price Type Selection State
-  const [selectedPriceType, setSelectedPriceType] = useState<PriceType>("price");
+  // Initialize from active tab's priceType or default to "price"
+  const [selectedPriceType, setSelectedPriceTypeState] = useState<PriceType>("price");
   const [isPriceTypeModalOpen, setIsPriceTypeModalOpen] = useState(false);
+
+  // Sync priceType with active tab when tab changes
+  useEffect(() => {
+    if (!isLoadingTabs && activePOSTab) {
+      const tabPriceType = activePOSTab.selections?.priceType || "price";
+      setSelectedPriceTypeState(tabPriceType as PriceType);
+    }
+  }, [activeTabId, activePOSTab, isLoadingTabs]);
+
+  // Custom setter that updates both local state AND tab selections
+  const setSelectedPriceType = useCallback((priceType: PriceType) => {
+    setSelectedPriceTypeState(priceType);
+    // Also update the tab's selections to persist the price type
+    if (activePOSTab) {
+      updateActiveTabSelections({
+        ...activePOSTab.selections,
+        priceType: priceType
+      });
+    }
+  }, [activePOSTab, updateActiveTabSelections]);
 
   // Transfer Mode States
   const [isTransferMode, setIsTransferMode] = useState(false);
@@ -2016,6 +2039,8 @@ function POSPageContent() {
           isReturn: isReturnMode, // Pass return mode flag
           paymentSplitData: paymentSplitData, // Pass payment split data
           creditAmount: creditAmount, // Pass credit amount
+          userId: user?.id || null, // Pass current user ID for tracking
+          userName: user?.name || null, // Pass current user name for performed_by
         });
 
         // Fetch customer's updated data and calculate balance after invoice creation

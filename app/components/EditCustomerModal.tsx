@@ -115,7 +115,7 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
       setFormData({
         name: customer.name || '',
         group: customer.group_id || '',
-        accountBalance: customer.account_balance?.toString() || '',
+        accountBalance: (customer as any).opening_balance?.toString() || '0',
         allowedLimit: customer.credit_limit?.toString() || '',
         rank: customer.rank || '',
         phone: customer.phone || '',
@@ -224,7 +224,7 @@ export default function EditCustomerModal({ isOpen, onClose, customer }: EditCus
       setFormData({
         name: customer.name || '',
         group: customer.group_id || '',
-        accountBalance: customer.account_balance?.toString() || '',
+        accountBalance: (customer as any).opening_balance?.toString() || '0',
         allowedLimit: customer.credit_limit?.toString() || '',
         rank: customer.rank || '',
         phone: customer.phone || '',

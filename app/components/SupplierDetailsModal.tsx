@@ -254,9 +254,17 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           created_at,
           time,
           invoice_type,
+          record_id,
+          created_by,
           supplier:suppliers(
             name,
             phone
+          ),
+          record:records(
+            name
+          ),
+          creator:user_profiles(
+            full_name
           )
         `)
         .eq('supplier_id', supplier.id)
@@ -304,7 +312,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           reference_number,
           notes,
           payment_date,
-          created_at
+          created_at,
+          created_by,
+          safe_id,
+          creator:user_profiles(full_name)
         `)
         .eq('supplier_id', supplier.id)
         .order('created_at', { ascending: false })
@@ -314,7 +325,29 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         return
       }
 
-      setSupplierPayments(data || [])
+      // Get safe names for payments that have safe_id
+      const safeIds = (data || []).filter(p => p.safe_id).map(p => p.safe_id as string)
+      let safesMap = new Map<string, string>()
+
+      if (safeIds.length > 0) {
+        const { data: safesData } = await supabase
+          .from('records')
+          .select('id, name')
+          .in('id', safeIds)
+
+        if (safesData) {
+          safesData.forEach(safe => safesMap.set(safe.id, safe.name))
+        }
+      }
+
+      // Map payments with safe_name and employee_name
+      const paymentsWithInfo = (data || []).map(payment => ({
+        ...payment,
+        safe_name: payment.safe_id ? safesMap.get(payment.safe_id) || null : null,
+        employee_name: (payment as any).creator?.full_name || null
+      }))
+
+      setSupplierPayments(paymentsWithInfo)
 
     } catch (error) {
       console.error('Error fetching supplier payments:', error)
@@ -395,7 +428,11 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       // Get all purchase invoices for this supplier
       const { data: invoices, error: invoicesError } = await supabase
         .from('purchase_invoices')
-        .select('id, invoice_number, total_amount, invoice_type, created_at')
+        .select(`
+          id, invoice_number, total_amount, invoice_type, created_at,
+          record:records(name),
+          creator:user_profiles(full_name)
+        `)
         .eq('supplier_id', supplier.id)
         .order('created_at', { ascending: true })
 
@@ -407,13 +444,31 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       // Get all payments for this supplier
       const { data: payments, error: paymentsError } = await supabase
         .from('supplier_payments')
-        .select('id, amount, payment_method, notes, created_at')
+        .select(`
+          id, amount, payment_method, notes, created_at, safe_id,
+          creator:user_profiles(full_name)
+        `)
         .eq('supplier_id', supplier.id)
         .order('created_at', { ascending: true })
 
       if (paymentsError) {
         console.error('Error fetching payments:', paymentsError)
         return
+      }
+
+      // Get safe names for payments
+      const paymentSafeIds = (payments || []).filter(p => p.safe_id).map(p => p.safe_id as string)
+      let paymentSafesMap = new Map<string, string>()
+
+      if (paymentSafeIds.length > 0) {
+        const { data: safesData } = await supabase
+          .from('records')
+          .select('id, name')
+          .in('id', paymentSafeIds)
+
+        if (safesData) {
+          safesData.forEach(safe => paymentSafesMap.set(safe.id, safe.name))
+        }
       }
 
       // Build statements array
@@ -432,7 +487,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             description: `فاتورة ${invoice.invoice_number}`,
             type: invoice.invoice_type === 'Purchase Invoice' ? 'فاتورة شراء' : 'مرتجع شراء',
             amount: amount,
-            invoiceId: invoice.id
+            invoiceId: invoice.id,
+            safe_name: (invoice as any).record?.name || null,
+            employee_name: (invoice as any).creator?.full_name || null
           })
         }
       })
@@ -443,6 +500,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           // التحقق إذا كانت سلفة من خلال الملاحظات
           const isLoan = payment.notes?.startsWith('سلفة')
 
+          // Get safe name from map and employee name from joined data
+          const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
+          const employeeName = (payment as any).creator?.full_name || null
+
           if (isLoan) {
             // السلفة من المورد تزيد الرصيد المستحق له
             statements.push({
@@ -451,7 +512,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               description: payment.notes,
               type: 'سلفة',
               amount: payment.amount, // Positive because it increases the balance
-              paymentId: payment.id
+              paymentId: payment.id,
+              safe_name: safeName,
+              employee_name: employeeName
             })
           } else {
             // الدفعة للمورد تنقص الرصيد المستحق له
@@ -461,7 +524,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               description: payment.notes || 'دفعة',
               type: 'دفعة',
               amount: -payment.amount, // Negative because it reduces the balance
-              paymentId: payment.id
+              paymentId: payment.id,
+              safe_name: safeName,
+              employee_name: employeeName
             })
           }
         }
@@ -1235,6 +1300,20 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'displayBalance',
       width: 140,
       render: (value: string) => <span className="text-white font-medium">{value}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'safe_name',
+      width: 120,
+      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
     }
   ]
 
@@ -1332,6 +1411,20 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'notes',
       width: 200,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'record.name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-cyan-400">{item.record?.name || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'creator.full_name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-yellow-400">{item.creator?.full_name || '-'}</span>
     }
   ]
 
@@ -1394,6 +1487,20 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'notes',
       width: 200,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
+    },
+    {
+      id: 'safe_name',
+      header: 'الخزنة',
+      accessor: 'safe_name',
+      width: 120,
+      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+    },
+    {
+      id: 'employee_name',
+      header: 'الموظف',
+      accessor: 'employee_name',
+      width: 120,
+      render: (value: string, item: any) => <span className="text-yellow-400">{item.employee_name || item.creator?.full_name || '-'}</span>
     }
   ]
 
