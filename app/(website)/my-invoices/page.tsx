@@ -101,6 +101,7 @@ export default function MyInvoicesPage() {
   // State
   const [activeTab, setActiveTab] = useState<TabType>('invoices');
   const [loading, setLoading] = useState(true);
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -169,11 +170,54 @@ export default function MyInvoicesPage() {
     return { startDate, endDate };
   }, [dateFilter]);
 
-  // Fetch data function
-  const fetchData = useCallback(async (tab: TabType, page: number = 1) => {
+  // Fetch all data at once (invoices, payments, statement)
+  const fetchAllData = useCallback(async () => {
     if (!isAuthenticated || !user?.id) return;
 
     setLoading(true);
+    try {
+      const { startDate, endDate } = getDateParams();
+
+      // Fetch all three tabs data in parallel
+      const [invoicesRes, paymentsRes, statementRes] = await Promise.all([
+        fetch(`/api/user/invoices?tab=invoices&page=1&limit=100${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`),
+        fetch(`/api/user/invoices?tab=payments&page=1&limit=100${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`),
+        fetch(`/api/user/invoices?tab=statement&page=1&limit=100${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`)
+      ]);
+
+      if (!invoicesRes.ok || !paymentsRes.ok || !statementRes.ok) {
+        console.error('API Error fetching data');
+        setLoading(false);
+        return;
+      }
+
+      const [invoicesData, paymentsData, statementData] = await Promise.all([
+        invoicesRes.json(),
+        paymentsRes.json(),
+        statementRes.json()
+      ]);
+
+      // Set customer and statistics from first response (they're the same across all)
+      setCustomer(invoicesData.customer);
+      setStatistics(invoicesData.statistics);
+
+      // Set all data
+      setInvoices(invoicesData.invoices || []);
+      setPayments(paymentsData.payments || []);
+      setStatement(statementData.statement || []);
+
+      setInitialDataLoaded(true);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, user?.id, getDateParams]);
+
+  // Fetch data for specific tab (used for pagination/load more)
+  const fetchTabData = useCallback(async (tab: TabType, page: number = 1) => {
+    if (!isAuthenticated || !user?.id) return;
+
     try {
       const params = new URLSearchParams({
         tab,
@@ -190,31 +234,26 @@ export default function MyInvoicesPage() {
       if (!response.ok) {
         const error = await response.json();
         console.error('API Error:', error);
-        setLoading(false);
         return;
       }
 
       const data = await response.json();
 
-      setCustomer(data.customer);
-      setStatistics(data.statistics);
       setPagination(data.pagination);
 
       if (tab === 'invoices') {
-        setInvoices(data.invoices || []);
+        setInvoices(prev => page === 1 ? (data.invoices || []) : [...prev, ...(data.invoices || [])]);
       } else if (tab === 'payments') {
-        setPayments(data.payments || []);
+        setPayments(prev => page === 1 ? (data.payments || []) : [...prev, ...(data.payments || [])]);
       } else if (tab === 'statement') {
-        setStatement(data.statement || []);
+        setStatement(prev => page === 1 ? (data.statement || []) : [...prev, ...(data.statement || [])]);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
     }
   }, [isAuthenticated, user?.id, getDateParams]);
 
-  // Initial load
+  // Initial load - fetch all data once
   useEffect(() => {
     if (isAuthLoading) return;
 
@@ -223,27 +262,27 @@ export default function MyInvoicesPage() {
       return;
     }
 
-    fetchData(activeTab);
-  }, [isAuthenticated, user?.id, isAuthLoading, fetchData, activeTab]);
+    fetchAllData();
+  }, [isAuthenticated, user?.id, isAuthLoading, fetchAllData]);
 
-  // Refetch when date filter changes
+  // Refetch all data when date filter changes
   useEffect(() => {
-    if (isAuthenticated && user?.id) {
-      fetchData(activeTab);
+    if (isAuthenticated && user?.id && initialDataLoaded) {
+      fetchAllData();
     }
   }, [dateFilter]);
 
-  // Handle tab change
+  // Handle tab change - NO API call, just switch tab (smooth transition)
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setExpandedInvoice(null);
-    fetchData(tab);
+    // No fetchData call - data is already loaded!
   };
 
   // Load more (pagination)
   const loadMore = () => {
     if (pagination && pagination.hasMore) {
-      fetchData(activeTab, pagination.page + 1);
+      fetchTabData(activeTab, pagination.page + 1);
     }
   };
 
