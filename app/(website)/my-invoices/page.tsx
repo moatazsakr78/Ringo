@@ -753,14 +753,6 @@ export default function MyInvoicesPage() {
           {/* Payments Tab */}
           {activeTab === 'payments' && (
             <div>
-              {payments.length > 0 && (
-                <div className="p-3 bg-green-50 border-b border-green-100">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-green-800">إجمالي الدفعات</span>
-                    <span className="font-bold text-green-600">{formatPrice(payments.reduce((sum, p) => sum + Number(p.amount), 0))}</span>
-                  </div>
-                </div>
-              )}
               {payments.length === 0 ? (
                 <div className="p-8 text-center">
                   <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1102,16 +1094,6 @@ export default function MyInvoicesPage() {
             {/* Payments Tab */}
             {activeTab === 'payments' && (
               <div>
-                {payments.length > 0 && (
-                  <div className="p-4 bg-green-50 border-b border-green-100">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-green-800">إجمالي الدفعات</span>
-                      <span className="text-xl font-bold text-green-600">
-                        {formatPrice(payments.reduce((sum, p) => sum + Number(p.amount), 0))}
-                      </span>
-                    </div>
-                  </div>
-                )}
                 {payments.length === 0 ? (
                   <div className="p-12 text-center">
                     <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
