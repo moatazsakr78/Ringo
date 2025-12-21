@@ -7,7 +7,7 @@ import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useAuth } from '@/app/lib/hooks/useAuth';
 import SimpleDateFilterModal, { DateFilter } from '@/app/components/SimpleDateFilterModal';
-import { CalendarDaysIcon, PrinterIcon } from '@heroicons/react/24/outline';
+import { CalendarDaysIcon, PrinterIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 
 // Types
 interface SaleItem {
@@ -108,9 +108,12 @@ export default function MyInvoicesPage() {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [pagination, setPagination] = useState<Pagination | null>(null);
 
-  // Date filter state - using SimpleDateFilterModal pattern
+  // Date filter state
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter>({ type: 'all' });
+
+  // Mobile: expanded customer details
+  const [mobileDetailsExpanded, setMobileDetailsExpanded] = useState(false);
 
   // Expanded invoice details
   const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
@@ -322,7 +325,6 @@ export default function MyInvoicesPage() {
             color: white;
           }
           tr:nth-child(even) { background: #f9f9f9; }
-          .total-row { font-weight: bold; background: #e5e5e5 !important; }
           .print-date {
             text-align: center;
             margin-top: 20px;
@@ -437,7 +439,7 @@ export default function MyInvoicesPage() {
   }
 
   return (
-    <div className="min-h-screen text-gray-800 flex flex-col" style={{ backgroundColor: '#c0c0c0' }}>
+    <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#c0c0c0' }}>
       {/* Hide system headers */}
       <style jsx global>{`
         body { margin-top: 0 !important; padding-top: 0 !important; }
@@ -448,7 +450,6 @@ export default function MyInvoicesPage() {
       <header className="border-b border-gray-700 py-0 relative z-40 flex-shrink-0" style={{ backgroundColor: 'var(--primary-color)' }}>
         <div className="relative flex items-center min-h-[60px] md:min-h-[80px]">
           <div className="w-full px-4 flex items-center justify-between min-h-[60px] md:min-h-[80px]">
-
             {/* Back Button */}
             <button
               onClick={() => router.back()}
@@ -475,33 +476,302 @@ export default function MyInvoicesPage() {
         </div>
       </header>
 
-      {/* Main Content Area - Full Width */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      {/* ==================== MOBILE LAYOUT ==================== */}
+      <div className="md:hidden flex-1 flex flex-col overflow-hidden">
 
-        {/* Right Sidebar - Customer Info & Date Filter (Desktop) */}
-        <div className="hidden md:flex md:w-72 lg:w-80 bg-[#2B3544] flex-col flex-shrink-0 border-l border-gray-600">
+        {/* Mobile: Customer Summary Card (Collapsible) */}
+        <div className="bg-white mx-3 mt-3 rounded-xl shadow-md overflow-hidden">
+          {/* Header - Always visible */}
+          <div
+            className="p-4 flex items-center justify-between cursor-pointer"
+            onClick={() => setMobileDetailsExpanded(!mobileDetailsExpanded)}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold"
+                style={{ backgroundColor: 'var(--primary-color)' }}
+              >
+                {customer.name?.charAt(0) || '؟'}
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800">{customer.name}</h3>
+                <p className={`text-sm font-semibold ${(customer.account_balance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {formatPrice(customer.account_balance || 0)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowDateFilter(true); }}
+                className="p-2 rounded-lg text-white"
+                style={{ backgroundColor: 'var(--primary-color)' }}
+              >
+                <CalendarDaysIcon className="h-5 w-5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handlePrint(); }}
+                className="p-2 bg-green-600 rounded-lg text-white"
+              >
+                <PrinterIcon className="h-5 w-5" />
+              </button>
+              {mobileDetailsExpanded ? (
+                <ChevronUpIcon className="h-5 w-5 text-gray-500" />
+              ) : (
+                <ChevronDownIcon className="h-5 w-5 text-gray-500" />
+              )}
+            </div>
+          </div>
+
+          {/* Expanded Details */}
+          {mobileDetailsExpanded && (
+            <div className="border-t border-gray-100 px-4 pb-4">
+              {/* Statistics */}
+              {statistics && (
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div className="bg-gray-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">عدد الفواتير</p>
+                    <p className="text-lg font-bold text-gray-800">{statistics.totalInvoices}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">إجمالي الفواتير</p>
+                    <p className="text-lg font-bold" style={{ color: 'var(--primary-color)' }}>{formatPrice(statistics.totalInvoicesAmount)}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">إجمالي الدفعات</p>
+                    <p className="text-lg font-bold text-green-600">{formatPrice(statistics.totalPayments)}</p>
+                  </div>
+                  <div className="bg-gray-50 p-3 rounded-lg text-center">
+                    <p className="text-xs text-gray-500">متوسط الفاتورة</p>
+                    <p className="text-lg font-bold text-gray-800">{formatPrice(statistics.averageOrderValue)}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Date Filter Display */}
+              {dateFilter.type !== 'all' && (
+                <div className="mt-3 text-center">
+                  <span
+                    className="inline-block px-3 py-1 rounded-full text-xs text-white"
+                    style={{ backgroundColor: 'var(--primary-color)' }}
+                  >
+                    {getFilterDisplayText()}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile: Tabs */}
+        <div className="flex mx-3 mt-3 bg-white rounded-xl shadow-md overflow-hidden">
+          <button
+            onClick={() => handleTabChange('invoices')}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              activeTab === 'invoices' ? 'text-white' : 'text-gray-600'
+            }`}
+            style={{ backgroundColor: activeTab === 'invoices' ? 'var(--primary-color)' : 'transparent' }}
+          >
+            الفواتير
+          </button>
+          <button
+            onClick={() => handleTabChange('statement')}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              activeTab === 'statement' ? 'text-white' : 'text-gray-600'
+            }`}
+            style={{ backgroundColor: activeTab === 'statement' ? 'var(--primary-color)' : 'transparent' }}
+          >
+            كشف الحساب
+          </button>
+          <button
+            onClick={() => handleTabChange('payments')}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${
+              activeTab === 'payments' ? 'text-white' : 'text-gray-600'
+            }`}
+            style={{ backgroundColor: activeTab === 'payments' ? 'var(--primary-color)' : 'transparent' }}
+          >
+            الدفعات
+          </button>
+        </div>
+
+        {/* Mobile: Content */}
+        <div ref={printRef} className="flex-1 mx-3 mt-3 mb-3 bg-white rounded-xl shadow-md overflow-y-auto scrollbar-hide">
+          {/* Invoices Tab */}
+          {activeTab === 'invoices' && (
+            <div>
+              {invoices.length === 0 ? (
+                <div className="p-8 text-center">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-gray-500">لا توجد فواتير</p>
+                </div>
+              ) : (
+                invoices.map((invoice, index) => (
+                  <div key={invoice.id} className="border-b border-gray-100 last:border-b-0">
+                    <div
+                      onClick={() => toggleInvoiceDetails(invoice.id)}
+                      className="p-4 cursor-pointer active:bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-gray-400">#{index + 1}</span>
+                        <span
+                          className="px-2 py-0.5 text-xs rounded-full text-white"
+                          style={{ backgroundColor: 'var(--primary-color)' }}
+                        >
+                          {invoice.invoice_type || 'فاتورة بيع'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-800 text-sm">{invoice.invoice_number}</p>
+                          <p className="text-xs text-gray-500">{formatDate(invoice.created_at)}</p>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-bold" style={{ color: 'var(--primary-color)' }}>{formatPrice(invoice.total_amount)}</p>
+                          <p className="text-xs text-gray-500">{invoice.payment_method}</p>
+                        </div>
+                      </div>
+                    </div>
+                    {expandedInvoice === invoice.id && invoice.sale_items && (
+                      <div className="px-4 pb-4 bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600 mb-2">تفاصيل الفاتورة:</p>
+                        {invoice.sale_items.map((item, i) => (
+                          <div key={item.id} className="flex justify-between text-xs py-1">
+                            <span className="text-gray-700">{item.products?.name || 'منتج'} x{item.quantity}</span>
+                            <span className="text-gray-800">{formatPrice(item.unit_price * item.quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Statement Tab */}
+          {activeTab === 'statement' && (
+            <div>
+              {statement.length === 0 ? (
+                <div className="p-8 text-center">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-gray-500">لا توجد حركات</p>
+                </div>
+              ) : (
+                statement.map((entry, index) => (
+                  <div key={entry.id} className="border-b border-gray-100 last:border-b-0 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400">#{index + 1}</span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${entry.type === 'سلفة' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {entry.type}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-800 mb-2">{entry.description}</p>
+                    <div className="grid grid-cols-3 gap-2 text-center bg-gray-50 p-2 rounded-lg">
+                      <div>
+                        <p className="text-xs text-gray-500">الفاتورة</p>
+                        <p className="text-sm font-medium" style={{ color: 'var(--primary-color)' }}>{entry.invoiceValue > 0 ? formatPrice(entry.invoiceValue) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">المدفوع</p>
+                        <p className="text-sm font-medium text-green-600">{entry.paidAmount > 0 ? formatPrice(entry.paidAmount) : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">الرصيد</p>
+                        <p className={`text-sm font-bold ${entry.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {formatPrice(entry.balance)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Payments Tab */}
+          {activeTab === 'payments' && (
+            <div>
+              {payments.length > 0 && (
+                <div className="p-3 bg-green-50 border-b border-green-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-800">إجمالي الدفعات</span>
+                    <span className="font-bold text-green-600">{formatPrice(payments.reduce((sum, p) => sum + Number(p.amount), 0))}</span>
+                  </div>
+                </div>
+              )}
+              {payments.length === 0 ? (
+                <div className="p-8 text-center">
+                  <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                  <p className="text-gray-500">لا توجد دفعات</p>
+                </div>
+              ) : (
+                payments.map((payment, index) => (
+                  <div key={payment.id} className="border-b border-gray-100 last:border-b-0 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-800">{payment.notes || 'دفعة'}</p>
+                        <p className="text-xs text-gray-500">{formatDate(payment.payment_date || payment.created_at)}</p>
+                      </div>
+                      <p className="text-lg font-bold text-green-600">{formatPrice(payment.amount)}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {pagination && pagination.hasMore && (
+            <div className="p-4 text-center">
+              <button
+                onClick={loadMore}
+                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm"
+              >
+                تحميل المزيد
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ==================== DESKTOP LAYOUT ==================== */}
+      <div className="hidden md:flex flex-1 overflow-hidden p-4 gap-4">
+
+        {/* Right Sidebar - Customer Info (Light Theme) */}
+        <div className="w-72 lg:w-80 bg-white rounded-xl shadow-lg flex flex-col flex-shrink-0 overflow-hidden">
 
           {/* Customer Avatar & Name */}
-          <div className="p-4 border-b border-gray-600">
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0" style={{ backgroundColor: 'var(--primary-color)' }}>
+          <div className="p-5 border-b border-gray-100">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 shadow-md"
+                style={{ backgroundColor: 'var(--primary-color)' }}
+              >
                 {customer.name?.charAt(0) || '؟'}
               </div>
               <div className="min-w-0">
-                <h2 className="text-white font-bold truncate">{customer.name}</h2>
-                <p className="text-gray-400 text-sm">{customer.phone || 'لا يوجد رقم'}</p>
+                <h2 className="text-lg font-bold text-gray-800 truncate">{customer.name}</h2>
+                <p className="text-gray-500 text-sm">{customer.phone || 'لا يوجد رقم'}</p>
               </div>
             </div>
           </div>
 
           {/* Account Balance */}
-          <div className="p-4 border-b border-gray-600">
-            <div className="bg-blue-600 rounded-lg p-4 text-center">
-              <p className={`text-2xl font-bold ${(customer.account_balance || 0) > 0 ? 'text-red-200' : 'text-green-200'}`}>
+          <div className="p-5 border-b border-gray-100">
+            <div
+              className="rounded-xl p-5 text-center shadow-inner"
+              style={{ backgroundColor: 'var(--primary-color)' }}
+            >
+              <p className={`text-3xl font-bold ${(customer.account_balance || 0) > 0 ? 'text-red-200' : 'text-green-200'}`}>
                 {formatPrice(customer.account_balance || 0)}
               </p>
-              <p className="text-blue-200 text-sm mt-1">رصيد الحساب</p>
-              <p className="text-blue-300 text-xs mt-1">
+              <p className="text-white/80 text-sm mt-1">رصيد الحساب</p>
+              <p className="text-white/60 text-xs mt-1">
                 {(customer.account_balance || 0) > 0 ? 'عليك' : (customer.account_balance || 0) < 0 ? 'لك' : 'الحساب متوازن'}
               </p>
             </div>
@@ -509,113 +779,82 @@ export default function MyInvoicesPage() {
 
           {/* Statistics */}
           {statistics && (
-            <div className="p-4 border-b border-gray-600 space-y-3">
-              <h3 className="text-white font-medium flex items-center gap-2">
-                <span>📊</span>
+            <div className="p-5 border-b border-gray-100">
+              <h3 className="text-gray-700 font-semibold flex items-center gap-2 mb-4">
+                <span className="text-lg">📊</span>
                 <span>إحصائيات</span>
               </h3>
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-white">{statistics.totalInvoices}</span>
-                  <span className="text-gray-400 text-sm">عدد الفواتير</span>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                  <span className="font-medium text-gray-800">{statistics.totalInvoices}</span>
+                  <span className="text-gray-500 text-sm">عدد الفواتير</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-blue-400">{formatPrice(statistics.totalInvoicesAmount)}</span>
-                  <span className="text-gray-400 text-sm">إجمالي الفواتير</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                  <span className="font-medium" style={{ color: 'var(--primary-color)' }}>{formatPrice(statistics.totalInvoicesAmount)}</span>
+                  <span className="text-gray-500 text-sm">إجمالي الفواتير</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-green-400">{formatPrice(statistics.totalPayments)}</span>
-                  <span className="text-gray-400 text-sm">إجمالي الدفعات</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                  <span className="font-medium text-green-600">{formatPrice(statistics.totalPayments)}</span>
+                  <span className="text-gray-500 text-sm">إجمالي الدفعات</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-white">{formatPrice(statistics.averageOrderValue)}</span>
-                  <span className="text-gray-400 text-sm">متوسط الفاتورة</span>
+                <div className="flex justify-between items-center py-2">
+                  <span className="font-medium text-gray-800">{formatPrice(statistics.averageOrderValue)}</span>
+                  <span className="text-gray-500 text-sm">متوسط الفاتورة</span>
                 </div>
               </div>
             </div>
           )}
 
           {/* Date Filter Button */}
-          <div className="p-4 border-b border-gray-600">
+          <div className="p-5 border-b border-gray-100">
             <button
               onClick={() => setShowDateFilter(true)}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              className="w-full text-white px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:scale-[1.02]"
+              style={{ backgroundColor: 'var(--primary-color)' }}
             >
               <CalendarDaysIcon className="h-5 w-5" />
               <span>التاريخ</span>
             </button>
-
-            {/* Current Filter Display */}
             {dateFilter.type !== 'all' && (
-              <div className="mt-2 text-center">
-                <span className="text-xs text-blue-400">{getFilterDisplayText()}</span>
+              <div className="mt-3 text-center">
+                <span
+                  className="inline-block px-3 py-1 rounded-full text-xs text-white"
+                  style={{ backgroundColor: 'var(--primary-color)', opacity: 0.8 }}
+                >
+                  {getFilterDisplayText()}
+                </span>
               </div>
             )}
           </div>
 
           {/* Print Button */}
-          <div className="p-4">
+          <div className="p-5">
             <button
               onClick={handlePrint}
-              className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all hover:shadow-lg hover:scale-[1.02]"
             >
               <PrinterIcon className="h-5 w-5" />
               <span>طباعة</span>
             </button>
           </div>
 
-          {/* Spacer */}
           <div className="flex-1" />
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-
-          {/* Mobile Customer Info Bar */}
-          <div className="md:hidden bg-white border-b border-gray-200 p-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: 'var(--primary-color)' }}>
-                  {customer.name?.charAt(0) || '؟'}
-                </div>
-                <div>
-                  <p className="font-medium text-gray-800 text-sm">{customer.name}</p>
-                  <p className={`text-xs font-bold ${(customer.account_balance || 0) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatPrice(customer.account_balance || 0)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowDateFilter(true)}
-                  className="p-2 bg-blue-600 text-white rounded-lg"
-                >
-                  <CalendarDaysIcon className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="p-2 bg-green-600 text-white rounded-lg"
-                >
-                  <PrinterIcon className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            {dateFilter.type !== 'all' && (
-              <p className="text-xs text-blue-600 mt-2 text-center">{getFilterDisplayText()}</p>
-            )}
-          </div>
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white rounded-xl shadow-lg">
 
           {/* Tabs */}
-          <div className="flex bg-white shadow-sm flex-shrink-0">
+          <div className="flex border-b border-gray-100 flex-shrink-0">
             <button
               onClick={() => handleTabChange('invoices')}
-              className={`flex-1 py-3 md:py-4 px-2 md:px-6 text-sm md:text-base font-semibold transition-colors ${
-                activeTab === 'invoices' ? 'text-white' : 'text-gray-600 hover:text-gray-800'
+              className={`flex-1 py-4 px-6 text-base font-semibold transition-colors ${
+                activeTab === 'invoices' ? 'text-white' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
               }`}
               style={{ backgroundColor: activeTab === 'invoices' ? 'var(--primary-color)' : 'transparent' }}
             >
               <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 الفواتير
@@ -623,13 +862,13 @@ export default function MyInvoicesPage() {
             </button>
             <button
               onClick={() => handleTabChange('statement')}
-              className={`flex-1 py-3 md:py-4 px-2 md:px-6 text-sm md:text-base font-semibold transition-colors ${
-                activeTab === 'statement' ? 'text-white' : 'text-gray-600 hover:text-gray-800'
+              className={`flex-1 py-4 px-6 text-base font-semibold transition-colors ${
+                activeTab === 'statement' ? 'text-white' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
               }`}
               style={{ backgroundColor: activeTab === 'statement' ? 'var(--primary-color)' : 'transparent' }}
             >
               <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 كشف الحساب
@@ -637,13 +876,13 @@ export default function MyInvoicesPage() {
             </button>
             <button
               onClick={() => handleTabChange('payments')}
-              className={`flex-1 py-3 md:py-4 px-2 md:px-6 text-sm md:text-base font-semibold transition-colors ${
-                activeTab === 'payments' ? 'text-white' : 'text-gray-600 hover:text-gray-800'
+              className={`flex-1 py-4 px-6 text-base font-semibold transition-colors ${
+                activeTab === 'payments' ? 'text-white' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
               }`}
               style={{ backgroundColor: activeTab === 'payments' ? 'var(--primary-color)' : 'transparent' }}
             >
               <span className="flex items-center justify-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 الدفعات
@@ -651,159 +890,99 @@ export default function MyInvoicesPage() {
             </button>
           </div>
 
-          {/* Content Area - Printable */}
-          <div ref={printRef} className="flex-1 overflow-y-auto bg-white scrollbar-hide">
-
+          {/* Content Area */}
+          <div ref={printRef} className="flex-1 overflow-y-auto scrollbar-hide">
             {/* Invoices Tab */}
             {activeTab === 'invoices' && (
               <div>
                 {invoices.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-12 text-center">
+                    <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p className="text-gray-500">لا توجد فواتير</p>
+                    <p className="text-gray-400 text-lg">لا توجد فواتير</p>
                   </div>
                 ) : (
-                  <>
-                    {/* Mobile View */}
-                    <div className="md:hidden">
-                      {invoices.map((invoice, index) => (
-                        <div key={invoice.id} className="border-b border-gray-200 last:border-b-0">
-                          <div
-                            onClick={() => toggleInvoiceDetails(invoice.id)}
-                            className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-xs text-gray-500">#{index + 1}</span>
-                              <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-600">
-                                {invoice.invoice_type || 'فاتورة بيع'}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium text-gray-800">{invoice.invoice_number}</p>
-                                <p className="text-xs text-gray-500">{formatDate(invoice.created_at)} - {formatTime(invoice.time)}</p>
-                              </div>
-                              <div className="text-left">
-                                <p className="font-bold text-blue-600">{formatPrice(invoice.total_amount)}</p>
-                                <p className="text-xs text-gray-500">{invoice.payment_method}</p>
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between mt-2">
-                              <span className="text-xs text-gray-500">{invoice.records?.name || '-'}</span>
-                              <svg className={`w-5 h-5 text-gray-400 transition-transform ${expandedInvoice === invoice.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </div>
-                          </div>
-
-                          {/* Invoice Details */}
-                          {expandedInvoice === invoice.id && invoice.sale_items && (
-                            <div className="px-4 pb-4 bg-gray-50">
-                              <p className="text-sm font-medium text-gray-700 mb-2">تفاصيل الفاتورة:</p>
-                              <div className="space-y-2">
-                                {invoice.sale_items.map((item, itemIndex) => (
-                                  <div key={item.id} className="flex items-center justify-between text-sm bg-white p-2 rounded">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-gray-400">{itemIndex + 1}</span>
-                                      <span className="text-gray-700">{item.products?.name || 'منتج'}</span>
-                                      <span className="text-xs text-gray-500">x{item.quantity}</span>
-                                    </div>
-                                    <span className="text-gray-800">{formatPrice(item.unit_price * item.quantity)}</span>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800 text-white sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-right text-sm font-medium">#</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">رقم الفاتورة</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">النوع</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">طريقة الدفع</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">المبلغ</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">تفاصيل</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {invoices.map((invoice, index) => (
+                          <>
+                            <tr key={invoice.id} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-500">{index + 1}</td>
+                              <td className="px-4 py-3 text-sm font-medium" style={{ color: 'var(--primary-color)' }}>{invoice.invoice_number}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.created_at)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{formatTime(invoice.time)}</td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className="px-2 py-1 text-xs rounded-full text-white"
+                                  style={{ backgroundColor: 'var(--primary-color)' }}
+                                >
+                                  {invoice.invoice_type || 'فاتورة بيع'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{invoice.payment_method}</td>
+                              <td className="px-4 py-3 text-sm font-bold" style={{ color: 'var(--primary-color)' }}>{formatPrice(invoice.total_amount)}</td>
+                              <td className="px-4 py-3 text-sm text-gray-600">{invoice.records?.name || '-'}</td>
+                              <td className="px-4 py-3">
+                                <button
+                                  onClick={() => toggleInvoiceDetails(invoice.id)}
+                                  className="hover:underline text-sm"
+                                  style={{ color: 'var(--primary-color)' }}
+                                >
+                                  {expandedInvoice === invoice.id ? 'إخفاء' : 'عرض'}
+                                </button>
+                              </td>
+                            </tr>
+                            {expandedInvoice === invoice.id && invoice.sale_items && (
+                              <tr>
+                                <td colSpan={9} className="bg-gray-50 px-6 py-4">
+                                  <div className="text-sm">
+                                    <p className="font-medium text-gray-700 mb-3">تفاصيل المنتجات:</p>
+                                    <table className="w-full bg-white rounded-lg overflow-hidden shadow-sm">
+                                      <thead className="bg-gray-100">
+                                        <tr>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-600">#</th>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-600">المنتج</th>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-600">الكمية</th>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-600">السعر</th>
+                                          <th className="px-3 py-2 text-right text-xs font-medium text-gray-600">الإجمالي</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {invoice.sale_items.map((item, itemIndex) => (
+                                          <tr key={item.id} className="border-b border-gray-50">
+                                            <td className="px-3 py-2 text-xs text-gray-500">{itemIndex + 1}</td>
+                                            <td className="px-3 py-2 text-xs text-gray-800">{item.products?.name || 'منتج'}</td>
+                                            <td className="px-3 py-2 text-xs text-gray-600">{item.quantity}</td>
+                                            <td className="px-3 py-2 text-xs text-gray-600">{formatPrice(item.unit_price)}</td>
+                                            <td className="px-3 py-2 text-xs font-medium text-gray-800">{formatPrice(item.unit_price * item.quantity)}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   </div>
-                                ))}
-                              </div>
-                              {invoice.discount_amount && invoice.discount_amount > 0 && (
-                                <div className="flex justify-between mt-2 text-sm text-green-600">
-                                  <span>الخصم</span>
-                                  <span>-{formatPrice(invoice.discount_amount)}</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop View */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-800 text-white">
-                          <tr>
-                            <th className="px-4 py-3 text-right text-sm font-medium">#</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">رقم الفاتورة</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">النوع</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">طريقة الدفع</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">المبلغ</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">تفاصيل</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {invoices.map((invoice, index) => (
-                            <>
-                              <tr key={invoice.id} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                                <td className="px-4 py-3 text-sm font-medium text-blue-600">{invoice.invoice_number}</td>
-                                <td className="px-4 py-3 text-sm text-gray-600">{formatDate(invoice.created_at)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-600">{formatTime(invoice.time)}</td>
-                                <td className="px-4 py-3">
-                                  <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-600">
-                                    {invoice.invoice_type || 'فاتورة بيع'}
-                                  </span>
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-600">{invoice.payment_method}</td>
-                                <td className="px-4 py-3 text-sm font-bold text-blue-600">{formatPrice(invoice.total_amount)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-600">{invoice.records?.name || '-'}</td>
-                                <td className="px-4 py-3">
-                                  <button
-                                    onClick={() => toggleInvoiceDetails(invoice.id)}
-                                    className="text-blue-600 hover:text-blue-800 text-sm"
-                                  >
-                                    {expandedInvoice === invoice.id ? 'إخفاء' : 'عرض'}
-                                  </button>
                                 </td>
                               </tr>
-                              {expandedInvoice === invoice.id && invoice.sale_items && (
-                                <tr>
-                                  <td colSpan={9} className="bg-gray-50 px-4 py-4">
-                                    <div className="text-sm">
-                                      <p className="font-medium text-gray-700 mb-2">تفاصيل المنتجات:</p>
-                                      <table className="w-full bg-white rounded-lg overflow-hidden">
-                                        <thead className="bg-gray-200">
-                                          <tr>
-                                            <th className="px-3 py-2 text-right text-xs">#</th>
-                                            <th className="px-3 py-2 text-right text-xs">المنتج</th>
-                                            <th className="px-3 py-2 text-right text-xs">الكمية</th>
-                                            <th className="px-3 py-2 text-right text-xs">السعر</th>
-                                            <th className="px-3 py-2 text-right text-xs">الإجمالي</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {invoice.sale_items.map((item, itemIndex) => (
-                                            <tr key={item.id} className="border-b border-gray-100">
-                                              <td className="px-3 py-2 text-xs text-gray-500">{itemIndex + 1}</td>
-                                              <td className="px-3 py-2 text-xs">{item.products?.name || 'منتج'}</td>
-                                              <td className="px-3 py-2 text-xs">{item.quantity}</td>
-                                              <td className="px-3 py-2 text-xs">{formatPrice(item.unit_price)}</td>
-                                              <td className="px-3 py-2 text-xs font-medium">{formatPrice(item.unit_price * item.quantity)}</td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )}
-                            </>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
+                            )}
+                          </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
@@ -812,89 +991,51 @@ export default function MyInvoicesPage() {
             {activeTab === 'statement' && (
               <div>
                 {statement.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-12 text-center">
+                    <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
-                    <p className="text-gray-500">لا توجد حركات</p>
+                    <p className="text-gray-400 text-lg">لا توجد حركات</p>
                   </div>
                 ) : (
-                  <>
-                    {/* Mobile View */}
-                    <div className="md:hidden">
-                      {statement.map((entry, index) => (
-                        <div key={entry.id} className="border-b border-gray-200 last:border-b-0 p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-gray-500">#{index + 1}</span>
-                            <span className={`px-2 py-1 text-xs rounded-full ${entry.type === 'سلفة' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                              {entry.type}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-800 mb-1">{entry.description}</p>
-                          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                            <span>{formatDate(entry.date)}</span>
-                            <span>{formatTime(entry.time)}</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-2 text-center bg-gray-50 p-2 rounded">
-                            <div>
-                              <p className="text-xs text-gray-500">قيمة الفاتورة</p>
-                              <p className="text-sm font-medium text-blue-600">{entry.invoiceValue > 0 ? formatPrice(entry.invoiceValue) : '-'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">المدفوع</p>
-                              <p className="text-sm font-medium text-green-600">{entry.paidAmount > 0 ? formatPrice(entry.paidAmount) : '-'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500">الرصيد</p>
-                              <p className={`text-sm font-bold ${entry.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatPrice(entry.balance)}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop View */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-800 text-white">
-                          <tr>
-                            <th className="px-4 py-3 text-right text-sm font-medium">#</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">نوع العملية</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">البيان</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">قيمة الفاتورة</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">المبلغ المدفوع</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الرصيد</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800 text-white sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-right text-sm font-medium">#</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">نوع العملية</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">البيان</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">قيمة الفاتورة</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">المبلغ المدفوع</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الرصيد</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {statement.map((entry, index) => (
+                          <tr key={entry.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-500">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{formatDate(entry.date)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{formatTime(entry.time)}</td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-1 text-xs rounded-full ${entry.type === 'سلفة' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {entry.type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-800">{entry.description}</td>
+                            <td className="px-4 py-3 text-sm" style={{ color: 'var(--primary-color)' }}>{entry.invoiceValue > 0 ? formatPrice(entry.invoiceValue) : '-'}</td>
+                            <td className="px-4 py-3 text-sm text-green-600">{entry.paidAmount > 0 ? formatPrice(entry.paidAmount) : '-'}</td>
+                            <td className={`px-4 py-3 text-sm font-bold ${entry.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {formatPrice(entry.balance)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{entry.record || '-'}</td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {statement.map((entry, index) => (
-                            <tr key={entry.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{formatDate(entry.date)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{formatTime(entry.time)}</td>
-                              <td className="px-4 py-3">
-                                <span className={`px-2 py-1 text-xs rounded-full ${entry.type === 'سلفة' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600'}`}>
-                                  {entry.type}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-800">{entry.description}</td>
-                              <td className="px-4 py-3 text-sm text-blue-600">{entry.invoiceValue > 0 ? formatPrice(entry.invoiceValue) : '-'}</td>
-                              <td className="px-4 py-3 text-sm text-green-600">{entry.paidAmount > 0 ? formatPrice(entry.paidAmount) : '-'}</td>
-                              <td className={`px-4 py-3 text-sm font-bold ${entry.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatPrice(entry.balance)}
-                              </td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{entry.record || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
@@ -902,9 +1043,8 @@ export default function MyInvoicesPage() {
             {/* Payments Tab */}
             {activeTab === 'payments' && (
               <div>
-                {/* Payments Summary */}
                 {payments.length > 0 && (
-                  <div className="p-4 bg-green-50 border-b border-green-200">
+                  <div className="p-4 bg-green-50 border-b border-green-100">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-green-800">إجمالي الدفعات</span>
                       <span className="text-xl font-bold text-green-600">
@@ -913,81 +1053,55 @@ export default function MyInvoicesPage() {
                     </div>
                   </div>
                 )}
-
                 {payments.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-12 text-center">
+                    <svg className="w-20 h-20 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    <p className="text-gray-500">لا توجد دفعات</p>
+                    <p className="text-gray-400 text-lg">لا توجد دفعات</p>
                   </div>
                 ) : (
-                  <>
-                    {/* Mobile View */}
-                    <div className="md:hidden">
-                      {payments.map((payment, index) => (
-                        <div key={payment.id} className="border-b border-gray-200 last:border-b-0 p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-gray-500">#{index + 1}</span>
-                            <span className="text-xs text-gray-500">{formatDate(payment.payment_date || payment.created_at)}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-sm text-gray-800">{payment.notes || 'دفعة'}</p>
-                              <p className="text-xs text-gray-500">{payment.payment_method || 'نقدي'}</p>
-                            </div>
-                            <p className="text-lg font-bold text-green-600">{formatPrice(payment.amount)}</p>
-                          </div>
-                          {payment.records?.name && (
-                            <p className="text-xs text-gray-500 mt-1">الخزنة: {payment.records.name}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Desktop View */}
-                    <div className="hidden md:block overflow-x-auto">
-                      <table className="w-full">
-                        <thead className="bg-gray-800 text-white">
-                          <tr>
-                            <th className="px-4 py-3 text-right text-sm font-medium">#</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">المبلغ</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">طريقة الدفع</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">البيان</th>
-                            <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-800 text-white sticky top-0">
+                        <tr>
+                          <th className="px-4 py-3 text-right text-sm font-medium">#</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">التاريخ</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الوقت</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">المبلغ</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">طريقة الدفع</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">البيان</th>
+                          <th className="px-4 py-3 text-right text-sm font-medium">الخزنة</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {payments.map((payment, index) => (
+                          <tr key={payment.id} className="hover:bg-gray-50 transition-colors">
+                            <td className="px-4 py-3 text-sm text-gray-500">{index + 1}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{formatDate(payment.payment_date || payment.created_at)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {payment.created_at ? formatTime(payment.created_at.split('T')[1]?.substring(0, 5)) : '-'}
+                            </td>
+                            <td className="px-4 py-3 text-sm font-bold text-green-600">{formatPrice(payment.amount)}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{payment.payment_method || 'نقدي'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-800">{payment.notes || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{payment.records?.name || '-'}</td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                          {payments.map((payment, index) => (
-                            <tr key={payment.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{formatDate(payment.payment_date || payment.created_at)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">
-                                {payment.created_at ? formatTime(payment.created_at.split('T')[1]?.substring(0, 5)) : '-'}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-bold text-green-600">{formatPrice(payment.amount)}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{payment.payment_method || 'نقدي'}</td>
-                              <td className="px-4 py-3 text-sm text-gray-800">{payment.notes || '-'}</td>
-                              <td className="px-4 py-3 text-sm text-gray-600">{payment.records?.name || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             )}
 
             {/* Pagination */}
             {pagination && pagination.hasMore && (
-              <div className="p-4 text-center border-t border-gray-200">
+              <div className="p-4 text-center border-t border-gray-100">
                 <button
                   onClick={loadMore}
                   disabled={loading}
-                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-50"
+                  className="px-8 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all disabled:opacity-50"
                 >
                   {loading ? 'جاري التحميل...' : 'تحميل المزيد'}
                 </button>
@@ -995,11 +1109,11 @@ export default function MyInvoicesPage() {
             )}
 
             {/* Info Footer */}
-            <div className="p-4 text-center text-xs text-gray-500 border-t border-gray-200">
-              {pagination && (
-                <p>عرض {Math.min(pagination.page * pagination.limit, pagination.total)} من {pagination.total} سجل</p>
-              )}
-            </div>
+            {pagination && (
+              <div className="p-4 text-center text-xs text-gray-400 border-t border-gray-100">
+                عرض {Math.min(pagination.page * pagination.limit, pagination.total)} من {pagination.total} سجل
+              </div>
+            )}
           </div>
         </div>
       </div>
