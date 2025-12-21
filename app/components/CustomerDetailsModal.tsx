@@ -94,6 +94,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   const [selectedStatementInvoice, setSelectedStatementInvoice] = useState<any>(null)
   const [statementInvoiceItems, setStatementInvoiceItems] = useState<any[]>([])
   const [isLoadingStatementInvoiceItems, setIsLoadingStatementInvoiceItems] = useState(false)
+  const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState<number>(0)
+
+  // Get list of invoice statements for navigation (only invoices, not payments)
+  const invoiceStatements = accountStatements.filter(s => s.type === 'فاتورة بيع' || s.type === 'مرتجع بيع')
 
   // Save dropdown state
   const [showSaveDropdown, setShowSaveDropdown] = useState(false)
@@ -545,8 +549,14 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   // Handle double click on statement row
   const handleStatementRowDoubleClick = async (statement: any) => {
     // Only handle invoices, not payments or opening balance
-    if (statement.type !== 'فاتورة' && statement.type !== 'مرتجع') {
+    if (statement.type !== 'فاتورة بيع' && statement.type !== 'مرتجع بيع') {
       return
+    }
+
+    // Find the index of this invoice in the invoice statements
+    const index = invoiceStatements.findIndex(s => s.id === statement.id)
+    if (index !== -1) {
+      setCurrentInvoiceIndex(index)
     }
 
     // Get invoice details - extract sale ID from statement id
@@ -556,7 +566,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
       const { data: saleData, error } = await supabase
         .from('sales')
-        .select('*')
+        .select(`
+          *,
+          cashier:user_profiles(full_name)
+        `)
         .eq('id', saleId)
         .single()
 
@@ -564,6 +577,62 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         setSelectedStatementInvoice(saleData)
         setShowStatementInvoiceDetails(true)
         await fetchStatementInvoiceItems(saleId)
+      }
+    }
+  }
+
+  // Navigate to next invoice in the statement
+  const navigateToNextInvoice = async () => {
+    if (currentInvoiceIndex < invoiceStatements.length - 1) {
+      const nextIndex = currentInvoiceIndex + 1
+      const nextStatement = invoiceStatements[nextIndex]
+      setCurrentInvoiceIndex(nextIndex)
+
+      const saleIdMatch = nextStatement.id.match(/^sale-(.+)$/)
+      if (saleIdMatch) {
+        const saleId = saleIdMatch[1]
+        setIsLoadingStatementInvoiceItems(true)
+        const { data: saleData, error } = await supabase
+          .from('sales')
+          .select(`
+            *,
+            cashier:user_profiles(full_name)
+          `)
+          .eq('id', saleId)
+          .single()
+
+        if (!error && saleData) {
+          setSelectedStatementInvoice(saleData)
+          await fetchStatementInvoiceItems(saleId)
+        }
+      }
+    }
+  }
+
+  // Navigate to previous invoice in the statement
+  const navigateToPreviousInvoice = async () => {
+    if (currentInvoiceIndex > 0) {
+      const prevIndex = currentInvoiceIndex - 1
+      const prevStatement = invoiceStatements[prevIndex]
+      setCurrentInvoiceIndex(prevIndex)
+
+      const saleIdMatch = prevStatement.id.match(/^sale-(.+)$/)
+      if (saleIdMatch) {
+        const saleId = saleIdMatch[1]
+        setIsLoadingStatementInvoiceItems(true)
+        const { data: saleData, error } = await supabase
+          .from('sales')
+          .select(`
+            *,
+            cashier:user_profiles(full_name)
+          `)
+          .eq('id', saleId)
+          .single()
+
+        if (!error && saleData) {
+          setSelectedStatementInvoice(saleData)
+          await fetchStatementInvoiceItems(saleId)
+        }
       }
     }
   }
@@ -2886,23 +2955,20 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                 {activeTab === 'statement' && (
                   <div className="h-full flex flex-col">
                     {showStatementInvoiceDetails ? (
-                      <>
-                        {/* Invoice Details Header */}
-                        <div className="bg-[#2B3544] border-b border-gray-600 p-4 flex items-center justify-between">
+                      <div className="flex flex-col h-full bg-[#1F2937]">
+                        {/* Top Bar with Back Button and Print Actions */}
+                        <div className="bg-[#2B3544] border-b border-gray-600 px-4 py-2 flex items-center justify-between">
                           <button
                             onClick={() => {
                               setShowStatementInvoiceDetails(false)
                               setSelectedStatementInvoice(null)
                               setStatementInvoiceItems([])
                             }}
-                            className="text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors"
+                            className="text-blue-400 hover:text-blue-300 flex items-center gap-2 transition-colors text-sm"
                           >
                             <ChevronRightIcon className="h-4 w-4" />
-                            <span>العودة إلى كشف الحساب</span>
+                            <span>العودة</span>
                           </button>
-                          <h3 className="text-white font-medium text-lg">
-                            تفاصيل الفاتورة {selectedStatementInvoice?.invoice_number || ''}
-                          </h3>
                           <div className="flex items-center gap-2">
                             {/* Print Receipt Button */}
                             <button
@@ -2911,7 +2977,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                               disabled={isLoadingStatementInvoiceItems || statementInvoiceItems.length === 0}
                             >
                               <PrinterIcon className="h-4 w-4" />
-                              طباعة الريسيت
+                              ريسيت
                             </button>
 
                             {/* Print A4 Invoice Button */}
@@ -2921,7 +2987,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                               disabled={isLoadingStatementInvoiceItems || statementInvoiceItems.length === 0}
                             >
                               <DocumentIcon className="h-4 w-4" />
-                              طباعة A4
+                              A4
                             </button>
 
                             {/* Save Dropdown Button */}
@@ -2958,22 +3024,192 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                           </div>
                         </div>
 
-                        {/* Invoice Details Table */}
-                        <div className="flex-1">
+                        {/* Navigation Bar with Invoice Number */}
+                        <div className="bg-[#374151] border-b border-gray-600 px-4 py-3 flex items-center justify-center gap-4">
+                          {/* Previous Button */}
+                          <button
+                            onClick={navigateToPreviousInvoice}
+                            disabled={currentInvoiceIndex === 0 || isLoadingStatementInvoiceItems}
+                            className={`p-2 rounded-lg transition-colors ${
+                              currentInvoiceIndex === 0
+                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                          >
+                            <ChevronRightIcon className="h-5 w-5" />
+                          </button>
+
+                          {/* Invoice Number Display */}
+                          <div className="flex items-center gap-3 bg-[#2B3544] px-6 py-2 rounded-lg border border-gray-600">
+                            <span className="text-gray-400 text-sm">فاتورة رقم</span>
+                            <span className="text-white font-bold text-xl">
+                              {selectedStatementInvoice?.invoice_number?.replace('INV-', '').split('-')[0] || '---'}
+                            </span>
+                            <span className="text-gray-500 text-xs">
+                              ({currentInvoiceIndex + 1} من {invoiceStatements.length})
+                            </span>
+                          </div>
+
+                          {/* Next Button */}
+                          <button
+                            onClick={navigateToNextInvoice}
+                            disabled={currentInvoiceIndex >= invoiceStatements.length - 1 || isLoadingStatementInvoiceItems}
+                            className={`p-2 rounded-lg transition-colors ${
+                              currentInvoiceIndex >= invoiceStatements.length - 1
+                                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            }`}
+                          >
+                            <ChevronLeftIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+
+                        {/* Invoice Info Header */}
+                        <div className="bg-[#2B3544] border-b border-gray-600 px-4 py-3">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <span className={`px-3 py-1 rounded text-sm font-medium ${
+                                selectedStatementInvoice?.invoice_type === 'Sale Return' || selectedStatementInvoice?.invoice_type === 'مرتجع'
+                                  ? 'bg-orange-600/20 text-orange-400 border border-orange-600/30'
+                                  : 'bg-green-600/20 text-green-400 border border-green-600/30'
+                              }`}>
+                                {selectedStatementInvoice?.invoice_type === 'Sale Return' ? 'مرتجع بيع' :
+                                 selectedStatementInvoice?.invoice_type === 'Sale Invoice' ? 'فاتورة بيع' :
+                                 selectedStatementInvoice?.invoice_type || 'فاتورة'}
+                              </span>
+                              <span className="text-gray-300 text-sm">
+                                {selectedStatementInvoice?.created_at
+                                  ? new Date(selectedStatementInvoice.created_at).toLocaleDateString('ar-EG', {
+                                      weekday: 'long',
+                                      year: 'numeric',
+                                      month: 'numeric',
+                                      day: 'numeric'
+                                    })
+                                  : '---'}
+                              </span>
+                            </div>
+                            <div className="text-white font-medium">
+                              {customer?.name || '---'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Invoice Items Table */}
+                        <div className="flex-1 overflow-hidden">
                           {isLoadingStatementInvoiceItems ? (
                             <div className="flex items-center justify-center h-full">
                               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
                               <span className="text-gray-400">جاري تحميل تفاصيل الفاتورة...</span>
                             </div>
                           ) : (
-                            <ResizableTable
-                              className="h-full w-full"
-                              columns={invoiceDetailsColumns}
-                              data={statementInvoiceItems}
-                            />
+                            <div className="h-full overflow-y-auto scrollbar-hide">
+                              <table className="w-full">
+                                <thead className="bg-[#374151] sticky top-0">
+                                  <tr>
+                                    <th className="px-4 py-3 text-right text-gray-300 font-medium text-sm border-b border-gray-600 w-12">م</th>
+                                    <th className="px-4 py-3 text-right text-gray-300 font-medium text-sm border-b border-gray-600">الصنف</th>
+                                    <th className="px-4 py-3 text-center text-gray-300 font-medium text-sm border-b border-gray-600 w-24">الكمية</th>
+                                    <th className="px-4 py-3 text-center text-gray-300 font-medium text-sm border-b border-gray-600 w-28">سعر</th>
+                                    <th className="px-4 py-3 text-center text-gray-300 font-medium text-sm border-b border-gray-600 w-28">قيمة</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {statementInvoiceItems.map((item, index) => (
+                                    <tr key={item.id} className="border-b border-gray-700 hover:bg-[#374151]/50">
+                                      <td className="px-4 py-3 text-blue-400 font-medium text-sm">{index + 1}</td>
+                                      <td className="px-4 py-3 text-blue-400 font-medium text-sm">
+                                        {item.product?.name || 'منتج غير معروف'}
+                                      </td>
+                                      <td className="px-4 py-3 text-center text-white text-sm">
+                                        {Math.abs(item.quantity)}
+                                      </td>
+                                      <td className="px-4 py-3 text-center text-white text-sm">
+                                        {formatPrice(item.unit_price)}
+                                      </td>
+                                      <td className="px-4 py-3 text-center text-white text-sm">
+                                        {formatPrice(Math.abs(item.quantity) * item.unit_price)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  {/* Totals Row */}
+                                  <tr className="bg-[#374151] border-t-2 border-blue-500">
+                                    <td colSpan={2} className="px-4 py-3 text-left text-blue-400 font-bold text-sm">
+                                      - = اجمالي = -
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-blue-400 font-bold text-sm">
+                                      {statementInvoiceItems.reduce((sum, item) => sum + Math.abs(item.quantity), 0)}
+                                    </td>
+                                    <td className="px-4 py-3 text-center text-white text-sm"></td>
+                                    <td className="px-4 py-3 text-center text-blue-400 font-bold text-sm">
+                                      {formatPrice(Math.abs(selectedStatementInvoice?.total_amount || 0))}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
                           )}
                         </div>
-                      </>
+
+                        {/* Invoice Info Footer */}
+                        <div className="bg-[#2B3544] border-t border-gray-600 p-4">
+                          <div className="grid grid-cols-6 gap-4 text-sm">
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">الاجمالي</span>
+                              <span className="text-white font-bold">
+                                {formatPrice(Math.abs(selectedStatementInvoice?.total_amount || 0))}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">الخصم</span>
+                              <span className="text-white font-bold">
+                                {formatPrice(selectedStatementInvoice?.discount_amount || 0)}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">ضريبة</span>
+                              <span className="text-white font-bold">
+                                {formatPrice(selectedStatementInvoice?.tax_amount || 0)}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">المدفوع</span>
+                              <span className="text-green-400 font-bold">
+                                {formatPrice(Math.abs(selectedStatementInvoice?.total_amount || 0))}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">آجل</span>
+                              <span className="text-orange-400 font-bold">
+                                {formatPrice(0)}
+                              </span>
+                            </div>
+                            <div className="flex flex-col items-center bg-[#374151] rounded-lg p-3 border border-gray-600">
+                              <span className="text-gray-400 mb-1">الرصيد</span>
+                              <span className={`font-bold ${customerBalance >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                {formatPrice(Math.abs(customerBalance))}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Notes and Employee Info */}
+                          <div className="mt-3 flex items-center justify-between text-xs text-gray-400">
+                            <div className="flex items-center gap-2">
+                              <span>الملاحظات:</span>
+                              <span className="text-gray-300">{selectedStatementInvoice?.notes || '---'}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <span>
+                                TIME: {selectedStatementInvoice?.created_at
+                                  ? new Date(selectedStatementInvoice.created_at).toLocaleDateString('en-GB')
+                                  : '---'} {selectedStatementInvoice?.time || ''}
+                              </span>
+                              <span>
+                                by: {(selectedStatementInvoice as any)?.cashier?.full_name || 'system'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <>
                         {isLoadingStatements ? (
