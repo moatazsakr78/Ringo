@@ -98,35 +98,55 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
 
-    // First, try to get the customer record linked to this user by user_id
-    let { data: customer, error: customerError } = await supabaseAdmin
+    // Try multiple methods to find the customer record
+    let customer = null
+
+    // Method 1: Try to find by user_id (session ID)
+    const { data: customerByUserId } = await supabaseAdmin
       .from('customers')
       .select('id, name, phone, email, address, city, governorate, account_balance, loyalty_points, rank, created_at')
       .eq('user_id', userId)
       .single()
 
-    // If not found by user_id, try to find by email and link them
-    if ((customerError || !customer) && userEmail) {
-      const { data: customerByEmail, error: emailError } = await supabaseAdmin
+    if (customerByUserId) {
+      customer = customerByUserId
+    }
+
+    // Method 2: If not found, try to find by email
+    if (!customer && userEmail) {
+      const { data: customerByEmail } = await supabaseAdmin
         .from('customers')
         .select('id, name, phone, email, address, city, governorate, account_balance, loyalty_points, rank, created_at')
         .eq('email', userEmail)
-        .is('user_id', null)
         .single()
 
-      if (customerByEmail && !emailError) {
-        // Link the customer to this user
-        await supabaseAdmin
-          .from('customers')
-          .update({ user_id: userId })
-          .eq('id', customerByEmail.id)
-
+      if (customerByEmail) {
         customer = customerByEmail
-        customerError = null
       }
     }
 
-    if (customerError || !customer) {
+    // Method 3: If still not found, try to get user_profiles email and search by that
+    if (!customer) {
+      const { data: userProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('email')
+        .eq('id', userId)
+        .single()
+
+      if (userProfile?.email) {
+        const { data: customerByProfileEmail } = await supabaseAdmin
+          .from('customers')
+          .select('id, name, phone, email, address, city, governorate, account_balance, loyalty_points, rank, created_at')
+          .eq('email', userProfile.email)
+          .single()
+
+        if (customerByProfileEmail) {
+          customer = customerByProfileEmail
+        }
+      }
+    }
+
+    if (!customer) {
       return NextResponse.json(
         { error: 'Customer account not found. Please contact support.' },
         { status: 404 }
