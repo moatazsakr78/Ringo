@@ -266,9 +266,6 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           ),
           record:records(
             name
-          ),
-          creator:user_profiles(
-            full_name
           )
         `)
         .eq('supplier_id', supplier.id)

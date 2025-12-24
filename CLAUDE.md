@@ -1,226 +1,352 @@
-# POS System Commands & Configuration
+# El Farouk Group - POS & E-Commerce System
+
+## Project Overview
+نظام متكامل يجمع بين:
+- **POS System**: نظام نقاط البيع للموظفين والإدارة
+- **E-Commerce Store**: متجر إلكتروني للعملاء مُحسّن للأداء العالي
+
+---
 
 ## Development Commands
-- `npm run dev` - Start development server (http://localhost:3000)
-- `npm run build` - Build for production  
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint checks
-- `npm run typecheck` - Run TypeScript checks
+```bash
+npm run dev        # Start development server (http://localhost:3000)
+npm run build      # Build for production
+npm run start      # Start production server
+npm run lint       # Run ESLint checks
+npm run typecheck  # Run TypeScript checks
+```
+
+---
 
 ## Project Structure
 ```
-pos-sys/
-├── app/                    # Next.js 14 App Router
-│   ├── (dashboard)/       # Dashboard layout group
-│   │   ├── pos/          # POS page
-│   │   ├── products/     # Products management page
-│   │   ├── inventory/    # Inventory management page
-│   │   ├── customers/    # Customers page
-│   │   ├── suppliers/    # Suppliers page  
-│   │   ├── records/      # Records dashboard page
-│   │   ├── reports/      # Reports page (custom design)
-│   │   └── permissions/  # Permissions page (custom design)
-│   ├── components/       # Reusable components
-│   │   ├── ui/          # Base UI components
-│   │   ├── layout/      # Layout components
-│   │   └── tables/      # Table components
-│   ├── lib/             # Utility libraries
-│   │   ├── supabase/    # Supabase client and utilities
-│   │   ├── hooks/       # Custom React hooks
-│   │   └── utils/       # Helper functions
-│   ├── types/           # TypeScript type definitions
-│   ├── globals.css      # Global styles with Tailwind
-│   ├── layout.tsx       # Root layout with RTL support
-│   └── page.tsx         # Homepage
-├── ui-designs/           # UI design reference images
+elfaroukgroup/
+├── app/
+│   ├── (dashboard)/           # POS & Admin System (للموظفين)
+│   │   ├── dashboard/         # لوحة التحكم الرئيسية
+│   │   ├── pos/               # نقطة البيع
+│   │   ├── products/          # إدارة المنتجات
+│   │   ├── inventory/         # إدارة المخزون
+│   │   ├── customers/         # إدارة العملاء
+│   │   ├── suppliers/         # إدارة الموردين
+│   │   ├── customer-orders/   # طلبات العملاء
+│   │   ├── reports/           # التقارير
+│   │   ├── permissions/       # الصلاحيات
+│   │   ├── settings/          # الإعدادات
+│   │   ├── payment-methods/   # طرق الدفع
+│   │   ├── safes/             # الخزائن
+│   │   └── whatsapp/          # رسائل واتساب
+│   │
+│   ├── (website)/             # E-Commerce Store (للعملاء)
+│   │   ├── profile/           # بروفايل العميل
+│   │   ├── my-orders/         # طلباتي
+│   │   ├── my-invoices/       # فواتيري
+│   │   ├── shipping/          # تتبع الشحن
+│   │   └── admin/products/    # إدارة منتجات المتجر
+│   │
+│   ├── auth/                  # صفحات المصادقة
+│   ├── product/[id]/          # صفحة تفاصيل المنتج
+│   ├── prepare-order/         # تجهيز الطلب
+│   │
+│   ├── api/                   # API Routes
+│   │   ├── auth/[...nextauth]/ # NextAuth.js endpoints
+│   │   ├── supabase/          # Supabase proxy
+│   │   ├── user/orders/       # طلبات المستخدم
+│   │   ├── revalidate/        # Cache revalidation
+│   │   └── analyze-receipt/   # تحليل الإيصالات
+│   │
+│   ├── components/            # Reusable Components
+│   │   ├── auth/              # مكونات المصادقة
+│   │   ├── layout/            # مكونات التخطيط
+│   │   ├── tables/            # الجداول
+│   │   └── ui/                # مكونات UI الأساسية
+│   │
+│   ├── lib/                   # Utility Libraries
+│   │   ├── auth/              # Auth utilities
+│   │   ├── cache/             # Memory caching
+│   │   ├── contexts/          # React Contexts
+│   │   ├── hooks/             # Custom React Hooks
+│   │   ├── services/          # Business services
+│   │   └── utils/             # Helper functions
+│   │
+│   ├── types/                 # TypeScript Definitions
+│   ├── globals.css            # Global Styles
+│   ├── layout.tsx             # Root Layout
+│   └── providers.tsx          # App Providers
+│
+├── lib/                       # Shared Libraries
+│   ├── auth.ts                # NextAuth configuration
+│   ├── supabase.ts            # Supabase client
+│   └── hooks/                 # Shared hooks
+│
+├── components/                # Shared Components
+├── types/                     # Shared Types
+├── public/                    # Static Assets
+│   └── manifest.json          # PWA Manifest
+├── ui-designs/                # UI Reference Designs
+├── middleware.ts              # Next.js Middleware
 └── ...config files
 ```
 
-## Database Schema
+---
+
+## Database Configuration
+
+### Connection Details
 - **Supabase Project ID**: `hecedrbnbknohssgaoso`
 - **Region**: eu-central-1
 - **Status**: ACTIVE_HEALTHY
 - **Database Version**: PostgreSQL 17.6.1.021
 
-### Key Tables (27 total):
-- `products` - Product catalog with pricing, barcodes, categories
-- `customers` - Customer information with loyalty points, credit limits
-- `suppliers` - Supplier management with account balances
-- `sales` - Sales transactions with totals, tax, discounts
-- `sale_items` - Individual items within sales transactions
-- `inventory` - Stock tracking by product and branch
-- `branches` - Store branch locations
-- `categories` - Product categories
-- `warehouses` - Warehouse management
-- `orders` - Order management system
-- `purchase_invoices` - Purchase transactions from suppliers
-- `customer_payments` - Customer payment tracking
-- `supplier_payments` - Supplier payment tracking
-- `expenses` - Business expense tracking
-- `records` - General record keeping
-- `user_profiles` - User management and roles
+### CRITICAL: Schema Usage
+```
+Schema Name: elfaroukgroup (NOT public)
+```
 
-**IMPORTANT**: No schema modifications allowed - read-only integration only.
+**IMPORTANT**: This project uses the `elfaroukgroup` schema, NOT the default `public` schema.
+- All queries MUST use `elfaroukgroup` schema
+- Example: `elfaroukgroup.products`, `elfaroukgroup.customers`
+- The `public` schema contains only utility tables
+
+### CRITICAL: Authentication & Security
+```
+Authentication: NextAuth.js (NOT Supabase Auth)
+RLS: DISABLED (Security at application level)
+```
+
+**Why NOT Supabase Auth?**
+- Supabase Auth limit: 100,000 MAU (Monthly Active Users)
+- After limit, costs become very expensive
+- External auth provides more control and scalability
+
+**Authentication Tables** (in `elfaroukgroup` schema):
+- `auth_users` - User accounts
+- `auth_sessions` - Active sessions
+- `auth_accounts` - OAuth provider accounts
+- `auth_verification_tokens` - Email verification
+
+**Security Model**:
+- NO RLS (Row Level Security) - Supabase RLS is disabled
+- Security handled at application level in Next.js API routes
+- All operations go through server-side validation
+
+### Database Tables (65 total in `elfaroukgroup` schema)
+
+#### Authentication
+- `auth_users`, `auth_sessions`, `auth_accounts`, `auth_verification_tokens`
+
+#### Products & Categories
+- `products`, `categories`, `product_images`, `product_videos`
+- `product_variants`, `product_sizes`, `product_votes`, `product_ratings`
+- `product_size_groups`, `product_size_group_items`
+
+#### Inventory & Stock
+- `inventory`, `branch_stocks`, `warehouse_stocks`
+- `branches`, `warehouses`
+
+#### Sales & Orders
+- `sales`, `sale_items`, `orders`, `order_items`, `cart_items`
+
+#### Customers & Suppliers
+- `customers`, `customer_groups`, `customer_payments`, `customer_merges`
+- `suppliers`, `supplier_groups`, `supplier_payments`, `supplier_merges`
+
+#### Purchases
+- `purchase_invoices`, `purchase_invoice_items`
+
+#### Cash & Finance
+- `cash_drawers`, `cash_drawer_transactions`, `cashbox_entries`
+- `expenses`, `payment_methods`, `payment_receipts`
+
+#### Shipping
+- `shipping_companies`, `shipping_governorates`, `shipping_areas`
+
+#### Store/E-commerce
+- `store_categories`, `store_category_products`, `store_theme_colors`
+- `custom_sections`, `favorites`
+
+#### Settings & System
+- `system_settings`, `user_preferences`, `user_profiles`, `user_roles`
+- `user_column_preferences`, `records`, `pos_tabs_state`
+
+---
+
+## Architecture: Dual System Design
+
+### 1. POS System (Dashboard)
+للموظفين والإدارة - يتطلب Real-time وميزات متقدمة
+
+**Features:**
+- Real-time data subscriptions
+- Full CRUD operations
+- Complex queries and reports
+- Role-based access control
+
+### 2. E-Commerce Store (Website)
+للعملاء - مُحسّن للأداء العالي وتحمل عدد كبير من المستخدمين
+
+**Performance Strategy:**
+```
+Priority: High Performance + Low Server Cost + Scalability
+Goal: Handle 50,000+ monthly users efficiently
+```
+
+#### CDN & Static Optimization
+- **Static Generation (SSG)**: Product pages generated at build time
+- **CDN Caching**: Static assets served from edge locations
+- **Image Optimization**: WebP format, lazy loading, responsive images
+- **Incremental Static Regeneration (ISR)**: Update static pages without rebuild
+
+#### Server Load Reduction
+- **NO real-time subscriptions** for customer-facing pages
+- **Minimal server queries**: Only essential data fetched
+- **Memory-only caching**: No expensive database hits
+- **API Routes caching**: Response caching with proper headers
+
+#### Dynamic Data (When Needed)
+بعض البيانات لازم تيجي من السيرفر للعميل:
+- **كشف حساب العميل**: رصيد، مديونية
+- **طلباتي**: حالة الطلب، تتبع الشحن
+- **الكمية المتاحة**: Stock availability (real-time check at checkout)
+- **الأسعار الخاصة**: Customer-specific pricing
+
+#### Balance: Performance + User Experience
+```
+Static Data (CDN):          Dynamic Data (Server):
+├── Product info            ├── Customer balance
+├── Product images          ├── Order status
+├── Categories              ├── Stock quantity
+├── Store design            ├── Cart operations
+└── General content         └── Checkout process
+```
+
+---
+
+## Key Technologies
+
+### Core Stack
+- **Framework**: Next.js 14 (App Router)
+- **Language**: TypeScript (strict mode)
+- **Styling**: Tailwind CSS
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: NextAuth.js v5 (Auth.js)
+
+### Key Dependencies
+```json
+{
+  "next": "14.2.5",
+  "next-auth": "^5.0.0-beta.30",
+  "@supabase/supabase-js": "^2.39.3",
+  "swr": "^2.3.6",
+  "@dnd-kit/core": "^6.3.1",
+  "xlsx": "^0.18.5",
+  "jsbarcode": "^3.12.1",
+  "react-barcode": "^1.6.1"
+}
+```
+
+### React Contexts (Providers)
+```tsx
+<Providers>
+  <ThemeProvider>           // Theme management
+    <SystemSettingsProvider> // System settings
+      <CurrencyProvider>     // Currency handling
+        <UserProfileProvider> // User profile
+          <CartProvider>      // Shopping cart
+            {children}
+          </CartProvider>
+        </UserProfileProvider>
+      </CurrencyProvider>
+    </SystemSettingsProvider>
+  </ThemeProvider>
+</Providers>
+```
+
+---
 
 ## UI Design Requirements
-- **Theme**: Dark theme with blue accents (#3B82F6)
-- **Language**: Arabic RTL interface throughout
+
+### Theme
+- **Style**: Dark theme with blue accents
+- **Language**: Arabic RTL interface
 - **Font**: Cairo Arabic font family
-- **Colors**:
-  - Primary Dark: #2B3544
-  - Darker: #1F2937
-  - Blue: #3B82F6
-  - Green: #10B981 (active status)
-  - Red: #EF4444 (inactive status)
-  - Orange: #F59E0B (warning)
-  - Gray: #6B7280
 
-### Design Compliance:
-- **Exact pixel-perfect match** required for all pages
-- Reference designs located in `/ui-designs/*.png`
-- 7 provided designs: pos, menu, products, inventory, customers, suppliers, records
-- 3 custom designs needed: dashboard, reports, permissions
+### Colors
+```css
+Primary Dark:   #2B3544
+Darker:         #1F2937
+Blue:           #3B82F6
+Green:          #10B981 (active/success)
+Red:            #EF4444 (inactive/error)
+Orange:         #F59E0B (warning)
+Gray:           #6B7280
+Theme Color:    #DC2626 (Store branding)
+```
 
-### Scrollbar Styling:
-- **All vertical scrollbars must be hidden** but remain functional
-- Use `scrollbar-hide` class or equivalent CSS
-- Apply to all containers with `overflow-y-auto`
-- Maintain scrolling functionality without visual scrollbar
-- Examples: `overflow-y-auto scrollbar-hide`
+### Design References
+Located in `/ui-designs/`:
+- `pos.png` - POS page
+- `products.png` - Products page
+- `inventory.png` - Inventory page
+- `customers.png` - Customers page
+- `suppliers.png` - Suppliers page
+- `records.png` - Records page
+- `menu.png` - Navigation menu
 
-### Button Behavior:
-- **All buttons must remain inactive** (visual only)
-- No functionality until modal designs are provided
-- Maintain proper styling and hover states
-- Display placeholder text where appropriate
+### Scrollbar Styling
+```css
+/* Hide scrollbars but keep functionality */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+```
 
-### Layout Restrictions:
-- **IMPORTANT**: Do not use the blue TopHeader stripe in any store/admin product management pages
-- The TopHeader component should be hidden for all admin product pages (`/admin/products`)
-- Only use TopHeader for POS system pages, not for customer-facing store pages
-- This ensures proper visibility of page-specific header designs (like the red header in admin products)
+---
 
-## Real-time Requirements
-- **Visibility-aware subscriptions**: Handle browser tab minimize/restore
-- **Reconnection logic**: Automatic reconnection on connection loss
-- **Memory-only caching**: No localStorage or IndexedDB usage
-- **CRUD stability**: All operations must work in all scenarios
+## PWA Configuration
+The app is a Progressive Web App:
+- **Manifest**: `/public/manifest.json`
+- **Icons**: El Farouk Group branding
+- **Theme Color**: #DC2626
+- **Installable**: Add to homescreen support
 
-## Egress Optimization Strategy
-- Use `.webp` image formats only
-- Selective field fetching from Supabase
-- Implement pagination and lazy loading
-- Memory-only caching with TTL limits
-- Avoid unnecessary polling or redundant listeners
-- Connection pooling and request batching
-- Minimize subscription payload sizes
-
-## Development Stages
-
-### Stage 1: Foundation & Setup ✅
-- [x] Next.js project initialization  
-- [x] Supabase integration setup
-- [x] Base component architecture
-- [x] Real-time foundation
-
-### Stage 2: Core Pages (UI Only)
-- [ ] POS page with product table
-- [ ] Inventory management page
-- [ ] Navigation sidebar component
-
-### Stage 3: Data Management Pages  
-- [ ] Customers page
-- [ ] Suppliers page
-- [ ] Records dashboard page
-- [ ] Data table components
-
-### Stage 4: Missing Pages (Custom Design)
-- [ ] Dashboard (analytics overview)
-- [ ] Reports (sales/inventory reports)  
-- [ ] Permissions (user access control)
-
-### Stage 5: Real-time Integration
-- [ ] Live data subscriptions
-- [ ] Visibility-aware reconnection
-- [ ] Optimized caching layer
-- [ ] Performance optimization
+---
 
 ## Environment Variables
 ```env
-# Supabase Configuration
+# Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# NextAuth
+NEXTAUTH_SECRET=your_secret
+NEXTAUTH_URL=http://localhost:3000
+
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
 ```
 
-## Testing Commands
-```bash
-# Run development server
-npm run dev
+---
 
-# Check TypeScript compilation
-npm run typecheck
+## Important Notes
 
-# Lint code
-npm run lint
+### Schema Reminder
+Always use `elfaroukgroup` schema, not `public`:
+```sql
+-- Correct
+SELECT * FROM elfaroukgroup.products;
 
-# Build for production
-npm run build
+-- Wrong
+SELECT * FROM public.products;
+SELECT * FROM products;
 ```
 
-## Common Issues & Solutions
+### No Supabase Auth/RLS
+- Authentication via NextAuth.js
+- No RLS policies - security at API level
+- Validate sessions in API routes
 
-### RTL Layout Issues
-- Ensure `dir="rtl"` is set on html element
-- Use Tailwind RTL utilities (`mr-` instead of `ml-` for margins)
-- Check Arabic font loading in browser dev tools
-
-### Real-time Connection Issues
-- Verify Supabase credentials in environment variables
-- Check browser network tab for WebSocket connections
-- Implement proper error handling and reconnection logic
-
-### Performance Issues
-- Monitor bundle size with `npm run build`  
-- Check for memory leaks in React DevTools
-- Optimize image sizes and formats
-
-## Website Integration Architecture
-
-### Dual System Approach
-- **POS System**: High-performance admin/staff interface with real-time features
-- **Website**: Customer-facing e-commerce with optimized egress and PWA support
-
-### Device-Responsive Architecture
-- **Server-side device detection** using User-Agent in getServerSideProps
-- **Component mapping**:
-  - Desktop: DesktopHome component
-  - Tablet: TabletHome component  
-  - Mobile: MobileHome component
-- **PWA Support**: Offline capability, app-like experience on mobile devices
-
-### Performance Strategy
-- **Optimistic UI**: Instant visual feedback without real-time subscriptions
-- **Minimal data fetching**: Only essential user data (name, email, cart contents)
-- **Memory-only state**: No localStorage, optimized for 50k monthly users
-- **Egress optimization**: Selective queries, efficient caching, minimal payloads
-
-### Technical Implementation
-- Pages Router for website (separate from App Router admin system)
-- Device-specific components with shared business logic
-- State management via useState/React Context for cart operations
-- Server-side rendering for initial data loading
-
-## PWA Configuration
-- **Manifest**: App metadata, icons, theme colors
-- **Service Worker**: Offline caching, background sync
-- **Installable**: Add to homescreen functionality
-- **Responsive**: Works across all device types
-
-## Architecture Notes
-- Uses Next.js 14 App Router (not Pages Router) for admin system
-- Uses Pages Router for public website (separate architecture)
-- TypeScript strict mode enabled
-- Tailwind CSS with custom POS theme
-- Supabase for real-time database operations
-- Component-based architecture with reusable UI elements
-- Memory-optimized for minimal resource usage
+### Performance First (Store)
+- Minimize server calls for customer pages
+- Use CDN for static content
+- Only fetch dynamic data when necessary

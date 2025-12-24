@@ -174,7 +174,7 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
       )}
 
       {/* Sidebar - wider for supplier form */}
-      <div className={`fixed top-12 right-0 h-[calc(100vh-3rem)] w-[500px] bg-[#3A4553] z-50 transform transition-transform duration-300 ease-in-out ${
+      <div className={`fixed top-12 right-0 h-[calc(100vh-3rem)] w-[500px] bg-[#3A4553] z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
         isOpen ? 'translate-x-0' : 'translate-x-full'
       } shadow-2xl`}>
         
@@ -212,7 +212,7 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
         </div>
 
         {/* Content Area - Scrollable */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto scrollbar-hide p-6 pb-24 space-y-4">
           
           {/* Error/Success Messages */}
           {error && (
