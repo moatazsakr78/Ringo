@@ -517,53 +517,114 @@ export default function SafesPage() {
       <div className="h-full pt-12 overflow-y-auto scrollbar-hide bg-pos-dark text-white" dir="rtl">
         {/* Header */}
         <div className="bg-pos-darker p-4 flex items-center justify-between border-b border-gray-700">
-          <div></div>
           <div className="flex items-center gap-4">
+            <BanknotesIcon className="h-6 w-6 text-blue-500" />
+            <h1 className="text-xl font-bold">الخزن والمالية</h1>
             <h1 className="text-xl font-medium text-gray-300">
               إدارة الخزن والسجلات وطرق الدفع
             </h1>
-            <h1 className="text-xl font-bold">الخزن والمالية</h1>
-            <BanknotesIcon className="h-6 w-6 text-blue-500" />
           </div>
+          <div></div>
         </div>
 
-        {/* Horizontal Tab Bar */}
-        <div className="px-6 pt-4">
-          <div className="flex bg-[#2B3544] rounded-md overflow-hidden w-fit border border-gray-700">
-            <button
-              onClick={() => setActiveTab('safes')}
-              className={`px-6 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === 'safes'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
-              }`}
-            >
-              <BanknotesIcon className="h-4 w-4" />
-              الخزن
-            </button>
-            <button
-              onClick={() => setActiveTab('records')}
-              className={`px-6 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === 'records'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
-              }`}
-            >
-              <DocumentTextIcon className="h-4 w-4" />
-              السجلات
-            </button>
-            <button
-              onClick={() => setActiveTab('payment_methods')}
-              className={`px-6 py-2.5 text-sm font-medium transition-colors flex items-center gap-2 ${
-                activeTab === 'payment_methods'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-600'
-              }`}
-            >
-              <CreditCardIcon className="h-4 w-4" />
-              طرق الدفع
-            </button>
+        {/* Unified Control Bar - Tabs, Filters, Count & Search in ONE row */}
+        <div className="px-6 pt-4 flex items-center justify-between gap-4">
+          {/* Right Section: Tabs + Filters (for records tab) */}
+          <div className="flex items-center gap-4">
+            {/* Tabs */}
+            <div className="flex bg-[#2B3544] rounded-md overflow-hidden w-fit border border-gray-700">
+              <button
+                onClick={() => setActiveTab('safes')}
+                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                  activeTab === 'safes'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                <BanknotesIcon className="h-4 w-4" />
+                الخزن
+              </button>
+              <button
+                onClick={() => setActiveTab('records')}
+                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                  activeTab === 'records'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                <DocumentTextIcon className="h-4 w-4" />
+                السجلات
+              </button>
+              <button
+                onClick={() => setActiveTab('payment_methods')}
+                className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
+                  activeTab === 'payment_methods'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600'
+                }`}
+              >
+                <CreditCardIcon className="h-4 w-4" />
+                طرق الدفع
+              </button>
+            </div>
+
+            {/* Records Tab Filters */}
+            {activeTab === 'records' && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={transactionFilters.safeId}
+                  onChange={(e) => setTransactionFilters(prev => ({ ...prev, safeId: e.target.value }))}
+                  className="bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="all">جميع الخزن</option>
+                  {safes.map(safe => (
+                    <option key={safe.id} value={safe.id}>{safe.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={transactionFilters.transactionType}
+                  onChange={(e) => setTransactionFilters(prev => ({ ...prev, transactionType: e.target.value as TransactionType }))}
+                  className="bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                >
+                  <option value="all">جميع العمليات</option>
+                  <option value="sale">بيع</option>
+                  <option value="return">مرتجع</option>
+                  <option value="withdrawal">سحب</option>
+                  <option value="deposit">إيداع</option>
+                  <option value="adjustment">تسوية</option>
+                  <option value="transfer_in">تحويل وارد</option>
+                </select>
+                <button
+                  onClick={() => setShowDateFilterModal(true)}
+                  className="px-3 py-2 bg-gray-700 text-gray-300 rounded-lg flex items-center gap-2 hover:bg-gray-600 border border-gray-600 transition-colors text-sm"
+                >
+                  <CalendarDaysIcon className="h-4 w-4" />
+                  {getDateFilterLabel(transactionFilters.dateFilter)}
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Middle: Count (for records tab) */}
+          {activeTab === 'records' && (
+            <span className="text-sm text-gray-400">
+              {filteredTransactions.length} سجل
+            </span>
+          )}
+
+          {/* Left Section: Search (for records tab) */}
+          {activeTab === 'records' && (
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="البحث في السجلات..."
+                value={transactionSearchTerm}
+                onChange={(e) => setTransactionSearchTerm(e.target.value)}
+                className="bg-gray-700 text-white placeholder-gray-400 pl-10 pr-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 w-56 text-sm"
+              />
+              <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            </div>
+          )}
         </div>
 
         {/* ==================== Safes Tab Content ==================== */}
@@ -722,65 +783,7 @@ export default function SafesPage() {
 
         {/* ==================== Records Tab Content ==================== */}
         {activeTab === 'records' && (
-          <div className="p-6">
-            {/* Filter Controls Row */}
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-              <div className="flex items-center gap-4 flex-wrap">
-                {/* Safe Filter Dropdown */}
-                <select
-                  value={transactionFilters.safeId}
-                  onChange={(e) => setTransactionFilters(prev => ({ ...prev, safeId: e.target.value }))}
-                  className="bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">جميع الخزن</option>
-                  {safes.map(safe => (
-                    <option key={safe.id} value={safe.id}>{safe.name}</option>
-                  ))}
-                </select>
-
-                {/* Transaction Type Filter */}
-                <select
-                  value={transactionFilters.transactionType}
-                  onChange={(e) => setTransactionFilters(prev => ({ ...prev, transactionType: e.target.value as TransactionType }))}
-                  className="bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="all">جميع العمليات</option>
-                  <option value="sale">بيع</option>
-                  <option value="return">مرتجع</option>
-                  <option value="withdrawal">سحب</option>
-                  <option value="deposit">إيداع</option>
-                  <option value="adjustment">تسوية</option>
-                  <option value="transfer_in">تحويل وارد</option>
-                </select>
-
-                {/* Date Filter Button */}
-                <button
-                  onClick={() => setShowDateFilterModal(true)}
-                  className="px-4 py-2 bg-gray-700 text-gray-300 rounded-lg flex items-center gap-2 hover:bg-gray-600 border border-gray-600 transition-colors"
-                >
-                  <CalendarDaysIcon className="h-4 w-4" />
-                  {getDateFilterLabel(transactionFilters.dateFilter)}
-                </button>
-              </div>
-
-              {/* Search & Count */}
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-400">
-                  {filteredTransactions.length} سجل
-                </span>
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="البحث في السجلات..."
-                    value={transactionSearchTerm}
-                    onChange={(e) => setTransactionSearchTerm(e.target.value)}
-                    className="bg-gray-700 text-white placeholder-gray-400 pl-10 pr-4 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 w-80"
-                  />
-                  <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                </div>
-              </div>
-            </div>
-
+          <div className="p-6 pt-4">
             {/* Transactions Table */}
             <div className="bg-pos-darker rounded-lg overflow-hidden border border-gray-700">
               {isLoadingTransactions ? (
