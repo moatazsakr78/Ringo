@@ -6,6 +6,8 @@ import ResizableTable from './tables/ResizableTable'
 import { supabase } from '../lib/supabase/client'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
 import SimpleDateFilterModal, { DateFilter } from './SimpleDateFilterModal'
+import ContextMenu, { createEditContextMenuItems } from './ContextMenu'
+import EditInvoiceModal from './EditInvoiceModal'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
 import { useAuth } from '@/lib/useAuth'
 
@@ -91,6 +93,18 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
   // The safe balance is the actual cash drawer balance (paid amounts, not invoice totals)
   // This is fetched from the cash_drawers table
   const safeBalance = cashDrawerBalance
+
+  // Context Menu State for editing invoices
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean
+    x: number
+    y: number
+    statement: any
+  }>({ isOpen: false, x: 0, y: 0, statement: null })
+
+  // Edit Invoice Modal State
+  const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false)
+  const [statementToEdit, setStatementToEdit] = useState<any>(null)
 
   // Load date filter preferences from database
   const loadDateFilterPreferences = async () => {
@@ -516,6 +530,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
 
           statements.push({
             id: tx.id,
+            sale_id: tx.sale_id || null, // Important for editing invoices
             date: createdDate.toLocaleDateString('en-GB'),
             time: createdDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
             description: description,
@@ -1560,6 +1575,38 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       }
     }
   }, [selectedTransaction, allTransactions])
+
+  // ==================== Context Menu Functions ====================
+  const handleStatementContextMenu = (e: React.MouseEvent, statement: any) => {
+    e.preventDefault()
+    // فقط السماح بالتعديل لفواتير البيع
+    if (statement.type === 'فاتورة بيع' || statement.type === 'مرتجع بيع') {
+      setContextMenu({
+        isOpen: true,
+        x: e.clientX,
+        y: e.clientY,
+        statement: statement
+      })
+    }
+  }
+
+  const closeContextMenu = () => {
+    setContextMenu({ isOpen: false, x: 0, y: 0, statement: null })
+  }
+
+  const handleEditStatement = () => {
+    if (contextMenu.statement) {
+      setStatementToEdit(contextMenu.statement)
+      setIsEditInvoiceModalOpen(true)
+    }
+    closeContextMenu()
+  }
+
+  const handleInvoiceUpdated = () => {
+    // إعادة تحميل البيانات بعد التعديل
+    fetchAccountStatement()
+    fetchCashDrawerBalance()
+  }
 
   // Handle delete transaction
   const handleDeleteTransaction = (transaction: any) => {
@@ -3013,6 +3060,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
                               columns={statementColumns}
                               data={accountStatementData}
                               onRowDoubleClick={handleStatementRowDoubleClick}
+                              onRowContextMenu={handleStatementContextMenu}
                             />
                           )}
                         </div>
@@ -3323,6 +3371,27 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           </div>
         </div>
       )}
+
+      {/* Context Menu for Statement */}
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        isOpen={contextMenu.isOpen}
+        onClose={closeContextMenu}
+        items={createEditContextMenuItems(handleEditStatement)}
+      />
+
+      {/* Edit Invoice Modal */}
+      <EditInvoiceModal
+        isOpen={isEditInvoiceModalOpen}
+        onClose={() => {
+          setIsEditInvoiceModalOpen(false)
+          setStatementToEdit(null)
+        }}
+        onInvoiceUpdated={handleInvoiceUpdated}
+        saleId={statementToEdit?.sale_id || null}
+        initialRecordId={safe?.id}  // الخزنة الحالية هي الخزنة المعروضة
+      />
     </>
   )
 }

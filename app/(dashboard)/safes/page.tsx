@@ -20,6 +20,8 @@ import EditSafeModal from '../../components/EditSafeModal'
 import AddPaymentMethodModal from '../../components/AddPaymentMethodModal'
 import EditPaymentMethodModal from '../../components/EditPaymentMethodModal'
 import SimpleDateFilterModal, { DateFilter } from '../../components/SimpleDateFilterModal'
+import ContextMenu, { createEditContextMenuItems } from '../../components/ContextMenu'
+import EditInvoiceModal from '../../components/EditInvoiceModal'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
 
 // Types
@@ -101,6 +103,18 @@ export default function SafesPage() {
 
   // Track if transactions have been loaded
   const [hasLoadedTransactions, setHasLoadedTransactions] = useState(false)
+
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean
+    x: number
+    y: number
+    transaction: CashDrawerTransaction | null
+  }>({ isOpen: false, x: 0, y: 0, transaction: null })
+
+  // Edit Invoice Modal State
+  const [isEditInvoiceModalOpen, setIsEditInvoiceModalOpen] = useState(false)
+  const [transactionToEdit, setTransactionToEdit] = useState<CashDrawerTransaction | null>(null)
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
@@ -276,7 +290,13 @@ export default function SafesPage() {
         .order('created_at', { ascending: false })
 
       // Apply safe filter
-      if (currentFilters.safeId !== 'all') {
+      // Note: 'no_safe' maps to sales without a safe (record_id is null)
+      // Also support old NO_SAFE_RECORD_ID for backward compatibility
+      const NO_SAFE_RECORD_ID = '00000000-0000-0000-0000-000000000000'
+      if (currentFilters.safeId === 'no_safe') {
+        // Support both null (new) and NO_SAFE_RECORD_ID (old data) for backward compatibility
+        query = query.or(`record_id.is.null,record_id.eq.${NO_SAFE_RECORD_ID}`)
+      } else if (currentFilters.safeId !== 'all') {
         query = query.eq('record_id', currentFilters.safeId)
       }
 
@@ -300,6 +320,13 @@ export default function SafesPage() {
 
       // Map safe names to transactions
       const transactionsWithNames = data?.map(tx => {
+        // Check if this is a "لا يوجد" record (null or old NO_SAFE_RECORD_ID)
+        if (tx.record_id === null || tx.record_id === NO_SAFE_RECORD_ID) {
+          return {
+            ...tx,
+            safe_name: 'لا يوجد'
+          }
+        }
         const safe = currentSafes.find(s => s.id === tx.record_id)
         return {
           ...tx,
@@ -414,6 +441,35 @@ export default function SafesPage() {
 
   const handlePaymentMethodUpdated = () => {
     fetchPaymentMethods()
+  }
+
+  // ==================== Context Menu Functions ====================
+  const handleContextMenu = (e: React.MouseEvent, tx: CashDrawerTransaction) => {
+    e.preventDefault()
+    setContextMenu({
+      isOpen: true,
+      x: e.clientX,
+      y: e.clientY,
+      transaction: tx
+    })
+  }
+
+  const closeContextMenu = () => {
+    setContextMenu({ isOpen: false, x: 0, y: 0, transaction: null })
+  }
+
+  const handleEditTransaction = () => {
+    if (contextMenu.transaction) {
+      setTransactionToEdit(contextMenu.transaction)
+      setIsEditInvoiceModalOpen(true)
+    }
+    closeContextMenu()
+  }
+
+  const handleInvoiceUpdated = () => {
+    // إعادة تحميل السجلات بعد التعديل
+    fetchTransactions(transactionFilters, safes)
+    fetchSafes() // لتحديث الأرصدة
   }
 
   // ==================== Date/Time Formatting ====================
@@ -577,6 +633,7 @@ export default function SafesPage() {
                   className="bg-gray-700 text-white px-3 py-2 rounded-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="all">جميع الخزن</option>
+                  <option value="no_safe">لا يوجد</option>
                   {safes.map(safe => (
                     <option key={safe.id} value={safe.id}>{safe.name}</option>
                   ))}
@@ -807,7 +864,11 @@ export default function SafesPage() {
                   <tbody className="bg-pos-darker divide-y divide-gray-700">
                     {filteredTransactions.length > 0 ? (
                       filteredTransactions.map((tx, index) => (
-                        <tr key={tx.id} className="hover:bg-gray-700 transition-colors">
+                        <tr
+                          key={tx.id}
+                          className="hover:bg-gray-700 transition-colors cursor-pointer"
+                          onContextMenu={(e) => handleContextMenu(e, tx)}
+                        >
                           <td className="p-3 text-white font-medium">{index + 1}</td>
                           <td className="p-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
                           <td className="p-3 text-white">{tx.safe_name}</td>
@@ -1050,6 +1111,27 @@ export default function SafesPage() {
         onClose={() => setShowDateFilterModal(false)}
         onDateFilterChange={(filter) => setTransactionFilters(prev => ({ ...prev, dateFilter: filter }))}
         currentFilter={transactionFilters.dateFilter}
+      />
+
+      {/* Context Menu for Records */}
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        isOpen={contextMenu.isOpen}
+        onClose={closeContextMenu}
+        items={createEditContextMenuItems(handleEditTransaction)}
+      />
+
+      {/* Edit Invoice Modal */}
+      <EditInvoiceModal
+        isOpen={isEditInvoiceModalOpen}
+        onClose={() => {
+          setIsEditInvoiceModalOpen(false)
+          setTransactionToEdit(null)
+        }}
+        onInvoiceUpdated={handleInvoiceUpdated}
+        saleId={transactionToEdit?.sale_id || null}
+        initialRecordId={transactionToEdit?.record_id}
       />
     </div>
   )

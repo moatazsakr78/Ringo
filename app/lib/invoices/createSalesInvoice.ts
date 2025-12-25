@@ -50,8 +50,14 @@ export async function createSalesInvoice({
     throw new Error('يجب تحديد الفرع قبل إنشاء الفاتورة')
   }
 
-  // Check if "no safe" option was selected (record.id is null)
+  // "No safe" record ID - a special record for transactions without a specific safe
+  const NO_SAFE_RECORD_ID = '00000000-0000-0000-0000-000000000000'
+
+  // Check if "no safe" option was selected (record.id is null or empty)
   const hasNoSafe = !selections.record || !selections.record.id;
+
+  // Get the effective record ID - use NO_SAFE_RECORD_ID if no safe selected
+  const effectiveRecordId = hasNoSafe ? NO_SAFE_RECORD_ID : selections.record.id;
 
   if (!cartItems || cartItems.length === 0) {
     throw new Error('لا يمكن إنشاء فاتورة بدون منتجات')
@@ -133,7 +139,7 @@ export async function createSalesInvoice({
         branch_id: selections.branch.id,
         customer_id: customerId,
         record_id: hasNoSafe ? null : selections.record.id,
-        notes: hasNoSafe ? `${notes || ''} [بدون خزنة]`.trim() : (notes || null),
+        notes: notes || null,
         time: timeString,
         invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice') as any
       })
@@ -302,7 +308,7 @@ export async function createSalesInvoice({
               notes: `دفعة من فاتورة رقم ${invoiceNumber}`,
               payment_date: new Date().toISOString().split('T')[0],
               created_by: userId || null,
-              safe_id: selections.record?.id || null
+              safe_id: hasNoSafe ? null : selections.record.id
             })
 
           if (paymentError) {
@@ -320,11 +326,6 @@ export async function createSalesInvoice({
     // No need to update account_balance in customers table
     // The balance is computed in real-time from sales and customer_payments tables
 
-    // Update cash drawer balance
-    // Skip if "no safe" option was selected - money goes to pocket instead of drawer
-    if (hasNoSafe) {
-      console.log('⏭️ Skipping cash drawer update - "لا يوجد" (no safe) option selected')
-    } else {
     // Calculate cash amount from payments (cash payments go to drawer)
     let cashToDrawer = 0
 
@@ -357,11 +358,18 @@ export async function createSalesInvoice({
       cashToDrawer = totalAmount - (creditAmount || 0)
     }
 
-    // Update drawer if there's cash to add/remove
-    if (cashToDrawer !== 0) {
-      try {
+    // Always create a transaction record in cash_drawer_transactions
+    // This allows all sales (including "لا يوجد") to appear in the records
+    // But only update cash drawer balance when there IS a safe selected
+    try {
+      const transactionAmount = cashToDrawer !== 0 ? cashToDrawer : totalAmount
+      let drawer: any = null
+      let newBalance: number | null = null
+
+      // Only get/create drawer and update balance if there's a safe selected
+      if (!hasNoSafe) {
         // Get or create drawer for this record
-        let { data: drawer, error: drawerError } = await supabase
+        const { data: existingDrawer, error: drawerError } = await supabase
           .from('cash_drawers')
           .select('*')
           .eq('record_id', selections.record.id)
@@ -378,11 +386,13 @@ export async function createSalesInvoice({
           if (!createError) {
             drawer = newDrawer
           }
+        } else {
+          drawer = existingDrawer
         }
 
         if (drawer) {
           // Calculate new balance (for returns, cashToDrawer is negative)
-          const newBalance = (drawer.current_balance || 0) + cashToDrawer
+          newBalance = (drawer.current_balance || 0) + transactionAmount
 
           // Update drawer balance
           await supabase
@@ -393,30 +403,40 @@ export async function createSalesInvoice({
             })
             .eq('id', drawer.id)
 
-          // Create transaction record
-          await supabase
-            .from('cash_drawer_transactions')
-            .insert({
-              drawer_id: drawer.id,
-              record_id: selections.record.id,
-              transaction_type: isReturn ? 'return' : 'sale',
-              amount: cashToDrawer,
-              balance_after: newBalance,
-              sale_id: salesData.id,
-              notes: isReturn
-                ? `مرتجع - فاتورة رقم ${invoiceNumber}`
-                : `بيع - فاتورة رقم ${invoiceNumber}`,
-              performed_by: userName || 'system'
-            })
-
-          console.log(`✅ Cash drawer updated: ${cashToDrawer >= 0 ? '+' : ''}${cashToDrawer}, new balance: ${newBalance}`)
+          console.log(`✅ Cash drawer updated: ${transactionAmount >= 0 ? '+' : ''}${transactionAmount}, new balance: ${newBalance}`)
         }
-      } catch (drawerError) {
-        console.warn('Failed to update cash drawer:', drawerError)
-        // Don't throw error here as the sale was created successfully
       }
+
+      // Always create transaction record (even for "لا يوجد" sales)
+      // This ensures all sales appear in the general records
+      const transactionData: any = {
+        transaction_type: isReturn ? 'return' : 'sale',
+        amount: transactionAmount,
+        sale_id: salesData.id,
+        notes: isReturn
+          ? `مرتجع - فاتورة رقم ${invoiceNumber}`
+          : `بيع - فاتورة رقم ${invoiceNumber}`,
+        performed_by: userName || 'system'
+      }
+
+      // Only add drawer_id, record_id, and balance_after if there's a safe
+      if (!hasNoSafe && drawer) {
+        transactionData.drawer_id = drawer.id
+        transactionData.record_id = selections.record.id
+        transactionData.balance_after = newBalance
+      }
+
+      await supabase
+        .from('cash_drawer_transactions')
+        .insert(transactionData)
+
+      if (hasNoSafe) {
+        console.log('✅ Sale created without safe - transaction recorded but no drawer balance affected')
+      }
+    } catch (drawerError) {
+      console.warn('Failed to create cash drawer transaction:', drawerError)
+      // Don't throw error here as the sale was created successfully
     }
-    } // End of else block for hasNoSafe check
 
     return {
       success: true,
