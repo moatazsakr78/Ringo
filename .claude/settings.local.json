@@ -60,7 +60,6 @@
       "Bash(del example-usage.js)",
       "Bash(npx playwright:*)",
       "Bash(mv:*)",
-      "Bash(move \"C:\\Users\\pc\\Desktop\\pos-sys7\\app\\(website)\\orders\\page.tsx\" \"C:\\Users\\pc\\Desktop\\pos-sys7\\app\\(website)\\my-orders\\page.tsx\")",
       "mcp__supabase__get_logs",
       "Bash(sed:*)",
       "Read(/c:\\Users\\pc\\Desktop\\claude code\\project-images\\sub-images/**)",
@@ -331,7 +330,8 @@
       "WebFetch(domain:vercel.com)",
       "Bash(npx tsc --noEmit)",
       "Bash(echo:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(start http://localhost:3000/safes)"
     ],
     "deny": [],
     "additionalDirectories": [
