@@ -764,6 +764,7 @@ export default function DesktopHome({
             <CategoryCarousel
               categories={categories}
               onCategorySelect={setSelectedCategory}
+              selectedCategory={selectedCategory}
               itemsPerView={4}
             />
           </section>

@@ -14,28 +14,30 @@ interface Category {
 interface CategoryCarouselProps {
   categories: Category[];
   onCategorySelect?: (categoryName: string) => void;
+  selectedCategory?: string;
   className?: string;
   itemsPerView?: number;
 }
 
-export default function CategoryCarousel({ 
-  categories, 
+export default function CategoryCarousel({
+  categories,
   onCategorySelect,
+  selectedCategory = 'الكل',
   className = "",
   itemsPerView = 4
 }: CategoryCarouselProps) {
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
-  
+
   const canGoPrevious = currentIndex > 0;
   const canGoNext = currentIndex < categories.length - itemsPerView;
-  
+
   const goToPrevious = () => {
     if (canGoPrevious) {
       setCurrentIndex(Math.max(0, currentIndex - 1));
     }
   };
-  
+
   const goToNext = () => {
     if (canGoNext) {
       setCurrentIndex(Math.min(categories.length - itemsPerView, currentIndex + 1));
@@ -47,7 +49,12 @@ export default function CategoryCarousel({
 
   const handleCategoryClick = (category: Category) => {
     if (onCategorySelect) {
-      onCategorySelect(category.name);
+      // Toggle: if same category clicked again, reset to 'الكل'
+      if (selectedCategory === category.name) {
+        onCategorySelect('الكل');
+      } else {
+        onCategorySelect(category.name);
+      }
     } else {
       router.push(`/category/${category.id}`);
     }
@@ -80,10 +87,16 @@ export default function CategoryCarousel({
       {/* Categories Grid */}
       <div className="mx-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {visibleCategories.map((category, index) => (
+          {visibleCategories.map((category, index) => {
+            const isSelected = selectedCategory === category.name;
+            return (
             <div
               key={category.id}
-              className="bg-white rounded-lg hover:bg-gray-50 transition-all duration-300 border border-gray-300 shadow-md cursor-pointer group transform hover:scale-105 hover:shadow-xl overflow-hidden"
+              className={`bg-white rounded-lg hover:bg-gray-50 transition-all duration-300 shadow-md cursor-pointer group transform hover:scale-105 hover:shadow-xl overflow-hidden ${
+                isSelected
+                  ? 'ring-3 ring-[var(--primary-color)] border-2 border-[var(--primary-color)]'
+                  : 'border border-gray-300'
+              }`}
               onClick={() => handleCategoryClick(category)}
               style={{
                 animationName: 'fadeInUp',
@@ -111,7 +124,8 @@ export default function CategoryCarousel({
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
 
