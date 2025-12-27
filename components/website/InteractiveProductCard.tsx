@@ -173,6 +173,31 @@ export default function InteractiveProductCard({
     return product.image || '/placeholder-product.svg';
   };
 
+  // Handle mouse hover for desktop - change image based on mouse position
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (deviceType !== 'desktop') return;
+    if (allImages.length <= 1) return;
+
+    // If shape or color with image is selected, don't change images on hover
+    if (selectedShape?.image_url || selectedColor?.image_url) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const segmentWidth = rect.width / allImages.length;
+    const newIndex = Math.min(Math.floor(x / segmentWidth), allImages.length - 1);
+
+    if (newIndex !== currentImageIndex) {
+      setCurrentImageIndex(newIndex);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (deviceType !== 'desktop') return;
+    // If shape or color with image is selected, don't reset
+    if (selectedShape?.image_url || selectedColor?.image_url) return;
+    setCurrentImageIndex(0); // Reset to first image
+  };
+
   // Handle touch/swipe events for tablets
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
@@ -319,6 +344,8 @@ export default function InteractiveProductCard({
             e.stopPropagation();
           }
         }}
+        onMouseMove={deviceType === 'desktop' ? handleMouseMove : undefined}
+        onMouseLeave={deviceType === 'desktop' ? handleMouseLeave : undefined}
         onTouchStart={deviceType === 'tablet' ? handleTouchStart : undefined}
         onTouchMove={deviceType === 'tablet' ? handleTouchMove : undefined}
         onTouchEnd={deviceType === 'tablet' ? handleTouchEnd : undefined}

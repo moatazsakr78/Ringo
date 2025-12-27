@@ -38,6 +38,8 @@ export async function getWebsiteProducts() {
         description,
         price,
         main_image_url,
+        sub_image_url,
+        additional_images_urls,
         category_id,
         is_active,
         is_hidden,
@@ -113,6 +115,23 @@ export async function getWebsiteProducts() {
           product.stock = stockMap.get(product.id) || 0;
         });
       }
+
+      // Transform images into images array for hover gallery feature
+      products.forEach((product: any) => {
+        const images: string[] = [];
+
+        // Add sub_image if exists
+        if (product.sub_image_url) {
+          images.push(product.sub_image_url);
+        }
+
+        // Add additional images if exists
+        if (product.additional_images_urls && Array.isArray(product.additional_images_urls)) {
+          images.push(...product.additional_images_urls);
+        }
+
+        product.allImages = images;
+      });
     }
 
     return products || [];
