@@ -910,8 +910,12 @@ export default function MobileHome({
               {categories.slice(0, 8).map((category) => (
                 <div
                   key={category.id}
-                  className="bg-white rounded-lg text-center hover:shadow-lg transition-all duration-200 border border-gray-200 group flex-shrink-0 w-40 overflow-hidden"
-                  onClick={() => setSelectedCategory(category.name)}
+                  className={`bg-white rounded-lg text-center hover:shadow-lg transition-all duration-200 group flex-shrink-0 w-40 overflow-hidden cursor-pointer ${
+                    selectedCategory === category.name
+                      ? 'border-2 border-[var(--interactive-color)] shadow-lg'
+                      : 'border border-gray-200'
+                  }`}
+                  onClick={() => setSelectedCategory(selectedCategory === category.name ? 'الكل' : category.name)}
                   style={{ height: '160px' }} // زيادة الارتفاع للهاتف
                 >
                   <div className="h-full flex flex-col">
