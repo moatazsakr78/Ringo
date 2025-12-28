@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Sidebar from '../../components/layout/Sidebar'
 import TopHeader from '../../components/layout/TopHeader'
+import VoiceMessage from '../../components/VoiceMessage'
+import VoiceRecorder from '../../components/VoiceRecorder'
 import {
   ChatBubbleLeftRightIcon,
   PaperAirplaneIcon,
@@ -67,6 +69,7 @@ export default function WhatsAppPage() {
   const [error, setError] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Attachment state
@@ -194,6 +197,56 @@ export default function WhatsAppPage() {
     setShowAttachmentMenu(false)
   }
 
+  // Send voice note
+  const sendVoiceNote = async (audioBlob: Blob, duration: number) => {
+    if (!selectedConversation) return
+
+    setIsSending(true)
+    try {
+      // 1. Upload audio to Supabase Storage
+      const formData = new FormData()
+      formData.append('audio', audioBlob, `voice_${Date.now()}.webm`)
+
+      const uploadResponse = await fetch('/api/whatsapp/upload-audio', {
+        method: 'POST',
+        body: formData
+      })
+
+      const uploadResult = await uploadResponse.json()
+
+      if (!uploadResult.success || !uploadResult.url) {
+        throw new Error(uploadResult.error || 'فشل في رفع الملف الصوتي')
+      }
+
+      // 2. Send audio message via WhatsApp
+      const sendResponse = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedConversation,
+          messageType: 'audio',
+          mediaUrl: uploadResult.url
+        })
+      })
+
+      const sendResult = await sendResponse.json()
+
+      if (sendResult.success) {
+        // Refresh messages
+        await fetchMessages()
+      } else {
+        setError(sendResult.error || 'فشل في إرسال الرسالة الصوتية')
+      }
+
+    } catch (err) {
+      console.error('Error sending voice note:', err)
+      setError('فشل في إرسال الرسالة الصوتية')
+    } finally {
+      setIsSending(false)
+      setIsRecordingVoice(false)
+    }
+  }
+
   // Send message
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -286,8 +339,14 @@ export default function WhatsAppPage() {
     return date.toLocaleDateString('ar-EG')
   }
 
+  // Get profile picture for a contact
+  const getContactProfilePicture = (phoneNumber: string) => {
+    const contact = conversations.find(c => c.phoneNumber === phoneNumber)
+    return contact?.profilePictureUrl || null
+  }
+
   // Render message content based on type
-  const renderMessageContent = (msg: Message) => {
+  const renderMessageContent = (msg: Message, isVoiceNote?: boolean) => {
     const mediaType = msg.media_type || 'text'
 
     switch (mediaType) {
@@ -326,9 +385,14 @@ export default function WhatsAppPage() {
 
       case 'audio':
         return (
-          <div>
+          <div className="-mx-4 -my-2">
             {msg.media_url && (
-              <audio src={msg.media_url} controls className="w-full" />
+              <VoiceMessage
+                audioUrl={msg.media_url}
+                isOutgoing={msg.message_type === 'outgoing'}
+                profilePicture={msg.message_type === 'incoming' ? getContactProfilePicture(msg.from_number) : null}
+                senderName={msg.customer_name}
+              />
             )}
           </div>
         )
@@ -741,29 +805,56 @@ export default function WhatsAppPage() {
                       )}
                     </div>
 
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder={attachmentType ? "تعليق إضافي (اختياري)..." : "اكتب رسالتك هنا..."}
-                      className="flex-1 px-4 py-2 bg-[#2B3544] border border-gray-600 rounded-full text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      disabled={isSending}
-                    />
-                    <button
-                      type="submit"
-                      disabled={(!newMessage.trim() && !attachmentType) || isSending}
-                      className={`p-3 rounded-full transition-colors ${
-                        (newMessage.trim() || attachmentType) && !isSending
-                          ? 'bg-green-600 hover:bg-green-700 text-white'
-                          : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {isSending ? (
-                        <ClockIcon className="h-5 w-5 animate-pulse" />
-                      ) : (
-                        <PaperAirplaneIcon className="h-5 w-5 rotate-180" />
-                      )}
-                    </button>
+                    {/* Voice Recorder or Text Input */}
+                    {isRecordingVoice ? (
+                      <VoiceRecorder
+                        onSend={sendVoiceNote}
+                        onCancel={() => setIsRecordingVoice(false)}
+                        isRecording={isRecordingVoice}
+                        setIsRecording={setIsRecordingVoice}
+                      />
+                    ) : (
+                      <>
+                        <input
+                          type="text"
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          placeholder={attachmentType ? "تعليق إضافي (اختياري)..." : "اكتب رسالتك هنا..."}
+                          className="flex-1 px-4 py-2 bg-[#2B3544] border border-gray-600 rounded-full text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          disabled={isSending}
+                        />
+
+                        {/* Show send button if there's text or attachment, otherwise show mic button */}
+                        {(newMessage.trim() || attachmentType) ? (
+                          <button
+                            type="submit"
+                            disabled={isSending}
+                            className={`p-3 rounded-full transition-colors ${
+                              !isSending
+                                ? 'bg-green-600 hover:bg-green-700 text-white'
+                                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            }`}
+                          >
+                            {isSending ? (
+                              <ClockIcon className="h-5 w-5 animate-pulse" />
+                            ) : (
+                              <PaperAirplaneIcon className="h-5 w-5 rotate-180" />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setIsRecordingVoice(true)}
+                            className="p-3 rounded-full bg-green-600 hover:bg-green-700 text-white transition-colors"
+                            title="تسجيل رسالة صوتية"
+                          >
+                            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 1.93c-3.94-.49-7-3.85-7-7.93V7h2v1c0 2.76 2.24 5 5 5s5-2.24 5-5V7h2v1c0 4.08-3.06 7.44-7 7.93V18h3v2H9v-2h3v-2.07z"/>
+                            </svg>
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </form>
               </>
