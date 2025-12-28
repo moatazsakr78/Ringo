@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sendWhatsAppMessage } from '@/app/lib/whatsapp';
+import {
+  sendWhatsAppMessage,
+  sendImageMessage,
+  sendVideoMessage,
+  sendDocumentMessage,
+  sendAudioMessage,
+  sendLocationMessage,
+  sendContactMessage,
+  sendPollMessage,
+  cleanPhoneNumber,
+} from '@/app/lib/whatsapp';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -7,35 +17,175 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+type MessageType = 'text' | 'image' | 'video' | 'document' | 'audio' | 'location' | 'contact' | 'poll';
+
+interface SendMessageRequest {
+  to: string;
+  message?: string;
+  messageType?: MessageType;
+  // For media messages
+  mediaUrl?: string;
+  caption?: string;
+  filename?: string;
+  // For location
+  latitude?: number;
+  longitude?: number;
+  locationName?: string;
+  address?: string;
+  // For contact
+  contactName?: string;
+  contactPhone?: string;
+  // For poll
+  pollQuestion?: string;
+  pollOptions?: string[];
+  selectableOptionsCount?: number;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { to, message } = await request.json();
+    const body: SendMessageRequest = await request.json();
+    const {
+      to,
+      message,
+      messageType = 'text',
+      mediaUrl,
+      caption,
+      filename,
+      latitude,
+      longitude,
+      locationName,
+      address,
+      contactName,
+      contactPhone,
+      pollQuestion,
+      pollOptions,
+      selectableOptionsCount,
+    } = body;
 
-    if (!to || !message) {
+    // Validate required fields
+    if (!to) {
       return NextResponse.json(
-        { error: 'Missing required fields: to, message' },
+        { error: 'رقم الهاتف مطلوب' },
         { status: 400 }
       );
     }
 
-    // Clean phone number (remove spaces, dashes, etc.)
-    const cleanNumber = to.replace(/[\s\-\(\)]/g, '');
+    const cleanNumber = cleanPhoneNumber(to);
+    let result;
+    let messageText = '';
+    let mediaType = messageType;
 
-    const result = await sendWhatsAppMessage(cleanNumber, message);
+    switch (messageType) {
+      case 'text':
+        if (!message) {
+          return NextResponse.json(
+            { error: 'نص الرسالة مطلوب' },
+            { status: 400 }
+          );
+        }
+        result = await sendWhatsAppMessage(cleanNumber, message);
+        messageText = message;
+        break;
+
+      case 'image':
+        if (!mediaUrl) {
+          return NextResponse.json(
+            { error: 'رابط الصورة مطلوب' },
+            { status: 400 }
+          );
+        }
+        result = await sendImageMessage(cleanNumber, mediaUrl, caption);
+        messageText = caption || '[صورة]';
+        break;
+
+      case 'video':
+        if (!mediaUrl) {
+          return NextResponse.json(
+            { error: 'رابط الفيديو مطلوب' },
+            { status: 400 }
+          );
+        }
+        result = await sendVideoMessage(cleanNumber, mediaUrl, caption);
+        messageText = caption || '[فيديو]';
+        break;
+
+      case 'document':
+        if (!mediaUrl) {
+          return NextResponse.json(
+            { error: 'رابط المستند مطلوب' },
+            { status: 400 }
+          );
+        }
+        result = await sendDocumentMessage(cleanNumber, mediaUrl, filename, caption);
+        messageText = filename || caption || '[مستند]';
+        break;
+
+      case 'audio':
+        if (!mediaUrl) {
+          return NextResponse.json(
+            { error: 'رابط الملف الصوتي مطلوب' },
+            { status: 400 }
+          );
+        }
+        result = await sendAudioMessage(cleanNumber, mediaUrl);
+        messageText = '[رسالة صوتية]';
+        break;
+
+      case 'location':
+        if (latitude === undefined || longitude === undefined) {
+          return NextResponse.json(
+            { error: 'إحداثيات الموقع مطلوبة' },
+            { status: 400 }
+          );
+        }
+        result = await sendLocationMessage(cleanNumber, latitude, longitude, locationName, address);
+        messageText = locationName || address || '[موقع]';
+        break;
+
+      case 'contact':
+        if (!contactName || !contactPhone) {
+          return NextResponse.json(
+            { error: 'اسم ورقم جهة الاتصال مطلوبان' },
+            { status: 400 }
+          );
+        }
+        result = await sendContactMessage(cleanNumber, contactName, contactPhone);
+        messageText = `[جهة اتصال: ${contactName}]`;
+        break;
+
+      case 'poll':
+        if (!pollQuestion || !pollOptions || pollOptions.length < 2) {
+          return NextResponse.json(
+            { error: 'سؤال الاستطلاع وخياران على الأقل مطلوبان' },
+            { status: 400 }
+          );
+        }
+        result = await sendPollMessage(cleanNumber, pollQuestion, pollOptions, selectableOptionsCount);
+        messageText = `[استطلاع: ${pollQuestion}]`;
+        break;
+
+      default:
+        return NextResponse.json(
+          { error: 'نوع الرسالة غير مدعوم' },
+          { status: 400 }
+        );
+    }
 
     if (result.success) {
-      // Try to store in database
+      // Store message in database
       try {
-        await supabase.from('whatsapp_messages').insert({
+        await supabase.schema('elfaroukgroup').from('whatsapp_messages').insert({
           message_id: result.messageId,
           from_number: cleanNumber,
           customer_name: 'الفاروق جروب',
-          message_text: message,
+          message_text: messageText,
           message_type: 'outgoing',
+          media_type: mediaType,
+          media_url: mediaUrl || null,
           created_at: new Date().toISOString(),
         });
       } catch (dbError) {
-        console.log('Note: Could not save to database');
+        console.log('Note: Could not save to database:', dbError);
       }
 
       return NextResponse.json({
@@ -51,7 +201,23 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Send message error:', error);
     return NextResponse.json(
-      { error: 'Failed to send message' },
+      { error: 'فشل في إرسال الرسالة' },
+      { status: 500 }
+    );
+  }
+}
+
+// GET endpoint to check WhatsApp session status
+export async function GET() {
+  try {
+    const { getSessionStatus } = await import('@/app/lib/whatsapp');
+    const status = await getSessionStatus();
+
+    return NextResponse.json(status);
+  } catch (error) {
+    console.error('Error getting session status:', error);
+    return NextResponse.json(
+      { connected: false, status: 'error', error: 'Failed to get status' },
       { status: 500 }
     );
   }

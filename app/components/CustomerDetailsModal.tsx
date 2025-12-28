@@ -3128,22 +3128,6 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
             {/* Main Content Area - Left side containing both tables */}
             <div className="flex-1 flex flex-col min-w-0 relative">
-              
-              {/* Search Bar */}
-              <div className={`bg-[#374151] border-b border-gray-600 ${isTabletDevice ? 'p-3' : 'p-4'}`}>
-                <div className="relative">
-                  <MagnifyingGlassIcon className={`absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 ${
-                    isTabletDevice ? 'h-3.5 w-3.5' : 'h-4 w-4'
-                  }`} />
-                  <input
-                    type="text"
-                    placeholder={isTabletDevice ? "بحث..." : "ابحث عن فاتورة (رقم الفاتورة، اسم العميل، أو الهاتف)..."}
-                    className={`w-full pr-10 bg-[#2B3544] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      isTabletDevice ? 'pl-3 py-1.5 text-xs' : 'pl-4 py-2 text-sm'
-                    }`}
-                  />
-                </div>
-              </div>
 
               {/* Conditional Content Based on Active Tab and View Mode */}
               <div className="flex-1 overflow-y-auto scrollbar-hide relative">

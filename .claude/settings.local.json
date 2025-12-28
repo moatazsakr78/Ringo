@@ -331,7 +331,8 @@
       "Bash(npx tsc --noEmit)",
       "Bash(echo:*)",
       "mcp__ide__getDiagnostics",
-      "Bash(start http://localhost:3000/safes)"
+      "Bash(start http://localhost:3000/safes)",
+      "WebFetch(domain:wasenderapi.com)"
     ],
     "deny": [],
     "additionalDirectories": [

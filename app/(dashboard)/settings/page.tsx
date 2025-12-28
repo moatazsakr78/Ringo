@@ -9,7 +9,12 @@ import {
   ShieldCheckIcon,
   BuildingOfficeIcon,
   PhotoIcon,
-  BuildingStorefrontIcon
+  BuildingStorefrontIcon,
+  KeyIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import TopHeader from '@/app/components/layout/TopHeader';
 import Sidebar from '@/app/components/layout/Sidebar';
@@ -301,6 +306,15 @@ export default function SettingsPage() {
   const [isLogoEditorOpen, setIsLogoEditorOpen] = useState(false);
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
 
+  // Security Settings State
+  const [wasenderTokenConfigured, setWasenderTokenConfigured] = useState(false);
+  const [wasenderTokenLastUpdated, setWasenderTokenLastUpdated] = useState<string | null>(null);
+  const [isLoadingSecuritySettings, setIsLoadingSecuritySettings] = useState(true);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+  const [newToken, setNewToken] = useState('');
+  const [showTokenValue, setShowTokenValue] = useState(false);
+  const [isSavingToken, setIsSavingToken] = useState(false);
+
   // Store Display Settings using hook
   const {
     showQuantityInStore,
@@ -347,6 +361,24 @@ export default function SettingsPage() {
     };
 
     loadBranches();
+  }, []);
+
+  // Load security settings (API key status)
+  useEffect(() => {
+    const loadSecuritySettings = async () => {
+      try {
+        const response = await fetch('/api/settings/api-keys?key=wasender_api_token');
+        const data = await response.json();
+        setWasenderTokenConfigured(data.isConfigured || false);
+        setWasenderTokenLastUpdated(data.updatedAt || null);
+      } catch (error) {
+        console.error('Error loading security settings:', error);
+      } finally {
+        setIsLoadingSecuritySettings(false);
+      }
+    };
+
+    loadSecuritySettings();
   }, []);
 
   // Load product display mode and branches from database
@@ -1500,6 +1532,233 @@ export default function SettingsPage() {
     );
   };
 
+  const handleSaveToken = async () => {
+    if (!newToken.trim()) {
+      alert('الرجاء إدخال الـ Token');
+      return;
+    }
+
+    setIsSavingToken(true);
+    try {
+      const response = await fetch('/api/settings/api-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'wasender_api_token',
+          value: newToken.trim()
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setWasenderTokenConfigured(true);
+        setWasenderTokenLastUpdated(new Date().toISOString());
+        setShowTokenInput(false);
+        setNewToken('');
+        alert('تم حفظ الـ Token بنجاح!');
+      } else {
+        throw new Error(data.error || 'Failed to save token');
+      }
+    } catch (error) {
+      console.error('Error saving token:', error);
+      alert('حدث خطأ أثناء حفظ الـ Token');
+    } finally {
+      setIsSavingToken(false);
+    }
+  };
+
+  const handleDeleteToken = async () => {
+    const confirmDelete = window.confirm('هل أنت متأكد من حذف الـ Token؟ سيتوقف إرسال رسائل الواتساب.');
+    if (!confirmDelete) return;
+
+    try {
+      const response = await fetch('/api/settings/api-keys?key=wasender_api_token', {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setWasenderTokenConfigured(false);
+        setWasenderTokenLastUpdated(null);
+        alert('تم حذف الـ Token بنجاح');
+      } else {
+        throw new Error(data.error || 'Failed to delete token');
+      }
+    } catch (error) {
+      console.error('Error deleting token:', error);
+      alert('حدث خطأ أثناء حذف الـ Token');
+    }
+  };
+
+  const renderSecuritySettings = () => {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <h3 className="text-white font-medium text-lg mb-6">إعدادات الأمان</h3>
+
+        {/* WasenderAPI Token Section */}
+        <div className="p-6 bg-[#374151] rounded-lg border border-gray-600">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-[#2B3544] rounded-lg">
+              <KeyIcon className="h-8 w-8 text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-white font-medium text-lg">WasenderAPI Token</h4>
+              <p className="text-gray-400 text-sm mt-1">
+                مفتاح API للاتصال بخدمة WasenderAPI لإرسال رسائل الواتساب
+              </p>
+
+              {isLoadingSecuritySettings ? (
+                <div className="mt-4 flex items-center gap-2 text-gray-400">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                  جاري التحميل...
+                </div>
+              ) : wasenderTokenConfigured && !showTokenInput ? (
+                // Token is configured - show status
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-center gap-3 p-3 bg-green-900/20 border border-green-800 rounded-lg">
+                    <CheckCircleIcon className="h-6 w-6 text-green-400 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-green-300 font-medium">Token مُعد بنجاح</p>
+                      {wasenderTokenLastUpdated && (
+                        <p className="text-gray-400 text-xs mt-1">
+                          آخر تحديث: {new Date(wasenderTokenLastUpdated).toLocaleDateString('ar-EG', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-amber-900/20 border border-amber-800 rounded-lg">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-amber-400 flex-shrink-0" />
+                    <p className="text-amber-300 text-sm">
+                      الـ Token مشفر ومحفوظ بأمان. لا يمكن عرضه مرة أخرى لأسباب أمنية.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowTokenInput(true)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <KeyIcon className="h-4 w-4" />
+                      تغيير Token
+                    </button>
+                    <button
+                      onClick={handleDeleteToken}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      حذف Token
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Show token input form
+                <div className="mt-4 space-y-4">
+                  {wasenderTokenConfigured && (
+                    <div className="flex items-center gap-3 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+                      <ExclamationTriangleIcon className="h-5 w-5 text-blue-400 flex-shrink-0" />
+                      <p className="text-blue-300 text-sm">
+                        سيتم استبدال الـ Token الحالي بالـ Token الجديد
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <label className="block text-white text-sm font-medium">
+                      {wasenderTokenConfigured ? 'Token جديد' : 'أدخل الـ Token'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showTokenValue ? 'text' : 'password'}
+                        value={newToken}
+                        onChange={(e) => setNewToken(e.target.value)}
+                        placeholder="الصق الـ Token هنا..."
+                        className="w-full px-4 py-3 bg-[#2B3544] border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm pr-12"
+                        style={{ direction: 'ltr', textAlign: 'left' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTokenValue(!showTokenValue)}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                      >
+                        {showTokenValue ? (
+                          <EyeSlashIcon className="h-5 w-5" />
+                        ) : (
+                          <EyeIcon className="h-5 w-5" />
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      احصل على الـ Token من لوحة تحكم WasenderAPI
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleSaveToken}
+                      disabled={isSavingToken || !newToken.trim()}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                        isSavingToken || !newToken.trim()
+                          ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {isSavingToken ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          جاري الحفظ...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircleIcon className="h-4 w-4" />
+                          حفظ Token
+                        </>
+                      )}
+                    </button>
+                    {wasenderTokenConfigured && (
+                      <button
+                        onClick={() => {
+                          setShowTokenInput(false);
+                          setNewToken('');
+                        }}
+                        className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        إلغاء
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Security Info */}
+        <div className="p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <ShieldCheckIcon className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-blue-300 text-sm font-medium">معلومات الأمان</p>
+              <ul className="text-gray-400 text-xs mt-2 space-y-1 list-disc list-inside">
+                <li>جميع الـ API Keys يتم تشفيرها قبل حفظها في قاعدة البيانات</li>
+                <li>لا يتم عرض أو إرسال الـ Token بعد الحفظ لأسباب أمنية</li>
+                <li>يمكنك تغيير أو حذف الـ Token في أي وقت</li>
+                <li>في حالة فقدان الـ Token، ستحتاج لإنشاء واحد جديد من WasenderAPI</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderSettingsContent = () => {
     switch (selectedCategory) {
       case 'system':
@@ -1510,6 +1769,8 @@ export default function SettingsPage() {
         return renderCompanySettings();
       case 'store':
         return renderStoreSettings();
+      case 'security':
+        return renderSecuritySettings();
       default:
         return renderPlaceholderContent(selectedCategory);
     }

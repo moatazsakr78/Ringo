@@ -2045,18 +2045,6 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
 
             {/* Main Content Area - Left side containing both tables */}
             <div className="flex-1 flex flex-col min-w-0 relative">
-              
-              {/* Search Bar */}
-              <div className="bg-[#374151] border-b border-gray-600 p-4">
-                <div className="relative">
-                  <MagnifyingGlassIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="ابحث عن فاتورة (رقم الفاتورة، اسم المورد، أو الهاتف)..."
-                    className="w-full pl-4 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
-                </div>
-              </div>
 
               {/* Conditional Content Based on Active Tab and View Mode */}
               <div className="flex-1 overflow-y-auto scrollbar-hide relative">

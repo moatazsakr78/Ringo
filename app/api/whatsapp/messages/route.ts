@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
 
     // Try to fetch from database first
     let query = supabase
+      .schema('elfaroukgroup')
       .from('whatsapp_messages')
       .select('*')
       .order('created_at', { ascending: true });
