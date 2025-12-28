@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { decryptAndStoreMedia, hasMediaContent, getMediaType } from '@/app/lib/whatsapp';
+import {
+  decryptAndStoreMedia,
+  hasMediaContent,
+  getMediaType,
+  syncContactWithProfilePicture
+} from '@/app/lib/whatsapp';
 
 // Supabase client for storing messages
 const supabase = createClient(
@@ -110,6 +115,15 @@ export async function POST(request: NextRequest) {
             console.error('❌ Database error:', dbError.message);
           } else {
             console.log('✅ Message stored successfully');
+
+            // Sync contact and fetch profile picture (runs in background)
+            syncContactWithProfilePicture(message.from, message.customerName)
+              .then(contact => {
+                if (contact?.profile_picture_url) {
+                  console.log('📷 Contact profile picture synced:', contact.profile_picture_url);
+                }
+              })
+              .catch(err => console.error('❌ Error syncing contact:', err));
           }
         }
       }

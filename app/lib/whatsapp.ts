@@ -606,6 +606,245 @@ export function getMediaType(messageData: any): 'image' | 'video' | 'audio' | 'd
   return 'text';
 }
 
+// ============ Contact Profile Picture Functions ============
+
+export interface WhatsAppContact {
+  id: string;
+  phone_number: string;
+  customer_name: string | null;
+  profile_picture_url: string | null;
+  last_picture_fetch: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Get or create a contact in the database
+export async function getOrCreateContact(
+  phoneNumber: string,
+  customerName?: string
+): Promise<WhatsAppContact | null> {
+  try {
+    const cleanNumber = cleanPhoneNumber(phoneNumber);
+
+    // Try to get existing contact
+    const { data: existing, error: selectError } = await supabase
+      .schema('elfaroukgroup')
+      .from('whatsapp_contacts')
+      .select('*')
+      .eq('phone_number', cleanNumber)
+      .single();
+
+    if (existing && !selectError) {
+      // Update customer name if provided and different
+      if (customerName && customerName !== existing.customer_name) {
+        const { data: updated } = await supabase
+          .schema('elfaroukgroup')
+          .from('whatsapp_contacts')
+          .update({
+            customer_name: customerName,
+            updated_at: new Date().toISOString()
+          })
+          .eq('phone_number', cleanNumber)
+          .select()
+          .single();
+        return updated || existing;
+      }
+      return existing;
+    }
+
+    // Create new contact
+    const { data: newContact, error: insertError } = await supabase
+      .schema('elfaroukgroup')
+      .from('whatsapp_contacts')
+      .insert({
+        phone_number: cleanNumber,
+        customer_name: customerName || null
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('❌ Error creating contact:', insertError.message);
+      return null;
+    }
+
+    return newContact;
+  } catch (error) {
+    console.error('❌ Error in getOrCreateContact:', error);
+    return null;
+  }
+}
+
+// Check if profile picture needs refresh (older than 24 hours or never fetched)
+export function shouldRefreshProfilePicture(contact: WhatsAppContact | null): boolean {
+  if (!contact) return true;
+  if (!contact.last_picture_fetch) return true;
+
+  const lastFetch = new Date(contact.last_picture_fetch);
+  const now = new Date();
+  const hoursDiff = (now.getTime() - lastFetch.getTime()) / (1000 * 60 * 60);
+
+  return hoursDiff > 24;
+}
+
+// Fetch profile picture from WasenderAPI and store in Supabase Storage
+export async function fetchAndStoreProfilePicture(phoneNumber: string): Promise<string | null> {
+  try {
+    const token = await getApiToken();
+    if (!token) {
+      console.error('❌ No API token available for profile picture fetch');
+      return null;
+    }
+
+    const cleanNumber = cleanPhoneNumber(phoneNumber);
+    console.log('📷 Fetching profile picture for:', cleanNumber);
+
+    // 1. Call WasenderAPI to get profile picture URL
+    const response = await fetch(`${WASENDER_API_URL}/contacts/${cleanNumber}/picture`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.log('⚠️ Profile picture not available for:', cleanNumber);
+      return null;
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.data?.imgUrl) {
+      console.log('⚠️ No profile picture URL in response');
+      return null;
+    }
+
+    console.log('📥 Downloading profile picture from:', data.data.imgUrl);
+
+    // 2. Download the image
+    const imageResponse = await fetch(data.data.imgUrl);
+    if (!imageResponse.ok) {
+      console.error('❌ Failed to download profile picture:', imageResponse.status);
+      return null;
+    }
+
+    const imageBuffer = await imageResponse.arrayBuffer();
+    const contentType = imageResponse.headers.get('content-type') || 'image/jpeg';
+
+    // 3. Upload to Supabase Storage
+    const filePath = `profiles/${cleanNumber}.jpg`;
+    console.log('📤 Uploading profile picture to:', filePath);
+
+    const { error: uploadError } = await supabase.storage
+      .from('whatsapp')
+      .upload(filePath, imageBuffer, {
+        contentType,
+        upsert: true // Overwrite if exists
+      });
+
+    if (uploadError) {
+      console.error('❌ Failed to upload profile picture:', uploadError.message);
+      return null;
+    }
+
+    // 4. Get public URL
+    const { data: urlData } = supabase.storage
+      .from('whatsapp')
+      .getPublicUrl(filePath);
+
+    console.log('✅ Profile picture stored:', urlData.publicUrl);
+    return urlData.publicUrl;
+
+  } catch (error) {
+    console.error('❌ Error in fetchAndStoreProfilePicture:', error);
+    return null;
+  }
+}
+
+// Update contact's profile picture URL in database
+export async function updateContactProfilePicture(
+  phoneNumber: string,
+  pictureUrl: string | null
+): Promise<boolean> {
+  try {
+    const cleanNumber = cleanPhoneNumber(phoneNumber);
+
+    const { error } = await supabase
+      .schema('elfaroukgroup')
+      .from('whatsapp_contacts')
+      .update({
+        profile_picture_url: pictureUrl,
+        last_picture_fetch: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .eq('phone_number', cleanNumber);
+
+    if (error) {
+      console.error('❌ Error updating contact profile picture:', error.message);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ Error in updateContactProfilePicture:', error);
+    return false;
+  }
+}
+
+// Full flow: Get or create contact and refresh profile picture if needed
+export async function syncContactWithProfilePicture(
+  phoneNumber: string,
+  customerName?: string
+): Promise<WhatsAppContact | null> {
+  try {
+    // 1. Get or create contact
+    const contact = await getOrCreateContact(phoneNumber, customerName);
+    if (!contact) return null;
+
+    // 2. Check if profile picture needs refresh
+    if (shouldRefreshProfilePicture(contact)) {
+      console.log('🔄 Refreshing profile picture for:', phoneNumber);
+      const pictureUrl = await fetchAndStoreProfilePicture(phoneNumber);
+      await updateContactProfilePicture(phoneNumber, pictureUrl);
+
+      // Return updated contact
+      const cleanNumber = cleanPhoneNumber(phoneNumber);
+      const { data: updated } = await supabase
+        .schema('elfaroukgroup')
+        .from('whatsapp_contacts')
+        .select('*')
+        .eq('phone_number', cleanNumber)
+        .single();
+
+      return updated || contact;
+    }
+
+    return contact;
+  } catch (error) {
+    console.error('❌ Error in syncContactWithProfilePicture:', error);
+    return null;
+  }
+}
+
+// Get all contacts with profile pictures
+export async function getAllContacts(): Promise<WhatsAppContact[]> {
+  try {
+    const { data, error } = await supabase
+      .schema('elfaroukgroup')
+      .from('whatsapp_contacts')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('❌ Error fetching contacts:', error.message);
+      return [];
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('❌ Error in getAllContacts:', error);
+    return [];
+  }
+}
+
 // ============ Parse Incoming Webhook ============
 
 // Parse incoming webhook message from WasenderAPI

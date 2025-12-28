@@ -41,6 +41,15 @@ interface Conversation {
   lastMessage: string
   lastMessageTime: string
   unreadCount: number
+  profilePictureUrl?: string
+}
+
+interface WhatsAppContact {
+  id: string
+  phone_number: string
+  customer_name: string | null
+  profile_picture_url: string | null
+  last_picture_fetch: string | null
 }
 
 type AttachmentType = 'image' | 'video' | 'document' | 'location' | null
@@ -49,6 +58,7 @@ export default function WhatsAppPage() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [messages, setMessages] = useState<Message[]>([])
+  const [contacts, setContacts] = useState<WhatsAppContact[]>([])
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -87,11 +97,29 @@ export default function WhatsAppPage() {
   const fetchMessages = useCallback(async () => {
     try {
       setError(null)
-      const response = await fetch('/api/whatsapp/messages')
-      const data = await response.json()
+      // Fetch messages and contacts in parallel
+      const [messagesRes, contactsRes] = await Promise.all([
+        fetch('/api/whatsapp/messages'),
+        fetch('/api/whatsapp/contacts')
+      ])
 
-      setMessages(data.messages || [])
-      setConversations(data.conversations || [])
+      const messagesData = await messagesRes.json()
+      const contactsData = await contactsRes.json()
+
+      setMessages(messagesData.messages || [])
+      setContacts(contactsData || [])
+
+      // Merge profile pictures into conversations
+      const conversationsWithPictures = (messagesData.conversations || []).map((conv: Conversation) => {
+        const contact = (contactsData || []).find(
+          (c: WhatsAppContact) => c.phone_number === conv.phoneNumber
+        )
+        return {
+          ...conv,
+          profilePictureUrl: contact?.profile_picture_url || null
+        }
+      })
+      setConversations(conversationsWithPictures)
     } catch (err) {
       console.error('Error fetching messages:', err)
       setError('فشل في تحميل الرسائل')
@@ -416,7 +444,20 @@ export default function WhatsAppPage() {
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0">
+                      {conv.profilePictureUrl ? (
+                        <img
+                          src={conv.profilePictureUrl}
+                          alt={conv.customerName}
+                          className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                          onError={(e) => {
+                            // Fallback to icon if image fails to load
+                            const target = e.target as HTMLImageElement
+                            target.style.display = 'none'
+                            target.nextElementSibling?.classList.remove('hidden')
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0 ${conv.profilePictureUrl ? 'hidden' : ''}`}>
                         <UserCircleIcon className="h-6 w-6 text-gray-300" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -453,19 +494,36 @@ export default function WhatsAppPage() {
               <>
                 {/* Chat Header */}
                 <div className="bg-[#374151] px-4 py-3 border-b border-gray-600">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center">
-                      <UserCircleIcon className="h-6 w-6 text-gray-300" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-medium">
-                        {conversations.find(c => c.phoneNumber === selectedConversation)?.customerName || selectedConversation}
-                      </h3>
-                      <p className="text-gray-400 text-sm font-mono">
-                        +{selectedConversation}
-                      </p>
-                    </div>
-                  </div>
+                  {(() => {
+                    const selectedContact = conversations.find(c => c.phoneNumber === selectedConversation)
+                    return (
+                      <div className="flex items-center gap-3">
+                        {selectedContact?.profilePictureUrl ? (
+                          <img
+                            src={selectedContact.profilePictureUrl}
+                            alt={selectedContact.customerName}
+                            className="w-12 h-12 rounded-full object-cover"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              target.nextElementSibling?.classList.remove('hidden')
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-12 h-12 rounded-full bg-gray-500 flex items-center justify-center ${selectedContact?.profilePictureUrl ? 'hidden' : ''}`}>
+                          <UserCircleIcon className="h-7 w-7 text-gray-300" />
+                        </div>
+                        <div>
+                          <h3 className="text-white font-medium">
+                            {selectedContact?.customerName || selectedConversation}
+                          </h3>
+                          <p className="text-gray-400 text-sm font-mono">
+                            +{selectedConversation}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Messages */}
