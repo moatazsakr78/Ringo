@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     // WasenderAPI webhook format
     const event = body.event || body.type;
 
-    // Handle different event types
-    if (event === 'messages.upsert' || event === 'messages.received' || event === 'message') {
+    // Handle only messages.received event (ignore messages.upsert to prevent duplicates)
+    if (event === 'messages.received') {
       // WasenderAPI format: data.messages is a single object (not array)
       const messagesData = body.data?.messages;
 
@@ -70,24 +70,11 @@ export async function POST(request: NextRequest) {
         if (message) {
           console.log('📱 New message from:', message.customerName, '-', message.text);
 
-          // Check for duplicate message
-          const { data: existingMsg } = await supabase
-            .schema('elfaroukgroup')
-            .from('whatsapp_messages')
-            .select('id')
-            .eq('message_id', message.messageId)
-            .single();
-
-          if (existingMsg) {
-            console.log('⏭️ Message already exists, skipping');
-            continue;
-          }
-
-          // Store message in database
+          // Use upsert to prevent duplicates (atomic operation)
           const { error: dbError } = await supabase
             .schema('elfaroukgroup')
             .from('whatsapp_messages')
-            .insert({
+            .upsert({
               message_id: message.messageId,
               from_number: message.from,
               customer_name: message.customerName,
@@ -97,6 +84,9 @@ export async function POST(request: NextRequest) {
               media_url: message.mediaUrl || null,
               is_read: false,
               created_at: message.timestamp.toISOString(),
+            }, {
+              onConflict: 'message_id',
+              ignoreDuplicates: true
             });
 
           if (dbError) {
@@ -106,6 +96,9 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    } else if (event === 'messages.upsert') {
+      // Ignore messages.upsert to prevent duplicates (we only process messages.received)
+      console.log('⏭️ Ignoring messages.upsert event (using messages.received only)');
     } else if (event === 'messages.update' || event === 'message.update') {
       // Message status update (delivered, read, etc.)
       console.log('📊 Message status update:', body.data);
