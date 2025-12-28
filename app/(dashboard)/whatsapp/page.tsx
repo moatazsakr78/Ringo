@@ -87,6 +87,9 @@ export default function WhatsAppPage() {
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
 
+  // Location state
+  const [isGettingLocation, setIsGettingLocation] = useState(false)
+
   // File input refs
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
@@ -211,10 +214,90 @@ export default function WhatsAppPage() {
     }
     setFilePreview(null)
     setIsUploading(false)
+    setIsGettingLocation(false)
     // Reset file inputs
     if (imageInputRef.current) imageInputRef.current.value = ''
     if (videoInputRef.current) videoInputRef.current.value = ''
     if (documentInputRef.current) documentInputRef.current.value = ''
+  }
+
+  // Handle getting current location from device
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      setError('المتصفح لا يدعم تحديد الموقع')
+      return
+    }
+
+    setIsGettingLocation(true)
+    setShowAttachmentMenu(false)
+    setAttachmentType('location')
+    setError(null)
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitude(position.coords.latitude.toString())
+        setLongitude(position.coords.longitude.toString())
+        setIsGettingLocation(false)
+      },
+      (err) => {
+        console.error('Geolocation error:', err)
+        let errorMessage = 'فشل في تحديد الموقع'
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            errorMessage = 'تم رفض الوصول للموقع. يرجى السماح للمتصفح بالوصول للموقع'
+            break
+          case err.POSITION_UNAVAILABLE:
+            errorMessage = 'معلومات الموقع غير متاحة'
+            break
+          case err.TIMEOUT:
+            errorMessage = 'انتهت مهلة طلب الموقع'
+            break
+        }
+        setError(errorMessage)
+        setIsGettingLocation(false)
+        resetAttachment()
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    )
+  }
+
+  // Handle sending location
+  const handleSendLocation = async () => {
+    if (!selectedConversation || !latitude || !longitude) return
+
+    setIsSending(true)
+
+    try {
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedConversation,
+          messageType: 'location',
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+          locationName: locationName || undefined
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        resetAttachment()
+        await fetchMessages()
+      } else {
+        setError(data.error || 'فشل في إرسال الموقع')
+      }
+    } catch (err) {
+      console.error('Error sending location:', err)
+      setError('فشل في إرسال الموقع')
+    } finally {
+      setIsSending(false)
+    }
   }
 
   // Handle file selection from file picker
@@ -867,30 +950,68 @@ export default function WhatsAppPage() {
                       </div>
                     )}
 
-                    {/* Location Input (unchanged) */}
+                    {/* Location Preview */}
                     {attachmentType === 'location' && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          value={latitude}
-                          onChange={(e) => setLatitude(e.target.value)}
-                          placeholder="خط العرض (Latitude)"
-                          className="px-3 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                        />
-                        <input
-                          type="text"
-                          value={longitude}
-                          onChange={(e) => setLongitude(e.target.value)}
-                          placeholder="خط الطول (Longitude)"
-                          className="px-3 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                        />
-                        <input
-                          type="text"
-                          value={locationName}
-                          onChange={(e) => setLocationName(e.target.value)}
-                          placeholder="اسم المكان (اختياري)"
-                          className="col-span-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                        />
+                      <div className="space-y-3">
+                        {isGettingLocation ? (
+                          // Loading indicator while getting location
+                          <div className="flex flex-col items-center justify-center py-6 text-gray-400">
+                            <svg className="animate-spin h-8 w-8 mb-3 text-green-500" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                            </svg>
+                            <span className="text-sm">جاري تحديد موقعك...</span>
+                          </div>
+                        ) : latitude && longitude ? (
+                          // Location found - show coordinates and send button
+                          <>
+                            <div className="bg-[#2B3544] rounded-lg p-3">
+                              <div className="flex items-center gap-3 mb-2">
+                                <MapPinIcon className="h-8 w-8 text-red-400 flex-shrink-0" />
+                                <div className="flex-1">
+                                  <p className="text-white text-sm font-medium">تم تحديد موقعك</p>
+                                  <p className="text-gray-400 text-xs mt-1">
+                                    {parseFloat(latitude).toFixed(6)}, {parseFloat(longitude).toFixed(6)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={locationName}
+                              onChange={(e) => setLocationName(e.target.value)}
+                              placeholder="اسم المكان (اختياري)"
+                              className="w-full px-3 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+
+                            <button
+                              type="button"
+                              onClick={handleSendLocation}
+                              disabled={isSending}
+                              className={`w-full py-2 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${
+                                isSending
+                                  ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                  : 'bg-green-600 hover:bg-green-700 text-white'
+                              }`}
+                            >
+                              {isSending ? (
+                                <>
+                                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                                  </svg>
+                                  <span>جاري الإرسال...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <PaperAirplaneIcon className="h-5 w-5 rotate-180" />
+                                  <span>إرسال الموقع</span>
+                                </>
+                              )}
+                            </button>
+                          </>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -967,7 +1088,7 @@ export default function WhatsAppPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setAttachmentType('location'); setShowAttachmentMenu(false) }}
+                            onClick={handleGetLocation}
                             className="flex items-center gap-2 w-full px-3 py-2 text-gray-300 hover:bg-gray-600/50 rounded-md text-sm"
                           >
                             <MapPinIcon className="h-5 w-5 text-red-400" />
