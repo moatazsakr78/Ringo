@@ -39,8 +39,9 @@ const customerOnlyPaths = [
 export default auth((req) => {
   const { pathname } = req.nextUrl
 
-  // Skip NextAuth internal routes and static files
+  // Skip NextAuth internal routes, static files, and WhatsApp webhook
   if (pathname.startsWith('/api/auth') ||
+      pathname.startsWith('/api/whatsapp') ||
       pathname.startsWith('/_next') ||
       pathname.startsWith('/favicon') ||
       pathname.startsWith('/images') ||
