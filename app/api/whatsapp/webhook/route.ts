@@ -63,18 +63,15 @@ export async function POST(request: NextRequest) {
       const messages = Array.isArray(messagesData) ? messagesData : [messagesData];
 
       for (const msgData of messages) {
-        // Skip outgoing messages
         const key = msgData.key || {};
-        if (key.fromMe === true) {
-          console.log('⏭️ Skipping outgoing message');
-          continue;
-        }
+        const isOutgoing = key.fromMe === true;
 
         // Parse WasenderAPI message format
         const message = parseWasenderMessage(msgData);
 
         if (message) {
-          console.log('📱 New message from:', message.customerName, '-', message.text);
+          const messageTypeLabel = isOutgoing ? '📤 Outgoing' : '📥 Incoming';
+          console.log(`${messageTypeLabel} message:`, message.customerName, '-', message.text);
 
           // Check if message contains media that needs decryption
           let mediaUrl = message.mediaUrl;
@@ -93,18 +90,19 @@ export async function POST(request: NextRequest) {
           }
 
           // Use upsert to prevent duplicates (atomic operation)
+          // Store both incoming and outgoing messages
           const { error: dbError } = await supabase
             .schema('elfaroukgroup')
             .from('whatsapp_messages')
             .upsert({
               message_id: message.messageId,
               from_number: message.from,
-              customer_name: message.customerName,
+              customer_name: isOutgoing ? 'الفاروق جروب' : message.customerName,
               message_text: message.text,
-              message_type: 'incoming',
+              message_type: isOutgoing ? 'outgoing' : 'incoming',
               media_type: message.mediaType || 'text',
               media_url: mediaUrl || null,
-              is_read: false,
+              is_read: isOutgoing ? true : false,
               created_at: message.timestamp.toISOString(),
             }, {
               onConflict: 'message_id',
@@ -116,14 +114,16 @@ export async function POST(request: NextRequest) {
           } else {
             console.log('✅ Message stored successfully');
 
-            // Sync contact and fetch profile picture (runs in background)
-            syncContactWithProfilePicture(message.from, message.customerName)
-              .then(contact => {
-                if (contact?.profile_picture_url) {
-                  console.log('📷 Contact profile picture synced:', contact.profile_picture_url);
-                }
-              })
-              .catch(err => console.error('❌ Error syncing contact:', err));
+            // Sync contact and fetch profile picture only for incoming messages
+            if (!isOutgoing) {
+              syncContactWithProfilePicture(message.from, message.customerName)
+                .then(contact => {
+                  if (contact?.profile_picture_url) {
+                    console.log('📷 Contact profile picture synced:', contact.profile_picture_url);
+                  }
+                })
+                .catch(err => console.error('❌ Error syncing contact:', err));
+            }
           }
         }
       }
