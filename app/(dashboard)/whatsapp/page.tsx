@@ -22,6 +22,7 @@ import {
   XMarkIcon,
   SignalIcon,
   SignalSlashIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline'
 
 interface Message {
@@ -42,6 +43,7 @@ interface Conversation {
   customerName: string
   lastMessage: string
   lastMessageTime: string
+  lastSender: 'customer' | 'me'
   unreadCount: number
   profilePictureUrl?: string
 }
@@ -70,6 +72,7 @@ export default function WhatsAppPage() {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
   const [isSyncing, setIsSyncing] = useState(false)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
+  const [showMobileChat, setShowMobileChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Attachment state
@@ -97,6 +100,20 @@ export default function WhatsAppPage() {
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
+  }
+
+  // دالة للرجوع للقائمة على الموبايل
+  const handleBackToList = () => {
+    setShowMobileChat(false)
+  }
+
+  // دالة لاختيار المحادثة
+  const handleSelectConversation = (phoneNumber: string, unreadCount: number) => {
+    setSelectedConversation(phoneNumber)
+    setShowMobileChat(true) // إظهار الدردشة على الموبايل
+    if (unreadCount > 0) {
+      markConversationAsRead(phoneNumber)
+    }
   }
 
   // Check connection status
@@ -641,7 +658,7 @@ export default function WhatsAppPage() {
       <div className="h-full pt-12 overflow-hidden flex flex-col">
 
         {/* Page Header */}
-        <div className="bg-[#374151] border-b border-gray-600 px-4 py-3">
+        <div className={`bg-[#374151] border-b border-gray-600 px-4 py-3 ${showMobileChat ? 'hidden md:block' : ''}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <ChatBubbleLeftRightIcon className="h-6 w-6 text-green-500" />
@@ -697,7 +714,12 @@ export default function WhatsAppPage() {
         <div className="flex-1 flex overflow-hidden">
 
           {/* Conversations List */}
-          <div className="w-80 bg-[#374151] border-l border-gray-600 flex flex-col">
+          <div className={`
+            ${showMobileChat ? 'hidden' : 'flex'}
+            md:flex
+            w-full md:w-80
+            bg-[#374151] border-l border-gray-600 flex-col
+          `}>
             {/* Search */}
             <div className="p-3 border-b border-gray-600">
               <div className="relative">
@@ -732,12 +754,7 @@ export default function WhatsAppPage() {
                 filteredConversations.map((conv) => (
                   <div
                     key={conv.phoneNumber}
-                    onClick={() => {
-                      setSelectedConversation(conv.phoneNumber)
-                      if (conv.unreadCount > 0) {
-                        markConversationAsRead(conv.phoneNumber)
-                      }
-                    }}
+                    onClick={() => handleSelectConversation(conv.phoneNumber, conv.unreadCount)}
                     className={`p-3 border-b border-gray-600/50 cursor-pointer transition-colors ${
                       selectedConversation === conv.phoneNumber
                         ? 'bg-green-600/20 border-r-2 border-r-green-500'
@@ -761,19 +778,22 @@ export default function WhatsAppPage() {
                       <div className={`w-10 h-10 rounded-full bg-gray-500 flex items-center justify-center flex-shrink-0 ${conv.profilePictureUrl ? 'hidden' : ''}`}>
                         <UserCircleIcon className="h-6 w-6 text-gray-300" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-white font-medium text-sm truncate">
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-white font-medium text-sm truncate flex-1 min-w-0">
                             {conv.customerName}
                           </span>
-                          <span className="text-gray-400 text-xs">
+                          <span className="text-gray-400 text-xs flex-shrink-0">
                             {formatTime(conv.lastMessageTime)}
                           </span>
                         </div>
                         <p className="text-gray-400 text-xs truncate mt-1">
+                          {conv.lastSender === 'me' && (
+                            <span className="text-green-400 ml-1">أنت: </span>
+                          )}
                           {conv.lastMessage}
                         </p>
-                        <p className="text-gray-500 text-xs mt-1 font-mono">
+                        <p className="text-gray-500 text-xs mt-1 font-mono truncate">
                           +{conv.phoneNumber}
                         </p>
                       </div>
@@ -790,15 +810,29 @@ export default function WhatsAppPage() {
           </div>
 
           {/* Chat Area */}
-          <div className="flex-1 flex flex-col bg-[#2B3544]">
+          <div className={`
+            ${!showMobileChat && !selectedConversation ? 'hidden' : ''}
+            ${showMobileChat ? 'flex' : 'hidden'}
+            md:flex
+            flex-1 flex-col bg-[#2B3544]
+            absolute md:relative inset-0 md:inset-auto
+            z-30 md:z-auto
+          `}>
             {selectedConversation ? (
               <>
                 {/* Chat Header */}
-                <div className="bg-[#374151] px-4 py-3 border-b border-gray-600">
+                <div className="bg-[#374151] px-4 py-3 border-b border-gray-600 mt-12 md:mt-0">
                   {(() => {
                     const selectedContact = conversations.find(c => c.phoneNumber === selectedConversation)
                     return (
                       <div className="flex items-center gap-3">
+                        {/* زر الرجوع - يظهر فقط على الموبايل */}
+                        <button
+                          onClick={handleBackToList}
+                          className="md:hidden p-2 -mr-2 text-gray-300 hover:text-white hover:bg-gray-600/50 rounded-full transition-colors"
+                        >
+                          <ArrowRightIcon className="h-5 w-5" />
+                        </button>
                         {selectedContact?.profilePictureUrl ? (
                           <img
                             src={selectedContact.profilePictureUrl}
@@ -850,11 +884,12 @@ export default function WhatsAppPage() {
                             )}
                             <div className={`flex ${msg.message_type === 'outgoing' ? 'justify-start' : 'justify-end'}`}>
                               <div
-                                className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                                className={`max-w-[85%] md:max-w-[70%] rounded-lg px-3 md:px-4 py-2 ${
                                   msg.message_type === 'outgoing'
                                     ? 'bg-green-600 text-white rounded-bl-none'
                                     : 'bg-[#374151] text-white rounded-br-none'
                                 }`}
+                                style={{ wordBreak: 'break-word' }}
                               >
                                 {renderMessageContent(msg)}
                                 <div className={`flex items-center gap-1 mt-1 ${

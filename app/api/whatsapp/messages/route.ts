@@ -37,21 +37,42 @@ export async function GET(request: NextRequest) {
       customerName: string;
       lastMessage: string;
       lastMessageTime: string;
+      lastSender: 'customer' | 'me';
       unreadCount: number;
     }>();
 
     for (const msg of data || []) {
       const existing = conversations.get(msg.from_number);
-      if (!existing || new Date(msg.created_at) > new Date(existing.lastMessageTime)) {
+      const isOutgoing = msg.message_type === 'outgoing';
+
+      if (!existing) {
+        // First message for this conversation
         conversations.set(msg.from_number, {
           phoneNumber: msg.from_number,
-          customerName: msg.customer_name,
+          // Use customer name only from incoming messages, otherwise keep phone number
+          customerName: isOutgoing ? msg.from_number : msg.customer_name,
           lastMessage: msg.message_text,
           lastMessageTime: msg.created_at,
-          unreadCount: msg.message_type === 'incoming' && !msg.is_read ? 1 : 0,
+          lastSender: isOutgoing ? 'me' : 'customer',
+          unreadCount: !isOutgoing && !msg.is_read ? 1 : 0,
         });
-      } else if (msg.message_type === 'incoming' && !msg.is_read) {
-        existing.unreadCount++;
+      } else {
+        // Update customer name if this is an incoming message (to get the real customer name)
+        if (!isOutgoing && msg.customer_name && msg.customer_name !== 'الفاروق جروب') {
+          existing.customerName = msg.customer_name;
+        }
+
+        // Update last message if this is newer
+        if (new Date(msg.created_at) > new Date(existing.lastMessageTime)) {
+          existing.lastMessage = msg.message_text;
+          existing.lastMessageTime = msg.created_at;
+          existing.lastSender = isOutgoing ? 'me' : 'customer';
+        }
+
+        // Count unread incoming messages
+        if (!isOutgoing && !msg.is_read) {
+          existing.unreadCount++;
+        }
       }
     }
 
