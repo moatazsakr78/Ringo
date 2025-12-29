@@ -264,6 +264,7 @@ function POSPageContent() {
   // Add Tab Modal States
   const [showAddTabModal, setShowAddTabModal] = useState(false);
   const [newTabName, setNewTabName] = useState("");
+  const [showNewTabCustomerModal, setShowNewTabCustomerModal] = useState(false);
 
   // Payment Split States
   const [paymentSplitData, setPaymentSplitData] = useState<any[]>([]);
@@ -1131,22 +1132,22 @@ function POSPageContent() {
   };
 
   const handleCustomerSelect = (customer: any) => {
-    // If we're in main tab, create a new tab with customer name
-    // Otherwise, just update the current tab's customer
-    if (activeTabId === 'main') {
-      // Create new tab with customer, inheriting selections from main tab
-      addTabWithCustomer(customer, {
-        customer: globalSelections.customer,
-        branch: globalSelections.branch,
-        record: globalSelections.record,
-        priceType: selectedPriceType,
-      });
-    } else {
-      // Update current tab's customer
-      setCustomer(customer);
-    }
+    // Always update the current tab's customer (for changing customer in existing tab)
+    setCustomer(customer);
     setIsCustomerModalOpen(false);
     console.log("Selected customer:", customer);
+  };
+
+  // Handler for creating a new tab with selected customer (from + button)
+  const handleNewTabCustomerSelect = (customer: any) => {
+    // Always create a new tab with the selected customer
+    addTabWithCustomer(customer, {
+      branch: globalSelections.branch,
+      record: globalSelections.record,
+      priceType: selectedPriceType,
+    });
+    setShowNewTabCustomerModal(false);
+    console.log("Created new tab with customer:", customer);
   };
 
   const handleBranchSelect = (branch: any) => {
@@ -3611,6 +3612,7 @@ function POSPageContent() {
           switchTab={switchTab}
           closeTab={closeTab}
           setShowAddTabModal={setShowAddTabModal}
+          setShowNewTabCustomerModal={setShowNewTabCustomerModal}
           setShowPurchaseModeConfirm={setShowPurchaseModeConfirm}
           setIsTransferMode={setIsTransferMode}
           setTransferFromLocation={setTransferFromLocation}
@@ -3631,6 +3633,13 @@ function POSPageContent() {
           isOpen={isCustomerModalOpen}
           onClose={() => setIsCustomerModalOpen(false)}
           onSelectCustomer={handleCustomerSelect}
+        />
+
+        {/* Customer Selection Modal for New Tab (from + button) */}
+        <CustomerSelectionModal
+          isOpen={showNewTabCustomerModal}
+          onClose={() => setShowNewTabCustomerModal(false)}
+          onSelectCustomer={handleNewTabCustomerSelect}
         />
 
         <BranchSelectionModal
@@ -4534,9 +4543,9 @@ function POSPageContent() {
                 </div>
               ))}
 
-              {/* Add New Tab Button */}
+              {/* Add New Tab Button - Opens customer selection to create new tab */}
               <button
-                onClick={() => setShowAddTabModal(true)}
+                onClick={() => setShowNewTabCustomerModal(true)}
                 className="px-3 py-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1 border-l border-gray-600"
                 title="إضافة نافذة بيع جديدة"
               >
@@ -5683,6 +5692,13 @@ function POSPageContent() {
         isOpen={isCustomerModalOpen}
         onClose={() => setIsCustomerModalOpen(false)}
         onSelectCustomer={handleCustomerSelect}
+      />
+
+      {/* Customer Selection Modal for New Tab (from + button) */}
+      <CustomerSelectionModal
+        isOpen={showNewTabCustomerModal}
+        onClose={() => setShowNewTabCustomerModal(false)}
+        onSelectCustomer={handleNewTabCustomerSelect}
       />
 
       {/* Branch Selection Modal */}

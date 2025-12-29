@@ -100,6 +100,7 @@ interface POSTabletViewProps {
   switchTab: (tabId: string) => void
   closeTab: (tabId: string) => void
   setShowAddTabModal: (show: boolean) => void
+  setShowNewTabCustomerModal: (show: boolean) => void
 
   // Mode Toggles
   setShowPurchaseModeConfirm: (show: boolean) => void
@@ -163,6 +164,7 @@ export default function POSTabletView({
   switchTab,
   closeTab,
   setShowAddTabModal,
+  setShowNewTabCustomerModal,
   setShowPurchaseModeConfirm,
   setIsTransferMode,
   setTransferFromLocation,
@@ -353,9 +355,9 @@ export default function POSTabletView({
               </div>
             ))}
 
-            {/* Add New Tab Button */}
+            {/* Add New Tab Button - Opens customer selection to create new tab */}
             <button
-              onClick={() => setShowAddTabModal(true)}
+              onClick={() => setShowNewTabCustomerModal(true)}
               className="px-1.5 py-0.5 text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-0.5 border-l border-gray-600"
               title="إضافة نافذة بيع جديدة"
             >
