@@ -657,56 +657,57 @@ export default function WhatsAppPage() {
       {/* Main Content Container */}
       <div className="h-full pt-12 overflow-hidden flex flex-col">
 
-        {/* Page Header */}
-        <div className={`bg-[#374151] border-b border-gray-600 px-4 py-3 ${showMobileChat ? 'hidden md:block' : ''}`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ChatBubbleLeftRightIcon className="h-6 w-6 text-green-500" />
-              <h1 className="text-xl font-bold text-white">محادثات واتساب</h1>
-              {/* Connection Status */}
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                connectionStatus === 'connected'
-                  ? 'bg-green-500/20 text-green-400'
-                  : connectionStatus === 'disconnected'
-                  ? 'bg-red-500/20 text-red-400'
-                  : 'bg-yellow-500/20 text-yellow-400'
-              }`}>
-                {connectionStatus === 'connected' ? (
-                  <>
-                    <SignalIcon className="h-3 w-3" />
-                    <span>متصل</span>
-                  </>
-                ) : connectionStatus === 'disconnected' ? (
-                  <>
-                    <SignalSlashIcon className="h-3 w-3" />
-                    <span>غير متصل</span>
-                  </>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-3 w-3 animate-spin" />
-                    <span>جاري الفحص</span>
-                  </>
-                )}
-              </div>
+        {/* Page Header - رفيع وقابل للتمرير على الموبايل */}
+        <div className={`bg-[#374151] border-b border-gray-600 px-2 md:px-4 py-2 md:py-3 ${showMobileChat ? 'hidden md:block' : ''}`}>
+          <div className="flex items-center gap-2 md:gap-3 overflow-x-auto scrollbar-hide">
+            <ChatBubbleLeftRightIcon className="h-5 w-5 md:h-6 md:w-6 text-green-500 flex-shrink-0" />
+            <h1 className="text-sm md:text-xl font-bold text-white flex-shrink-0 whitespace-nowrap">محادثات واتساب</h1>
+            {/* Connection Status */}
+            <div className={`flex items-center gap-1 px-1.5 md:px-2 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs flex-shrink-0 ${
+              connectionStatus === 'connected'
+                ? 'bg-green-500/20 text-green-400'
+                : connectionStatus === 'disconnected'
+                ? 'bg-red-500/20 text-red-400'
+                : 'bg-yellow-500/20 text-yellow-400'
+            }`}>
+              {connectionStatus === 'connected' ? (
+                <>
+                  <SignalIcon className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                  <span>متصل</span>
+                </>
+              ) : connectionStatus === 'disconnected' ? (
+                <>
+                  <SignalSlashIcon className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                  <span className="hidden md:inline">غير متصل</span>
+                  <span className="md:hidden">منقطع</span>
+                </>
+              ) : (
+                <>
+                  <ArrowPathIcon className="h-2.5 w-2.5 md:h-3 md:w-3 animate-spin" />
+                  <span className="hidden md:inline">جاري الفحص</span>
+                  <span className="md:hidden">فحص</span>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={syncContacts}
-                disabled={isSyncing}
-                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-green-600/30 rounded-md transition-colors disabled:opacity-50"
-                title="مزامنة صور العملاء"
-              >
-                <PhotoIcon className={`h-4 w-4 ${isSyncing ? 'animate-pulse' : ''}`} />
-                <span className="text-sm">{isSyncing ? 'جاري المزامنة...' : 'مزامنة الصور'}</span>
-              </button>
-              <button
-                onClick={fetchMessages}
-                className="flex items-center gap-2 px-3 py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md transition-colors"
-              >
-                <ArrowPathIcon className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                <span className="text-sm">تحديث</span>
-              </button>
-            </div>
+            {/* Spacer */}
+            <div className="flex-1 min-w-[8px]" />
+            {/* Buttons */}
+            <button
+              onClick={syncContacts}
+              disabled={isSyncing}
+              className="flex items-center gap-1 md:gap-2 px-2 py-1 md:px-3 md:py-2 text-gray-300 hover:text-white hover:bg-green-600/30 rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
+              title="مزامنة صور العملاء"
+            >
+              <PhotoIcon className={`h-4 w-4 ${isSyncing ? 'animate-pulse' : ''}`} />
+              <span className="text-xs md:text-sm whitespace-nowrap">{isSyncing ? 'مزامنة...' : 'الصور'}</span>
+            </button>
+            <button
+              onClick={fetchMessages}
+              className="flex items-center gap-1 md:gap-2 px-2 py-1 md:px-3 md:py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md transition-colors flex-shrink-0"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <span className="text-xs md:text-sm">تحديث</span>
+            </button>
           </div>
         </div>
 
