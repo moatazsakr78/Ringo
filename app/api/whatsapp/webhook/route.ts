@@ -49,8 +49,9 @@ export async function POST(request: NextRequest) {
     // WasenderAPI webhook format
     const event = body.event || body.type;
 
-    // Handle only messages.received event (ignore messages.upsert to prevent duplicates)
-    if (event === 'messages.received') {
+    // Handle both messages.received and messages.upsert events
+    // messages.upsert is used for outgoing messages sent from mobile WhatsApp Business app
+    if (event === 'messages.received' || event === 'messages.upsert') {
       // WasenderAPI format: data.messages is a single object (not array)
       const messagesData = body.data?.messages;
 
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
 
         if (message) {
           const messageTypeLabel = isOutgoing ? '📤 Outgoing' : '📥 Incoming';
-          console.log(`${messageTypeLabel} message:`, message.customerName, '-', message.text);
+          console.log(`${messageTypeLabel} message (${event}):`, message.customerName, '-', message.text);
 
           // Check if message contains media that needs decryption
           let mediaUrl = message.mediaUrl;
@@ -127,9 +128,6 @@ export async function POST(request: NextRequest) {
           }
         }
       }
-    } else if (event === 'messages.upsert') {
-      // Ignore messages.upsert to prevent duplicates (we only process messages.received)
-      console.log('⏭️ Ignoring messages.upsert event (using messages.received only)');
     } else if (event === 'messages.update' || event === 'message.update') {
       // Message status update (delivered, read, etc.)
       console.log('📊 Message status update:', body.data);
