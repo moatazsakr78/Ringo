@@ -10,7 +10,7 @@ import AddStorageModal from './AddStorageModal'
 import ManagementModal from './ManagementModal'
 import CategoriesTreeView from './CategoriesTreeView'
 import ColumnsControlModal from './ColumnsControlModal'
-import { useProducts } from '../lib/hooks/useProductsOptimized'
+import { useProductsAdmin } from '@/lib/hooks/useProductsAdmin'
 import {
   ArrowPathIcon,
   BuildingStorefrontIcon,
@@ -103,8 +103,8 @@ export default function InventoryTabletView({
   // Ref for scrollable toolbar
   const toolbarRef = useRef<HTMLDivElement>(null)
 
-  // Get products and branches data
-  const { products, branches, isLoading, error, fetchProducts } = useProducts()
+  // Get products and branches data - Using optimized admin hook for better mobile performance
+  const { products, branches, isLoading, error, fetchProducts } = useProductsAdmin()
 
   // OPTIMIZED: Memoized branch toggle handler
   const handleBranchToggle = useCallback((branchId: string) => {

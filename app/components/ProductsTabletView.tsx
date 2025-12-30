@@ -12,7 +12,7 @@ import ColorAssignmentModal from './ColorAssignmentModal'
 import ColorChangeModal from './ColorChangeModal'
 import ColumnsControlModal from './ColumnsControlModal'
 import { useBranches, Branch, ProductVariant } from '../lib/hooks/useBranches'
-import { useProducts, Product } from '../lib/hooks/useProductsOptimized'
+import { useProductsAdmin, Product } from '@/lib/hooks/useProductsAdmin'
 import {
   ArrowPathIcon,
   FolderPlusIcon,
@@ -93,8 +93,8 @@ export default function ProductsTabletView({
   // Ref for scrollable toolbar
   const toolbarRef = useRef<HTMLDivElement>(null)
 
-  // Get products and branches data
-  const { products, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct } = useProducts()
+  // Get products and branches data - Using optimized admin hook for better mobile performance
+  const { products, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct } = useProductsAdmin()
   const { fetchBranchInventory, fetchProductVariants } = useBranches()
 
   // Initialize selected branches when branches data loads
