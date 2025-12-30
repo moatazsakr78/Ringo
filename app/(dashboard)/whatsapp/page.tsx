@@ -193,6 +193,9 @@ export default function WhatsAppPage() {
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [showMobileChat, setShowMobileChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const [shouldScrollToBottom, setShouldScrollToBottom] = useState(true)
+  const prevMessageCountRef = useRef<number>(0)
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<Message | null>(null)
@@ -343,10 +346,27 @@ export default function WhatsAppPage() {
     }
   }, [fetchMessages, checkConnectionStatus])
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom only when needed (new messages or conversation change)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, selectedConversation])
+    const currentMessageCount = messages.filter(m => m.from_number === selectedConversation).length
+    const isNewConversation = prevMessageCountRef.current === 0 && currentMessageCount > 0
+    const hasNewMessages = currentMessageCount > prevMessageCountRef.current
+
+    // Scroll to bottom only if:
+    // 1. User is at bottom (shouldScrollToBottom is true)
+    // 2. AND (it's a new conversation OR there are new messages)
+    if (shouldScrollToBottom && (isNewConversation || hasNewMessages)) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+
+    prevMessageCountRef.current = currentMessageCount
+  }, [messages, selectedConversation, shouldScrollToBottom])
+
+  // Reset scroll state when changing conversations
+  useEffect(() => {
+    setShouldScrollToBottom(true)
+    prevMessageCountRef.current = 0
+  }, [selectedConversation])
 
   // Filter messages for selected conversation
   const conversationMessages = messages.filter(
@@ -785,7 +805,7 @@ export default function WhatsAppPage() {
   }
 
   return (
-    <div className="h-screen bg-[#2B3544] overflow-hidden">
+    <div className="h-screen bg-[#2B3544] overflow-hidden overflow-x-hidden">
       {/* Top Header */}
       <TopHeader onMenuClick={toggleSidebar} isMenuOpen={isSidebarOpen} />
 
@@ -1001,7 +1021,15 @@ export default function WhatsAppPage() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3">
+                <div
+                  ref={messagesContainerRef}
+                  className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide p-4 space-y-3"
+                  onScroll={(e) => {
+                    const target = e.target as HTMLDivElement
+                    const isAtBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 100
+                    setShouldScrollToBottom(isAtBottom)
+                  }}
+                >
                   {conversationMessages.length === 0 ? (
                     <div className="flex items-center justify-center h-full">
                       <p className="text-gray-400">لا توجد رسائل في هذه المحادثة</p>
