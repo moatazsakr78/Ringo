@@ -41,6 +41,7 @@ import {
   Squares2X2Icon,
   ListBulletIcon,
   EyeIcon,
+  EyeSlashIcon,
   XMarkIcon
 } from '@heroicons/react/24/outline'
 
@@ -90,6 +91,8 @@ export default function ProductsPage() {
   } | null>(null)
   const [showFinalDeleteConfirm, setShowFinalDeleteConfirm] = useState(false)
   const [isLoadingUsageStats, setIsLoadingUsageStats] = useState(false)
+  const [showHideProductConfirm, setShowHideProductConfirm] = useState(false)
+  const [isHidingProduct, setIsHidingProduct] = useState(false)
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid')
   const [showProductModal, setShowProductModal] = useState(false)
   const [modalProduct, setModalProduct] = useState<Product | null>(null)
@@ -118,7 +121,7 @@ export default function ProductsPage() {
   const [lastScrollY, setLastScrollY] = useState(0)
 
   // ✨ OPTIMIZED: Use super-optimized admin hook (reduces queries significantly!)
-  const { products, setProducts, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct, getProductUsageStats } = useProductsAdmin()
+  const { products, setProducts, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct, hideProduct, getProductUsageStats } = useProductsAdmin()
   const { fetchBranchInventory, fetchProductVariants } = useBranches()
 
   // Device detection for tablet and mobile optimization
@@ -723,6 +726,31 @@ export default function ProductsPage() {
     setProductUsageStats(null)
   }
 
+  // Hide product handlers (soft delete without usage check)
+  const handleHideProduct = () => {
+    if (!selectedProduct) return
+    setShowHideProductConfirm(true)
+  }
+
+  const confirmHideProduct = async () => {
+    if (!selectedProduct) return
+    setIsHidingProduct(true)
+    try {
+      await hideProduct(selectedProduct.id)
+      setSelectedProduct(null)
+      setShowHideProductConfirm(false)
+    } catch (error) {
+      console.error('Error hiding product:', error)
+      alert('حدث خطأ أثناء إخفاء المنتج')
+    } finally {
+      setIsHidingProduct(false)
+    }
+  }
+
+  const cancelHideProduct = () => {
+    setShowHideProductConfirm(false)
+  }
+
   // OPTIMIZED: Memoized columns change handler - saves to localStorage
   const handleColumnsChange = useCallback((updatedColumns: {id: string, header: string, visible: boolean}[]) => {
     const newVisibleColumns: {[key: string]: boolean} = {}
@@ -933,17 +961,30 @@ export default function ProductsPage() {
               <span className="text-sm">تحرير المنتج</span>
             </button>
 
-            <button 
+            <button
               onClick={handleDeleteProduct}
               className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
                 selectedProduct
-                  ? 'text-red-400 hover:text-red-300' 
+                  ? 'text-red-400 hover:text-red-300'
                   : 'text-gray-500 cursor-not-allowed'
               }`}
               disabled={!selectedProduct}
             >
               <TrashIcon className="h-5 w-5 mb-1" />
               <span className="text-sm">حذف المنتج</span>
+            </button>
+
+            <button
+              onClick={handleHideProduct}
+              className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] ${
+                selectedProduct
+                  ? 'text-orange-400 hover:text-orange-300'
+                  : 'text-gray-500 cursor-not-allowed'
+              }`}
+              disabled={!selectedProduct}
+            >
+              <EyeSlashIcon className="h-5 w-5 mb-1" />
+              <span className="text-sm">إخفاء المنتج</span>
             </button>
 
             <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px]">
@@ -1545,6 +1586,70 @@ export default function ProductsPage() {
                   }`}
                 >
                   {isDeletingProduct ? 'جاري الحذف...' : (showFinalDeleteConfirm ? 'نعم، احذف المنتج' : (productUsageStats?.hasUsage ? 'متابعة' : 'نعم، احذف'))}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Hide Product Confirmation Modal */}
+      {showHideProductConfirm && (
+        <>
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50" onClick={cancelHideProduct} />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-[#3A4553] rounded-lg shadow-2xl border border-[#4A5568] max-w-lg w-full">
+              {/* Header */}
+              <div className="px-6 py-4 border-b border-[#4A5568]">
+                <h3 className="text-lg font-medium text-white text-right">
+                  إخفاء المنتج
+                </h3>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4">
+                <p className="text-gray-300 text-right mb-2">
+                  هل أنت متأكد من إخفاء هذا المنتج؟
+                </p>
+                <p className="text-blue-400 font-medium text-right mb-4">
+                  {selectedProduct?.name}
+                </p>
+
+                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                  <p className="text-green-400 text-right flex items-center justify-end gap-2">
+                    <span>✓</span>
+                    <span>لا تقلق!</span>
+                  </p>
+                  <p className="text-gray-300 text-right mt-2">
+                    <span className="text-white font-medium">لن يتأثر أي شيء</span> - الفواتير والطلبات السابقة ستظل كما هي.
+                  </p>
+                  <p className="text-gray-400 text-right mt-2 text-sm">
+                    المنتج سيختفي فقط من نقطة البيع والمتجر، ولكنه سيبقى في كل الفواتير والطلبات السابقة.
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="px-6 py-4 border-t border-[#4A5568] flex gap-3 justify-end">
+                <button
+                  onClick={cancelHideProduct}
+                  className="px-4 py-2 text-gray-300 hover:text-white bg-transparent hover:bg-gray-600/20 border border-gray-600 hover:border-gray-500 rounded transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={confirmHideProduct}
+                  disabled={isHidingProduct}
+                  className={`px-4 py-2 rounded transition-colors ${
+                    isHidingProduct
+                      ? 'bg-orange-600/50 text-orange-300 cursor-not-allowed'
+                      : 'bg-orange-600 hover:bg-orange-700 text-white'
+                  }`}
+                >
+                  {isHidingProduct ? 'جاري الإخفاء...' : 'نعم، إخفاء المنتج'}
                 </button>
               </div>
             </div>

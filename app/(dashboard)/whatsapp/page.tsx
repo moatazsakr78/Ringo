@@ -24,7 +24,9 @@ import {
   SignalSlashIcon,
   ArrowRightIcon,
   ArrowUturnLeftIcon,
+  FaceSmileIcon,
 } from '@heroicons/react/24/outline'
+import { EmojiPicker } from '../../components/EmojiPicker'
 
 interface Message {
   id: string
@@ -198,6 +200,7 @@ export default function WhatsAppPage() {
 
   // Attachment state
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const [attachmentType, setAttachmentType] = useState<AttachmentType>(null)
   const [mediaUrl, setMediaUrl] = useState('')
   const [caption, setCaption] = useState('')
@@ -1300,6 +1303,28 @@ export default function WhatsAppPage() {
                           </button>
                         </div>
                       )}
+                    </div>
+
+                    {/* Emoji Picker Button */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="p-2 text-gray-400 hover:text-white hover:bg-gray-600/50 rounded-full transition-colors"
+                        title="إضافة emoji"
+                      >
+                        <FaceSmileIcon className="h-5 w-5" />
+                      </button>
+
+                      {/* Emoji Picker Popup */}
+                      <EmojiPicker
+                        isOpen={showEmojiPicker}
+                        onClose={() => setShowEmojiPicker(false)}
+                        onEmojiSelect={(emoji) => {
+                          setNewMessage(prev => prev + emoji)
+                          // الـ picker يفضل مفتوح - يتقفل بس لما يدوس برا
+                        }}
+                      />
                     </div>
 
                     {/* Voice Recorder or Text Input */}

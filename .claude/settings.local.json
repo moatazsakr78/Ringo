@@ -333,7 +333,8 @@
       "mcp__ide__getDiagnostics",
       "Bash(start http://localhost:3000/safes)",
       "WebFetch(domain:wasenderapi.com)",
-      "WebFetch(domain:www.wasenderapi.com)"
+      "WebFetch(domain:www.wasenderapi.com)",
+      "Bash(start http://localhost:3000/whatsapp)"
     ],
     "deny": [],
     "additionalDirectories": [

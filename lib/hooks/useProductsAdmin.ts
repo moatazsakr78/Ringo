@@ -729,6 +729,21 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     }
   }, [getProductUsageStats])
 
+  // ✨ Hide product (soft delete always - just marks as deleted without checking usage)
+  const hideProduct = useCallback(async (productId: string): Promise<void> => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_deleted: true } as any)
+        .eq('id', productId)
+
+      if (error) throw error
+    } catch (err) {
+      console.error('Error hiding product:', err)
+      throw err
+    }
+  }, [])
+
   return {
     products,
     setProducts, // ✨ Expose setProducts for optimistic updates
@@ -739,6 +754,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     createProduct, // ✨ Expose createProduct
     updateProduct, // ✨ Expose updateProduct
     deleteProduct, // ✨ Expose deleteProduct
+    hideProduct, // ✨ Expose hideProduct for soft delete without usage check
     getProductUsageStats, // ✨ Expose getProductUsageStats for detailed deletion info
   };
 }
