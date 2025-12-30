@@ -1319,7 +1319,7 @@ function ReportsPageContent() {
     setLoading(true);
     try {
       // Get customers with their group information
-      const { data: customersData, error: customersError } = await supabase
+      let customersQuery = supabase
         .from('customers')
         .select(`
           id,
@@ -1330,9 +1330,26 @@ function ReportsPageContent() {
           category,
           rank,
           created_at,
+          group_id,
           customer_groups(name)
         `)
         .eq('is_active', true);
+
+      // Apply customer filter
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        customersQuery = customersQuery.eq('id', simpleFilters.customerId);
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        customersQuery = customersQuery.in('id', multiFilters.customerIds);
+      }
+
+      // Apply customer group filter
+      if (activeFilterType === 'simple' && simpleFilters.customerGroupId) {
+        customersQuery = customersQuery.eq('group_id', simpleFilters.customerGroupId);
+      } else if (activeFilterType === 'multi' && multiFilters.customerGroupIds.length > 0) {
+        customersQuery = customersQuery.in('group_id', multiFilters.customerGroupIds);
+      }
+
+      const { data: customersData, error: customersError } = await customersQuery;
 
       if (customersError) {
         console.error('Error fetching customers:', customersError);
@@ -1348,11 +1365,15 @@ function ReportsPageContent() {
           customer_id,
           total_amount,
           created_at,
+          user_id,
+          branch_id,
           sale_items(
             id,
             quantity,
             unit_price,
-            cost_price
+            cost_price,
+            product_id,
+            products(category_id)
           )
         `);
 
@@ -1385,6 +1406,31 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on sales data
+      let filteredSalesData = salesData || [];
+
+      // Filter by user (salesperson)
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          multiFilters.userIds.includes(sale.user_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          multiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
       // Process data to calculate customer statistics with accurate profit
       const customerMap = new Map();
 
@@ -1406,26 +1452,53 @@ function ReportsPageContent() {
       });
 
       // Calculate sales statistics for each customer
-      salesData?.forEach((sale: any) => {
+      filteredSalesData.forEach((sale: any) => {
         if (!sale.customer_id || !customerMap.has(sale.customer_id)) return;
 
         const customerStats = customerMap.get(sale.customer_id);
-        customerStats.invoice_count += 1;
-        customerStats.total_amount += parseFloat(sale.total_amount) || 0;
 
-        // Calculate accurate profit from sale items
-        // Profit = (unit_price - cost_price) * quantity for each item
-        if (sale.sale_items && Array.isArray(sale.sale_items)) {
-          sale.sale_items.forEach((item: any) => {
-            const quantity = item.quantity || 0;
-            const unitPrice = parseFloat(item.unit_price) || 0;
-            const costPrice = parseFloat(item.cost_price) || 0;
+        // Filter sale_items by product and category if needed
+        let filteredItems = sale.sale_items || [];
 
-            // Calculate profit per item: (selling price - cost price) × quantity
-            const itemProfit = (unitPrice - costPrice) * quantity;
-            customerStats.total_profit += itemProfit;
-          });
+        // Filter by product
+        if (activeFilterType === 'simple' && simpleFilters.productId) {
+          filteredItems = filteredItems.filter((item: any) =>
+            item.product_id === simpleFilters.productId
+          );
+        } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+          filteredItems = filteredItems.filter((item: any) =>
+            multiFilters.productIds.includes(item.product_id)
+          );
         }
+
+        // Filter by category
+        if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+          filteredItems = filteredItems.filter((item: any) =>
+            item.products?.category_id === simpleFilters.categoryId
+          );
+        } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+          filteredItems = filteredItems.filter((item: any) =>
+            multiFilters.categoryIds.includes(item.products?.category_id)
+          );
+        }
+
+        if (filteredItems.length === 0) return;
+
+        customerStats.invoice_count += 1;
+
+        // Calculate total amount and profit from filtered items
+        let saleTotal = 0;
+        filteredItems.forEach((item: any) => {
+          const quantity = item.quantity || 0;
+          const unitPrice = parseFloat(item.unit_price) || 0;
+          const costPrice = parseFloat(item.cost_price) || 0;
+
+          saleTotal += unitPrice * quantity;
+          const itemProfit = (unitPrice - costPrice) * quantity;
+          customerStats.total_profit += itemProfit;
+        });
+
+        customerStats.total_amount += saleTotal;
       });
 
       // Convert map to array and sort by total amount (highest first)
@@ -1463,14 +1536,17 @@ function ReportsPageContent() {
             id,
             name,
             price,
+            category_id,
             categories(
               id,
               name
             )
           ),
-          sales(
+          sales!inner(
             branch_id,
             created_at,
+            user_id,
+            customer_id,
             branches(name)
           )
         `);
@@ -1495,6 +1571,13 @@ function ReportsPageContent() {
         salesQuery = salesQuery.gte('sales.created_at', '2024-01-01T00:00:00');
       }
 
+      // Apply product filter
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        salesQuery = salesQuery.eq('product_id', simpleFilters.productId);
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        salesQuery = salesQuery.in('product_id', multiFilters.productIds);
+      }
+
       const { data: salesData, error: salesError } = await salesQuery;
 
       if (salesError) {
@@ -1503,10 +1586,57 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on fetched data
+      let filteredData = salesData || [];
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.products?.category_id === simpleFilters.categoryId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.categoryIds.includes(item.products?.category_id)
+        );
+      }
+
+      // Filter by user
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.userIds.includes(item.sales?.user_id)
+        );
+      }
+
+      // Filter by customer
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.customer_id === simpleFilters.customerId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.customerIds.includes(item.sales?.customer_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
       // Process the data to aggregate by category
       const categoryMap = new Map();
 
-      salesData?.forEach((saleItem: any) => {
+      filteredData.forEach((saleItem: any) => {
         const product = saleItem.products;
         const category = product?.categories;
         const branch = saleItem.sales?.branches;
@@ -1579,15 +1709,18 @@ function ReportsPageContent() {
             price2,
             price3,
             price4,
+            category_id,
             categories(name)
           ),
-          sales(
+          sales!inner(
             branch_id,
             created_at,
+            user_id,
+            customer_id,
             branches(name)
           )
         `);
-        
+
       // Apply date filters
       if (dateFilter.type === 'today') {
         const today = new Date().toISOString().split('T')[0];
@@ -1607,7 +1740,14 @@ function ReportsPageContent() {
       } else {
         salesQuery = salesQuery.gte('sales.created_at', '2024-01-01T00:00:00');
       }
-      
+
+      // Apply product filter
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        salesQuery = salesQuery.eq('product_id', simpleFilters.productId);
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        salesQuery = salesQuery.in('product_id', multiFilters.productIds);
+      }
+
       const { data: salesData, error: salesError } = await salesQuery;
 
       if (salesError) {
@@ -1616,10 +1756,57 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on fetched data
+      let filteredData = salesData || [];
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.products?.category_id === simpleFilters.categoryId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.categoryIds.includes(item.products?.category_id)
+        );
+      }
+
+      // Filter by user
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.userIds.includes(item.sales?.user_id)
+        );
+      }
+
+      // Filter by customer
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.customer_id === simpleFilters.customerId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.customerIds.includes(item.sales?.customer_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
       // Process the data to aggregate by product
       const productMap = new Map();
 
-      salesData?.forEach((saleItem: any) => {
+      filteredData.forEach((saleItem: any) => {
         const productId = saleItem.product_id;
         const product = saleItem.products;
         const branch = saleItem.sales?.branches;
@@ -1833,10 +2020,26 @@ function ReportsPageContent() {
     setLoading(true);
     try {
       // Get customers data with account balance
-      const { data: customersData, error: customersError } = await supabase
+      let customersQuery = supabase
         .from('customers')
-        .select('id, name, account_balance')
+        .select('id, name, account_balance, group_id')
         .eq('is_active', true);
+
+      // Apply customer filter
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        customersQuery = customersQuery.eq('id', simpleFilters.customerId);
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        customersQuery = customersQuery.in('id', multiFilters.customerIds);
+      }
+
+      // Apply customer group filter
+      if (activeFilterType === 'simple' && simpleFilters.customerGroupId) {
+        customersQuery = customersQuery.eq('group_id', simpleFilters.customerGroupId);
+      } else if (activeFilterType === 'multi' && multiFilters.customerGroupIds.length > 0) {
+        customersQuery = customersQuery.in('group_id', multiFilters.customerGroupIds);
+      }
+
+      const { data: customersData, error: customersError } = await customersQuery;
 
       if (customersError) {
         console.error('Error fetching customers:', customersError);
@@ -1852,7 +2055,9 @@ function ReportsPageContent() {
           customer_id,
           total_amount,
           created_at,
-          sale_items(quantity)
+          user_id,
+          branch_id,
+          sale_items(quantity, product_id, products(category_id))
         `)
         .not('customer_id', 'is', null);
 
@@ -1882,6 +2087,53 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on sales data
+      let filteredSalesData = salesData || [];
+
+      // Filter by user
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          multiFilters.userIds.includes(sale.user_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          multiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by product
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+        );
+      }
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+        );
+      }
+
       // Process data
       const customerMap = new Map();
 
@@ -1899,7 +2151,7 @@ function ReportsPageContent() {
         });
       });
 
-      salesData?.forEach((sale: any) => {
+      filteredSalesData.forEach((sale: any) => {
         if (!sale.customer_id || !customerMap.has(sale.customer_id)) return;
 
         const customerStats = customerMap.get(sale.customer_id);
@@ -1959,7 +2211,15 @@ function ReportsPageContent() {
 
       let salesQuery = supabase
         .from('sales')
-        .select('id, total_amount, created_at');
+        .select(`
+          id,
+          total_amount,
+          created_at,
+          user_id,
+          customer_id,
+          branch_id,
+          sale_items(product_id, products(category_id))
+        `);
 
       // Apply date filters
       if (dateFilter.type === 'today') {
@@ -1992,10 +2252,68 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on fetched data
+      let filteredData = salesData || [];
+
+      // Filter by user
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.userIds.includes(sale.user_id)
+        );
+      }
+
+      // Filter by customer
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.customer_id === simpleFilters.customerId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.customerIds.includes(sale.customer_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by product
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+        );
+      }
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+        );
+      }
+
       // Group by date
       const dailyMap = new Map();
 
-      salesData?.forEach((sale: any) => {
+      filteredData.forEach((sale: any) => {
         const date = new Date(sale.created_at);
         const dateKey = date.toISOString().split('T')[0];
         const dayOfWeek = date.getDay();
@@ -2041,7 +2359,15 @@ function ReportsPageContent() {
     try {
       let salesQuery = supabase
         .from('sales')
-        .select('id, total_amount, created_at');
+        .select(`
+          id,
+          total_amount,
+          created_at,
+          user_id,
+          customer_id,
+          branch_id,
+          sale_items(product_id, products(category_id))
+        `);
 
       // Apply date filters
       if (dateFilter.type === 'today') {
@@ -2073,6 +2399,64 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on fetched data
+      let filteredData = salesData || [];
+
+      // Filter by user
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.userIds.includes(sale.user_id)
+        );
+      }
+
+      // Filter by customer
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.customer_id === simpleFilters.customerId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.customerIds.includes(sale.customer_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          multiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by product
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+        );
+      }
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+        );
+      }
+
       // Group by hour
       const hourlyMap = new Map();
       let totalAllSales = 0;
@@ -2094,7 +2478,7 @@ function ReportsPageContent() {
         });
       }
 
-      salesData?.forEach((sale: any) => {
+      filteredData.forEach((sale: any) => {
         const date = new Date(sale.created_at);
         const hour = date.getHours();
         const amount = parseFloat(sale.total_amount) || 0;
@@ -2138,8 +2522,8 @@ function ReportsPageContent() {
           quantity,
           unit_price,
           cost_price,
-          products(name),
-          sales!inner(created_at)
+          products(name, category_id),
+          sales!inner(created_at, user_id, customer_id, branch_id)
         `);
 
       // Apply date filters
@@ -2160,6 +2544,13 @@ function ReportsPageContent() {
           .lte('sales.created_at', dateFilter.endDate.toISOString());
       }
 
+      // Apply simple/multi filters - Product filter
+      if (activeFilterType === 'simple' && simpleFilters.productId) {
+        saleItemsQuery = saleItemsQuery.eq('product_id', simpleFilters.productId);
+      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        saleItemsQuery = saleItemsQuery.in('product_id', multiFilters.productIds);
+      }
+
       const { data: saleItemsData, error: saleItemsError } = await saleItemsQuery;
 
       if (saleItemsError) {
@@ -2168,10 +2559,57 @@ function ReportsPageContent() {
         return;
       }
 
+      // Apply additional filters on fetched data (category, user, customer, location)
+      let filteredData = saleItemsData || [];
+
+      // Filter by category
+      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.products?.category_id === simpleFilters.categoryId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.categoryIds.includes(item.products?.category_id)
+        );
+      }
+
+      // Filter by user (salesperson)
+      if (activeFilterType === 'simple' && simpleFilters.userId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.user_id === simpleFilters.userId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.userIds.includes(item.sales?.user_id)
+        );
+      }
+
+      // Filter by customer
+      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.customer_id === simpleFilters.customerId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.customerIds.includes(item.sales?.customer_id)
+        );
+      }
+
+      // Filter by location (branch)
+      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.branch_id === simpleFilters.locationId
+        );
+      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          multiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
       // Group by product
       const productMap = new Map();
 
-      saleItemsData?.forEach((item: any) => {
+      filteredData.forEach((item: any) => {
         const productId = item.product_id;
         const productName = item.products?.name || 'منتج غير معروف';
 
@@ -3085,6 +3523,22 @@ function ReportsPageContent() {
               // Re-fetch customers report when date filter changes
               setTimeout(() => fetchCustomersReport(), 100);
             }
+            if (showProfitMarginReport) {
+              // Re-fetch profit margin report when date filter changes
+              setTimeout(() => fetchProfitMarginReport(), 100);
+            }
+            if (showDailySalesReport) {
+              // Re-fetch daily sales report when date filter changes
+              setTimeout(() => fetchDailySalesReport(), 100);
+            }
+            if (showHourlySalesReport) {
+              // Re-fetch hourly sales report when date filter changes
+              setTimeout(() => fetchHourlySalesReport(), 100);
+            }
+            if (showCustomerInvoicesReport) {
+              // Re-fetch customer invoices report when date filter changes
+              setTimeout(() => fetchCustomerInvoicesReport(), 100);
+            }
           }}
           currentFilter={dateFilter}
         />
@@ -3131,6 +3585,18 @@ function ReportsPageContent() {
             // Reset multi filters when using simple filter
             setMultiFilters(initialMultiFilters);
             console.log('Simple Filters Applied:', filters);
+
+            // Re-fetch current report with new filters
+            setTimeout(() => {
+              if (showProfitMarginReport) fetchProfitMarginReport();
+              if (showProductsReport) fetchProductsReport();
+              if (showCategoriesReport) fetchCategoriesReport();
+              if (showCustomersReport) fetchCustomersReport();
+              if (showDailySalesReport) fetchDailySalesReport();
+              if (showHourlySalesReport) fetchHourlySalesReport();
+              if (showCustomerInvoicesReport) fetchCustomerInvoicesReport();
+              if (showUsersReport) fetchUsersReport();
+            }, 100);
           }}
           initialFilters={simpleFilters}
         />
@@ -3145,6 +3611,18 @@ function ReportsPageContent() {
             // Reset simple filters when using multi filter
             setSimpleFilters(initialSimpleFilters);
             console.log('Multi Filters Applied:', filters);
+
+            // Re-fetch current report with new filters
+            setTimeout(() => {
+              if (showProfitMarginReport) fetchProfitMarginReport();
+              if (showProductsReport) fetchProductsReport();
+              if (showCategoriesReport) fetchCategoriesReport();
+              if (showCustomersReport) fetchCustomersReport();
+              if (showDailySalesReport) fetchDailySalesReport();
+              if (showHourlySalesReport) fetchHourlySalesReport();
+              if (showCustomerInvoicesReport) fetchCustomerInvoicesReport();
+              if (showUsersReport) fetchUsersReport();
+            }, 100);
           }}
           initialFilters={multiFilters}
         />

@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
             .from('whatsapp_messages')
             .upsert({
               message_id: message.messageId,
+              msg_id: message.msgId || null, // WasenderAPI integer ID for replyTo
               from_number: message.from,
               customer_name: isOutgoing ? 'الفاروق جروب' : message.customerName,
               message_text: message.text,
@@ -157,6 +158,7 @@ export async function POST(request: NextRequest) {
 // Parse WasenderAPI message format
 interface ParsedMessage {
   messageId: string;
+  msgId?: number; // WasenderAPI integer ID for replyTo
   from: string;
   customerName: string;
   text: string;
@@ -176,6 +178,12 @@ function parseWasenderMessage(msgData: any): ParsedMessage | null {
 
     // Get message ID
     const messageId = key.id || msgData.id || `msg_${Date.now()}`;
+
+    // Get msgId (integer) from WasenderAPI - needed for replyTo
+    const msgId = msgData.msgId || msgData.msg_id || key.msgId || null;
+    if (msgId) {
+      console.log('📌 Found msgId:', msgId);
+    }
 
     // Get phone number - WasenderAPI uses cleanedSenderPn or cleanedParticipantPn
     let from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
@@ -286,6 +294,7 @@ function parseWasenderMessage(msgData: any): ParsedMessage | null {
 
     return {
       messageId,
+      msgId: msgId ? Number(msgId) : undefined,
       from,
       customerName,
       text,

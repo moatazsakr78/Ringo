@@ -40,7 +40,8 @@ interface SendMessageRequest {
   pollOptions?: string[];
   selectableOptionsCount?: number;
   // For reply/quoted messages
-  quotedMessageId?: string;
+  quotedMsgId?: number; // WasenderAPI integer ID for replyTo
+  quotedMessageId?: string; // WhatsApp string ID for our database
   quotedMessageText?: string;
   quotedMessageSender?: string;
 }
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
       pollQuestion,
       pollOptions,
       selectableOptionsCount,
+      quotedMsgId,
       quotedMessageId,
       quotedMessageText,
       quotedMessageSender,
@@ -90,7 +92,8 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
-        result = await sendWhatsAppMessage(cleanNumber, message, quotedMessageId);
+        // Pass quotedMsgId (integer) for WasenderAPI replyTo
+        result = await sendWhatsAppMessage(cleanNumber, message, quotedMsgId);
         messageText = message;
         break;
 
@@ -182,6 +185,7 @@ export async function POST(request: NextRequest) {
       // Store message in database
       const { error: dbError } = await supabase.schema('elfaroukgroup').from('whatsapp_messages').insert({
         message_id: result.messageId,
+        msg_id: result.msgId || null, // WasenderAPI integer ID for replyTo
         from_number: cleanNumber,
         customer_name: 'الفاروق جروب',
         message_text: messageText,
@@ -202,6 +206,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         messageId: result.messageId,
+        msgId: result.msgId, // Return msgId for client if needed
       });
     } else {
       return NextResponse.json(

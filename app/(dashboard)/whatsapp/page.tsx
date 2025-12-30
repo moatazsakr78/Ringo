@@ -29,6 +29,7 @@ import {
 interface Message {
   id: string
   message_id: string
+  msg_id?: number // WasenderAPI integer ID for replyTo
   from_number: string
   customer_name: string
   message_text: string
@@ -602,8 +603,13 @@ export default function WhatsAppPage() {
         to: selectedConversation,
       }
 
-      // Add quotedMessageId if replying to a message
+      // Add reply info if replying to a message
       if (replyingTo) {
+        // Use msg_id (integer) for WasenderAPI replyTo
+        if (replyingTo.msg_id) {
+          requestBody.quotedMsgId = replyingTo.msg_id // integer for WasenderAPI
+        }
+        // Keep these for storing in our database
         requestBody.quotedMessageId = replyingTo.message_id
         requestBody.quotedMessageText = replyingTo.message_text
         requestBody.quotedMessageSender = replyingTo.message_type === 'outgoing' ? 'أنت' : replyingTo.customer_name

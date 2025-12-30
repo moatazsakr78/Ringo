@@ -22,6 +22,7 @@ const TOKEN_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 export interface SendMessageResponse {
   success: boolean;
   messageId?: string;
+  msgId?: number; // WasenderAPI integer ID for replyTo
   error?: string;
 }
 
@@ -190,7 +191,7 @@ export function cleanPhoneNumber(phone: string): string {
 export async function sendWhatsAppMessage(
   to: string,
   message: string,
-  quotedMessageId?: string
+  replyToMsgId?: number // WasenderAPI integer msgId for replying
 ): Promise<SendMessageResponse> {
   try {
     const cleanNumber = cleanPhoneNumber(to);
@@ -200,9 +201,9 @@ export async function sendWhatsAppMessage(
       text: message,
     };
 
-    // Add replyTo if replying to a message (WasenderAPI uses replyTo)
-    if (quotedMessageId) {
-      payload.replyTo = quotedMessageId;
+    // Add replyTo if replying to a message (WasenderAPI requires integer msgId)
+    if (replyToMsgId) {
+      payload.replyTo = replyToMsgId;
     }
 
     const data = await makeApiRequest('/send-message', 'POST', payload);
@@ -210,6 +211,7 @@ export async function sendWhatsAppMessage(
     return {
       success: true,
       messageId: data.messageId || data.id,
+      msgId: data.msgId || data.data?.msgId, // WasenderAPI integer msgId
     };
   } catch (error) {
     console.error('WhatsApp Send Error:', error);
