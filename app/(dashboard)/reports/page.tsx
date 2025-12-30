@@ -588,6 +588,55 @@ const getProductsTableColumns = (formatPrice: (value: number) => string) => [
   }
 ];
 
+// Helper function to get date range from filter type
+// Handles all date filter types including last_week and last_month
+const getDateRangeForFilter = (filter: DateFilter): { startDate: string; endDate: string } | null => {
+  const now = new Date();
+  let startDate: Date;
+  let endDate: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  switch (filter.type) {
+    case 'today':
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      break;
+    case 'current_week':
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - now.getDay());
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'last_week':
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - now.getDay() - 7);
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 6);
+      endDate.setHours(23, 59, 59, 999);
+      break;
+    case 'current_month':
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      break;
+    case 'last_month':
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      break;
+    case 'custom':
+      if (filter.startDate && filter.endDate) {
+        return {
+          startDate: filter.startDate.toISOString(),
+          endDate: filter.endDate.toISOString()
+        };
+      }
+      return null;
+    default: // 'all'
+      return null;
+  }
+
+  return {
+    startDate: startDate.toISOString(),
+    endDate: endDate.toISOString()
+  };
+};
+
 function ReportsPageContent() {
   const formatPrice = useFormatPrice();
   const { showToast } = useToast();
@@ -1315,7 +1364,17 @@ function ReportsPageContent() {
   }, []); // Empty dependency array for mount-only effect
   
   // Function to fetch customers report data with accurate profit calculation
-  const fetchCustomersReport = async () => {
+  const fetchCustomersReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       // Get customers with their group information
@@ -1336,17 +1395,17 @@ function ReportsPageContent() {
         .eq('is_active', true);
 
       // Apply customer filter
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
-        customersQuery = customersQuery.eq('id', simpleFilters.customerId);
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
-        customersQuery = customersQuery.in('id', multiFilters.customerIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
+        customersQuery = customersQuery.eq('id', currentSimpleFilters.customerId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
+        customersQuery = customersQuery.in('id', currentMultiFilters.customerIds);
       }
 
       // Apply customer group filter
-      if (activeFilterType === 'simple' && simpleFilters.customerGroupId) {
-        customersQuery = customersQuery.eq('group_id', simpleFilters.customerGroupId);
-      } else if (activeFilterType === 'multi' && multiFilters.customerGroupIds.length > 0) {
-        customersQuery = customersQuery.in('group_id', multiFilters.customerGroupIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerGroupId) {
+        customersQuery = customersQuery.eq('group_id', currentSimpleFilters.customerGroupId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerGroupIds.length > 0) {
+        customersQuery = customersQuery.in('group_id', currentMultiFilters.customerGroupIds);
       }
 
       const { data: customersData, error: customersError } = await customersQuery;
@@ -1365,8 +1424,9 @@ function ReportsPageContent() {
           customer_id,
           total_amount,
           created_at,
-          user_id,
+          cashier_id,
           branch_id,
+          record_id,
           sale_items(
             id,
             quantity,
@@ -1377,25 +1437,12 @@ function ReportsPageContent() {
           )
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('created_at', dateFilter.startDate.toISOString())
-          .lte('created_at', dateFilter.endDate.toISOString());
-      } else {
-        // Default to all time
-        salesQuery = salesQuery.gte('created_at', '2024-01-01T00:00:00');
+          .gte('created_at', dateRange.startDate)
+          .lte('created_at', dateRange.endDate);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -1410,24 +1457,35 @@ function ReportsPageContent() {
       let filteredSalesData = salesData || [];
 
       // Filter by user (salesperson)
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.user_id === simpleFilters.userId
+          sale.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          multiFilters.userIds.includes(sale.user_id)
+          currentMultiFilters.userIds.includes(sale.cashier_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.branch_id === simpleFilters.locationId
+          sale.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          multiFilters.locationIds.includes(sale.branch_id)
+          currentMultiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          currentMultiFilters.safeIds.includes(sale.record_id)
         );
       }
 
@@ -1461,24 +1519,24 @@ function ReportsPageContent() {
         let filteredItems = sale.sale_items || [];
 
         // Filter by product
-        if (activeFilterType === 'simple' && simpleFilters.productId) {
+        if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
           filteredItems = filteredItems.filter((item: any) =>
-            item.product_id === simpleFilters.productId
+            item.product_id === currentSimpleFilters.productId
           );
-        } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+        } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
           filteredItems = filteredItems.filter((item: any) =>
-            multiFilters.productIds.includes(item.product_id)
+            currentMultiFilters.productIds.includes(item.product_id)
           );
         }
 
         // Filter by category
-        if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+        if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
           filteredItems = filteredItems.filter((item: any) =>
-            item.products?.category_id === simpleFilters.categoryId
+            item.products?.category_id === currentSimpleFilters.categoryId
           );
-        } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+        } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
           filteredItems = filteredItems.filter((item: any) =>
-            multiFilters.categoryIds.includes(item.products?.category_id)
+            currentMultiFilters.categoryIds.includes(item.products?.category_id)
           );
         }
 
@@ -1523,7 +1581,17 @@ function ReportsPageContent() {
   };
 
   // Function to fetch categories report data
-  const fetchCategoriesReport = async () => {
+  const fetchCategoriesReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       let salesQuery = supabase
@@ -1545,37 +1613,26 @@ function ReportsPageContent() {
           sales!inner(
             branch_id,
             created_at,
-            user_id,
+            cashier_id,
             customer_id,
+            record_id,
             branches(name)
           )
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('sales.created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('sales.created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('sales.created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('sales.created_at', dateFilter.startDate.toISOString())
-          .lte('sales.created_at', dateFilter.endDate.toISOString());
-      } else {
-        salesQuery = salesQuery.gte('sales.created_at', '2024-01-01T00:00:00');
+          .gte('sales.created_at', dateRange.startDate)
+          .lte('sales.created_at', dateRange.endDate);
       }
 
       // Apply product filter
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
-        salesQuery = salesQuery.eq('product_id', simpleFilters.productId);
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
-        salesQuery = salesQuery.in('product_id', multiFilters.productIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
+        salesQuery = salesQuery.eq('product_id', currentSimpleFilters.productId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
+        salesQuery = salesQuery.in('product_id', currentMultiFilters.productIds);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -1590,46 +1647,57 @@ function ReportsPageContent() {
       let filteredData = salesData || [];
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredData = filteredData.filter((item: any) =>
-          item.products?.category_id === simpleFilters.categoryId
+          item.products?.category_id === currentSimpleFilters.categoryId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.categoryIds.includes(item.products?.category_id)
+          currentMultiFilters.categoryIds.includes(item.products?.category_id)
         );
       }
 
       // Filter by user
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.user_id === simpleFilters.userId
+          item.sales?.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.userIds.includes(item.sales?.user_id)
+          currentMultiFilters.userIds.includes(item.sales?.cashier_id)
         );
       }
 
       // Filter by customer
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.customer_id === simpleFilters.customerId
+          item.sales?.customer_id === currentSimpleFilters.customerId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.customerIds.includes(item.sales?.customer_id)
+          currentMultiFilters.customerIds.includes(item.sales?.customer_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.branch_id === simpleFilters.locationId
+          item.sales?.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.locationIds.includes(item.sales?.branch_id)
+          currentMultiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          currentMultiFilters.safeIds.includes(item.sales?.record_id)
         );
       }
 
@@ -1691,7 +1759,17 @@ function ReportsPageContent() {
   };
 
   // Function to fetch products report data
-  const fetchProductsReport = async () => {
+  const fetchProductsReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       let salesQuery = supabase
@@ -1715,37 +1793,26 @@ function ReportsPageContent() {
           sales!inner(
             branch_id,
             created_at,
-            user_id,
+            cashier_id,
             customer_id,
+            record_id,
             branches(name)
           )
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('sales.created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('sales.created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('sales.created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('sales.created_at', dateFilter.startDate.toISOString())
-          .lte('sales.created_at', dateFilter.endDate.toISOString());
-      } else {
-        salesQuery = salesQuery.gte('sales.created_at', '2024-01-01T00:00:00');
+          .gte('sales.created_at', dateRange.startDate)
+          .lte('sales.created_at', dateRange.endDate);
       }
 
       // Apply product filter
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
-        salesQuery = salesQuery.eq('product_id', simpleFilters.productId);
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
-        salesQuery = salesQuery.in('product_id', multiFilters.productIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
+        salesQuery = salesQuery.eq('product_id', currentSimpleFilters.productId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
+        salesQuery = salesQuery.in('product_id', currentMultiFilters.productIds);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -1760,46 +1827,57 @@ function ReportsPageContent() {
       let filteredData = salesData || [];
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredData = filteredData.filter((item: any) =>
-          item.products?.category_id === simpleFilters.categoryId
+          item.products?.category_id === currentSimpleFilters.categoryId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.categoryIds.includes(item.products?.category_id)
+          currentMultiFilters.categoryIds.includes(item.products?.category_id)
         );
       }
 
       // Filter by user
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.user_id === simpleFilters.userId
+          item.sales?.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.userIds.includes(item.sales?.user_id)
+          currentMultiFilters.userIds.includes(item.sales?.cashier_id)
         );
       }
 
       // Filter by customer
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.customer_id === simpleFilters.customerId
+          item.sales?.customer_id === currentSimpleFilters.customerId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.customerIds.includes(item.sales?.customer_id)
+          currentMultiFilters.customerIds.includes(item.sales?.customer_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.branch_id === simpleFilters.locationId
+          item.sales?.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.locationIds.includes(item.sales?.branch_id)
+          currentMultiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          currentMultiFilters.safeIds.includes(item.sales?.record_id)
         );
       }
 
@@ -1864,7 +1942,17 @@ function ReportsPageContent() {
   };
 
   // Function to fetch users report data
-  const fetchUsersReport = async () => {
+  const fetchUsersReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       // Get derived roles from wholesale to exclude them too
@@ -1909,6 +1997,8 @@ function ReportsPageContent() {
           cashier_id,
           total_amount,
           created_at,
+          branch_id,
+          record_id,
           sale_items(
             id,
             quantity,
@@ -1917,25 +2007,12 @@ function ReportsPageContent() {
           )
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('created_at', dateFilter.startDate.toISOString())
-          .lte('created_at', dateFilter.endDate.toISOString());
-      } else {
-        // Default to all time
-        salesQuery = salesQuery.gte('created_at', '2024-01-01T00:00:00');
+          .gte('created_at', dateRange.startDate)
+          .lte('created_at', dateRange.endDate);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -1944,6 +2021,31 @@ function ReportsPageContent() {
         console.error('Error fetching sales data:', salesError);
         alert(`خطأ في جلب بيانات المبيعات: ${salesError.message}`);
         return;
+      }
+
+      // Apply additional filters on sales data
+      let filteredSalesData = salesData || [];
+
+      // Filter by location (branch)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.branch_id === currentSimpleFilters.locationId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          currentMultiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          currentMultiFilters.safeIds.includes(sale.record_id)
+        );
       }
 
       // Process data to calculate user statistics with accurate profit
@@ -1967,7 +2069,7 @@ function ReportsPageContent() {
       });
 
       // Process sales data and calculate profits for each user
-      salesData?.forEach((sale: any) => {
+      filteredSalesData.forEach((sale: any) => {
         if (!sale.cashier_id) return; // Skip sales without cashier
 
         const user = userMap.get(sale.cashier_id);
@@ -2016,7 +2118,17 @@ function ReportsPageContent() {
   // ============ NEW REPORTS FETCH FUNCTIONS ============
 
   // Fetch Customer Invoices Report
-  const fetchCustomerInvoicesReport = async () => {
+  const fetchCustomerInvoicesReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       // Get customers data with account balance
@@ -2026,17 +2138,17 @@ function ReportsPageContent() {
         .eq('is_active', true);
 
       // Apply customer filter
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
-        customersQuery = customersQuery.eq('id', simpleFilters.customerId);
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
-        customersQuery = customersQuery.in('id', multiFilters.customerIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
+        customersQuery = customersQuery.eq('id', currentSimpleFilters.customerId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
+        customersQuery = customersQuery.in('id', currentMultiFilters.customerIds);
       }
 
       // Apply customer group filter
-      if (activeFilterType === 'simple' && simpleFilters.customerGroupId) {
-        customersQuery = customersQuery.eq('group_id', simpleFilters.customerGroupId);
-      } else if (activeFilterType === 'multi' && multiFilters.customerGroupIds.length > 0) {
-        customersQuery = customersQuery.in('group_id', multiFilters.customerGroupIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerGroupId) {
+        customersQuery = customersQuery.eq('group_id', currentSimpleFilters.customerGroupId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerGroupIds.length > 0) {
+        customersQuery = customersQuery.in('group_id', currentMultiFilters.customerGroupIds);
       }
 
       const { data: customersData, error: customersError } = await customersQuery;
@@ -2055,28 +2167,19 @@ function ReportsPageContent() {
           customer_id,
           total_amount,
           created_at,
-          user_id,
+          cashier_id,
           branch_id,
+          record_id,
           sale_items(quantity, product_id, products(category_id))
         `)
         .not('customer_id', 'is', null);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('created_at', dateFilter.startDate.toISOString())
-          .lte('created_at', dateFilter.endDate.toISOString());
+          .gte('created_at', dateRange.startDate)
+          .lte('created_at', dateRange.endDate);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -2091,46 +2194,57 @@ function ReportsPageContent() {
       let filteredSalesData = salesData || [];
 
       // Filter by user
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.user_id === simpleFilters.userId
+          sale.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          multiFilters.userIds.includes(sale.user_id)
+          currentMultiFilters.userIds.includes(sale.cashier_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.branch_id === simpleFilters.locationId
+          sale.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          multiFilters.locationIds.includes(sale.branch_id)
+          currentMultiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          sale.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredSalesData = filteredSalesData.filter((sale: any) =>
+          currentMultiFilters.safeIds.includes(sale.record_id)
         );
       }
 
       // Filter by product
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+          sale.sale_items?.some((item: any) => item.product_id === currentSimpleFilters.productId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.productIds.includes(item.product_id))
         );
       }
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+          sale.sale_items?.some((item: any) => item.products?.category_id === currentSimpleFilters.categoryId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredSalesData = filteredSalesData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.categoryIds.includes(item.products?.category_id))
         );
       }
 
@@ -2204,7 +2318,17 @@ function ReportsPageContent() {
   };
 
   // Fetch Daily Sales Report
-  const fetchDailySalesReport = async () => {
+  const fetchDailySalesReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       const dayNames = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -2215,30 +2339,21 @@ function ReportsPageContent() {
           id,
           total_amount,
           created_at,
-          user_id,
+          cashier_id,
           customer_id,
           branch_id,
+          record_id,
           sale_items(product_id, products(category_id))
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('created_at', dateFilter.startDate.toISOString())
-          .lte('created_at', dateFilter.endDate.toISOString());
+          .gte('created_at', dateRange.startDate)
+          .lte('created_at', dateRange.endDate);
       } else {
-        // Default to last 30 days
+        // Default to last 30 days when no filter (type='all')
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         salesQuery = salesQuery.gte('created_at', thirtyDaysAgo.toISOString());
@@ -2256,57 +2371,68 @@ function ReportsPageContent() {
       let filteredData = salesData || [];
 
       // Filter by user
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.user_id === simpleFilters.userId
+          sale.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.userIds.includes(sale.user_id)
+          currentMultiFilters.userIds.includes(sale.cashier_id)
         );
       }
 
       // Filter by customer
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.customer_id === simpleFilters.customerId
+          sale.customer_id === currentSimpleFilters.customerId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.customerIds.includes(sale.customer_id)
+          currentMultiFilters.customerIds.includes(sale.customer_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredData = filteredData.filter((sale: any) =>
-          sale.branch_id === simpleFilters.locationId
+          sale.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.locationIds.includes(sale.branch_id)
+          currentMultiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          currentMultiFilters.safeIds.includes(sale.record_id)
         );
       }
 
       // Filter by product
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+          sale.sale_items?.some((item: any) => item.product_id === currentSimpleFilters.productId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.productIds.includes(item.product_id))
         );
       }
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+          sale.sale_items?.some((item: any) => item.products?.category_id === currentSimpleFilters.categoryId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.categoryIds.includes(item.products?.category_id))
         );
       }
 
@@ -2354,7 +2480,17 @@ function ReportsPageContent() {
   };
 
   // Fetch Hourly Sales Report
-  const fetchHourlySalesReport = async () => {
+  const fetchHourlySalesReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       let salesQuery = supabase
@@ -2363,32 +2499,24 @@ function ReportsPageContent() {
           id,
           total_amount,
           created_at,
-          user_id,
+          cashier_id,
           customer_id,
           branch_id,
+          record_id,
           sale_items(product_id, products(category_id))
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        salesQuery = salesQuery.gte('created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        salesQuery = salesQuery.gte('created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         salesQuery = salesQuery
-          .gte('created_at', dateFilter.startDate.toISOString())
-          .lte('created_at', dateFilter.endDate.toISOString());
+          .gte('created_at', dateRange.startDate)
+          .lte('created_at', dateRange.endDate);
       } else {
-        // Default to today
-        const today = new Date().toISOString().split('T')[0];
-        salesQuery = salesQuery.gte('created_at', today + 'T00:00:00');
+        // Default to today when no filter (type='all')
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        salesQuery = salesQuery.gte('created_at', todayStart.toISOString());
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -2403,57 +2531,68 @@ function ReportsPageContent() {
       let filteredData = salesData || [];
 
       // Filter by user
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.user_id === simpleFilters.userId
+          sale.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.userIds.includes(sale.user_id)
+          currentMultiFilters.userIds.includes(sale.cashier_id)
         );
       }
 
       // Filter by customer
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.customer_id === simpleFilters.customerId
+          sale.customer_id === currentSimpleFilters.customerId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.customerIds.includes(sale.customer_id)
+          currentMultiFilters.customerIds.includes(sale.customer_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredData = filteredData.filter((sale: any) =>
-          sale.branch_id === simpleFilters.locationId
+          sale.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          multiFilters.locationIds.includes(sale.branch_id)
+          currentMultiFilters.locationIds.includes(sale.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredData = filteredData.filter((sale: any) =>
+          sale.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredData = filteredData.filter((sale: any) =>
+          currentMultiFilters.safeIds.includes(sale.record_id)
         );
       }
 
       // Filter by product
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.product_id === simpleFilters.productId)
+          sale.sale_items?.some((item: any) => item.product_id === currentSimpleFilters.productId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.productIds.includes(item.product_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.productIds.includes(item.product_id))
         );
       }
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => item.products?.category_id === simpleFilters.categoryId)
+          sale.sale_items?.some((item: any) => item.products?.category_id === currentSimpleFilters.categoryId)
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredData = filteredData.filter((sale: any) =>
-          sale.sale_items?.some((item: any) => multiFilters.categoryIds.includes(item.products?.category_id))
+          sale.sale_items?.some((item: any) => currentMultiFilters.categoryIds.includes(item.products?.category_id))
         );
       }
 
@@ -2511,7 +2650,17 @@ function ReportsPageContent() {
   };
 
   // Fetch Profit Margin Report
-  const fetchProfitMarginReport = async () => {
+  const fetchProfitMarginReport = async (
+    filterOverride?: DateFilter,
+    simpleFiltersOverride?: SimpleFiltersResult,
+    multiFiltersOverride?: MultiFiltersResult,
+    activeFilterTypeOverride?: 'simple' | 'multi' | null
+  ) => {
+    const currentFilter = filterOverride || dateFilter;
+    const currentSimpleFilters = simpleFiltersOverride || simpleFilters;
+    const currentMultiFilters = multiFiltersOverride || multiFilters;
+    const currentActiveFilterType = activeFilterTypeOverride !== undefined ? activeFilterTypeOverride : activeFilterType;
+
     setLoading(true);
     try {
       let saleItemsQuery = supabase
@@ -2523,32 +2672,22 @@ function ReportsPageContent() {
           unit_price,
           cost_price,
           products(name, category_id),
-          sales!inner(created_at, user_id, customer_id, branch_id)
+          sales!inner(created_at, cashier_id, customer_id, branch_id, record_id)
         `);
 
-      // Apply date filters
-      if (dateFilter.type === 'today') {
-        const today = new Date().toISOString().split('T')[0];
-        saleItemsQuery = saleItemsQuery.gte('sales.created_at', today + 'T00:00:00');
-      } else if (dateFilter.type === 'current_week') {
-        const weekStart = new Date();
-        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-        saleItemsQuery = saleItemsQuery.gte('sales.created_at', weekStart.toISOString());
-      } else if (dateFilter.type === 'current_month') {
-        const monthStart = new Date();
-        monthStart.setDate(1);
-        saleItemsQuery = saleItemsQuery.gte('sales.created_at', monthStart.toISOString());
-      } else if (dateFilter.type === 'custom' && dateFilter.startDate && dateFilter.endDate) {
+      // Apply date filters using unified helper function
+      const dateRange = getDateRangeForFilter(currentFilter);
+      if (dateRange) {
         saleItemsQuery = saleItemsQuery
-          .gte('sales.created_at', dateFilter.startDate.toISOString())
-          .lte('sales.created_at', dateFilter.endDate.toISOString());
+          .gte('sales.created_at', dateRange.startDate)
+          .lte('sales.created_at', dateRange.endDate);
       }
 
       // Apply simple/multi filters - Product filter
-      if (activeFilterType === 'simple' && simpleFilters.productId) {
-        saleItemsQuery = saleItemsQuery.eq('product_id', simpleFilters.productId);
-      } else if (activeFilterType === 'multi' && multiFilters.productIds.length > 0) {
-        saleItemsQuery = saleItemsQuery.in('product_id', multiFilters.productIds);
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.productId) {
+        saleItemsQuery = saleItemsQuery.eq('product_id', currentSimpleFilters.productId);
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.productIds.length > 0) {
+        saleItemsQuery = saleItemsQuery.in('product_id', currentMultiFilters.productIds);
       }
 
       const { data: saleItemsData, error: saleItemsError } = await saleItemsQuery;
@@ -2563,46 +2702,57 @@ function ReportsPageContent() {
       let filteredData = saleItemsData || [];
 
       // Filter by category
-      if (activeFilterType === 'simple' && simpleFilters.categoryId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.categoryId) {
         filteredData = filteredData.filter((item: any) =>
-          item.products?.category_id === simpleFilters.categoryId
+          item.products?.category_id === currentSimpleFilters.categoryId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.categoryIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.categoryIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.categoryIds.includes(item.products?.category_id)
+          currentMultiFilters.categoryIds.includes(item.products?.category_id)
         );
       }
 
       // Filter by user (salesperson)
-      if (activeFilterType === 'simple' && simpleFilters.userId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.userId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.user_id === simpleFilters.userId
+          item.sales?.cashier_id === currentSimpleFilters.userId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.userIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.userIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.userIds.includes(item.sales?.user_id)
+          currentMultiFilters.userIds.includes(item.sales?.cashier_id)
         );
       }
 
       // Filter by customer
-      if (activeFilterType === 'simple' && simpleFilters.customerId) {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.customerId) {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.customer_id === simpleFilters.customerId
+          item.sales?.customer_id === currentSimpleFilters.customerId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.customerIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.customerIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.customerIds.includes(item.sales?.customer_id)
+          currentMultiFilters.customerIds.includes(item.sales?.customer_id)
         );
       }
 
       // Filter by location (branch)
-      if (activeFilterType === 'simple' && simpleFilters.locationId && simpleFilters.locationType === 'branch') {
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.locationId && currentSimpleFilters.locationType === 'branch') {
         filteredData = filteredData.filter((item: any) =>
-          item.sales?.branch_id === simpleFilters.locationId
+          item.sales?.branch_id === currentSimpleFilters.locationId
         );
-      } else if (activeFilterType === 'multi' && multiFilters.locationIds.length > 0) {
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.locationIds.length > 0) {
         filteredData = filteredData.filter((item: any) =>
-          multiFilters.locationIds.includes(item.sales?.branch_id)
+          currentMultiFilters.locationIds.includes(item.sales?.branch_id)
+        );
+      }
+
+      // Filter by safe (record)
+      if (currentActiveFilterType === 'simple' && currentSimpleFilters.safeId) {
+        filteredData = filteredData.filter((item: any) =>
+          item.sales?.record_id === currentSimpleFilters.safeId
+        );
+      } else if (currentActiveFilterType === 'multi' && currentMultiFilters.safeIds.length > 0) {
+        filteredData = filteredData.filter((item: any) =>
+          currentMultiFilters.safeIds.includes(item.sales?.record_id)
         );
       }
 
@@ -3513,31 +3663,31 @@ function ReportsPageContent() {
             setDateFilter(filter);
             if (showProductsReport) {
               // Re-fetch products report when date filter changes
-              setTimeout(() => fetchProductsReport(), 100);
+              setTimeout(() => fetchProductsReport(filter), 100);
             }
             if (showCategoriesReport) {
               // Re-fetch categories report when date filter changes
-              setTimeout(() => fetchCategoriesReport(), 100);
+              setTimeout(() => fetchCategoriesReport(filter), 100);
             }
             if (showCustomersReport) {
               // Re-fetch customers report when date filter changes
-              setTimeout(() => fetchCustomersReport(), 100);
+              setTimeout(() => fetchCustomersReport(filter), 100);
             }
             if (showProfitMarginReport) {
               // Re-fetch profit margin report when date filter changes
-              setTimeout(() => fetchProfitMarginReport(), 100);
+              setTimeout(() => fetchProfitMarginReport(filter), 100);
             }
             if (showDailySalesReport) {
               // Re-fetch daily sales report when date filter changes
-              setTimeout(() => fetchDailySalesReport(), 100);
+              setTimeout(() => fetchDailySalesReport(filter), 100);
             }
             if (showHourlySalesReport) {
               // Re-fetch hourly sales report when date filter changes
-              setTimeout(() => fetchHourlySalesReport(), 100);
+              setTimeout(() => fetchHourlySalesReport(filter), 100);
             }
             if (showCustomerInvoicesReport) {
               // Re-fetch customer invoices report when date filter changes
-              setTimeout(() => fetchCustomerInvoicesReport(), 100);
+              setTimeout(() => fetchCustomerInvoicesReport(filter), 100);
             }
           }}
           currentFilter={dateFilter}
@@ -3586,17 +3736,15 @@ function ReportsPageContent() {
             setMultiFilters(initialMultiFilters);
             console.log('Simple Filters Applied:', filters);
 
-            // Re-fetch current report with new filters
-            setTimeout(() => {
-              if (showProfitMarginReport) fetchProfitMarginReport();
-              if (showProductsReport) fetchProductsReport();
-              if (showCategoriesReport) fetchCategoriesReport();
-              if (showCustomersReport) fetchCustomersReport();
-              if (showDailySalesReport) fetchDailySalesReport();
-              if (showHourlySalesReport) fetchHourlySalesReport();
-              if (showCustomerInvoicesReport) fetchCustomerInvoicesReport();
-              if (showUsersReport) fetchUsersReport();
-            }, 100);
+            // Re-fetch current report with new filters - pass filters directly to avoid stale closure
+            if (showProfitMarginReport) fetchProfitMarginReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showProductsReport) fetchProductsReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showCategoriesReport) fetchCategoriesReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showCustomersReport) fetchCustomersReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showDailySalesReport) fetchDailySalesReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showHourlySalesReport) fetchHourlySalesReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showCustomerInvoicesReport) fetchCustomerInvoicesReport(undefined, filters, initialMultiFilters, 'simple');
+            if (showUsersReport) fetchUsersReport(undefined, filters, initialMultiFilters, 'simple');
           }}
           initialFilters={simpleFilters}
         />
@@ -3612,17 +3760,15 @@ function ReportsPageContent() {
             setSimpleFilters(initialSimpleFilters);
             console.log('Multi Filters Applied:', filters);
 
-            // Re-fetch current report with new filters
-            setTimeout(() => {
-              if (showProfitMarginReport) fetchProfitMarginReport();
-              if (showProductsReport) fetchProductsReport();
-              if (showCategoriesReport) fetchCategoriesReport();
-              if (showCustomersReport) fetchCustomersReport();
-              if (showDailySalesReport) fetchDailySalesReport();
-              if (showHourlySalesReport) fetchHourlySalesReport();
-              if (showCustomerInvoicesReport) fetchCustomerInvoicesReport();
-              if (showUsersReport) fetchUsersReport();
-            }, 100);
+            // Re-fetch current report with new filters - pass filters directly to avoid stale closure
+            if (showProfitMarginReport) fetchProfitMarginReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showProductsReport) fetchProductsReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showCategoriesReport) fetchCategoriesReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showCustomersReport) fetchCustomersReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showDailySalesReport) fetchDailySalesReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showHourlySalesReport) fetchHourlySalesReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showCustomerInvoicesReport) fetchCustomerInvoicesReport(undefined, initialSimpleFilters, filters, 'multi');
+            if (showUsersReport) fetchUsersReport(undefined, initialSimpleFilters, filters, 'multi');
           }}
           initialFilters={multiFilters}
         />
