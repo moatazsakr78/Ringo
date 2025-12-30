@@ -1619,9 +1619,8 @@ export default function ProductsPage() {
                 </p>
 
                 <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
-                  <p className="text-green-400 text-right flex items-center justify-end gap-2">
-                    <span>✓</span>
-                    <span>لا تقلق!</span>
+                  <p className="text-green-400 text-right font-medium">
+                    لا تقلق!
                   </p>
                   <p className="text-gray-300 text-right mt-2">
                     <span className="text-white font-medium">لن يتأثر أي شيء</span> - الفواتير والطلبات السابقة ستظل كما هي.
