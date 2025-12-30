@@ -197,7 +197,7 @@ function POSPageContent() {
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
-  const [isCartOpen, setIsCartOpen] = useState(true); // Default open for desktop, toggle for mobile;
+  const [isCartOpen, setIsCartOpen] = useState(false); // Default closed for mobile - show products first
   const [showProductModal, setShowProductModal] = useState(false);
   const [showAddToCartModal, setShowAddToCartModal] = useState(false);
   const [showColorSelectionModal, setShowColorSelectionModal] = useState(false);

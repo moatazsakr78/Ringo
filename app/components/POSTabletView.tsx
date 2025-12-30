@@ -636,8 +636,8 @@ export default function POSTabletView({
           {/* Cart Panel - Tablet Split View */}
           {isCartOpen && (
             <div className="w-1/2 bg-[#374151] border-l-2 border-gray-500 flex flex-col">
-              {/* Cart Items Area */}
-              <div className="flex-1 border-t-2 border-gray-500 overflow-hidden">
+              {/* Cart Items Area - Fixed scrolling for mobile */}
+              <div className="flex-1 border-t-2 border-gray-500 overflow-y-auto min-h-0">
                 {cartItems.length === 0 ? (
                   <div className="flex flex-col justify-center items-center h-full p-8">
                     <ShoppingCartIcon className="h-24 w-24 text-gray-500 mb-8" />
