@@ -197,6 +197,11 @@ function POSPageContent() {
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
+
+  // Search Mode: all = الكل, name = الاسم, code = الكود, barcode = الباركود
+  type SearchMode = 'all' | 'name' | 'code' | 'barcode';
+  const [searchMode, setSearchMode] = useState<SearchMode>('all');
+
   const [isCartOpen, setIsCartOpen] = useState(false); // Default closed for mobile - show products first
   const [showProductModal, setShowProductModal] = useState(false);
   const [showAddToCartModal, setShowAddToCartModal] = useState(false);
@@ -1318,6 +1323,7 @@ function POSPageContent() {
   // OPTIMIZED: Memoized product filtering to prevent unnecessary re-renders
   // Returns Set of matching product IDs for O(1) lookup
   // Now includes both search query AND category filter
+  // 🔍 Updated to support different search modes: all, name, code, barcode
   const filteredProductIds = useMemo(() => {
     const hasSearchFilter = !!searchQuery;
     const hasCategoryFilter = selectedCategoryId !== null && categoryFilterIds.size > 0;
@@ -1329,11 +1335,35 @@ function POSPageContent() {
     const matchingIds = new Set<string>();
 
     products.forEach((product) => {
-      // Check search filter
-      const matchesSearch = !hasSearchFilter || (
-        product.name.toLowerCase().includes(query) ||
-        (product.barcode && product.barcode.toLowerCase().includes(query))
-      );
+      // Check search filter based on search mode
+      let matchesSearch = false;
+
+      if (!hasSearchFilter) {
+        matchesSearch = true;
+      } else {
+        switch (searchMode) {
+          case 'all':
+            // البحث في الاسم والكود والباركود
+            matchesSearch = !!(
+              product.name.toLowerCase().includes(query) ||
+              (product.product_code && product.product_code.toLowerCase().includes(query)) ||
+              (product.barcode && product.barcode.toLowerCase().includes(query))
+            );
+            break;
+          case 'name':
+            // البحث بالاسم فقط
+            matchesSearch = product.name.toLowerCase().includes(query);
+            break;
+          case 'code':
+            // البحث بالكود فقط
+            matchesSearch = !!(product.product_code && product.product_code.toLowerCase().includes(query));
+            break;
+          case 'barcode':
+            // البحث بالباركود فقط
+            matchesSearch = !!(product.barcode && product.barcode.toLowerCase().includes(query));
+            break;
+        }
+      }
 
       // Check category filter
       const matchesCategory = !hasCategoryFilter || (
@@ -1345,7 +1375,7 @@ function POSPageContent() {
       }
     });
     return matchingIds;
-  }, [products, searchQuery, selectedCategoryId, categoryFilterIds]);
+  }, [products, searchQuery, searchMode, selectedCategoryId, categoryFilterIds]);
 
   // Helper function to check if product matches search
   const isProductVisible = useCallback((productId: string) => {
@@ -1415,6 +1445,83 @@ function POSPageContent() {
         return product.price || 0;
     }
   }, [selectedPriceType]);
+
+  // =============================================
+  // 🔍 نظام البحث المتقدم بالباركود
+  // =============================================
+
+  // دالة التنقل بين أوضاع البحث بأسهم الكيبورد
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    const modes: SearchMode[] = ['all', 'name', 'code', 'barcode'];
+    const currentIndex = modes.indexOf(searchMode);
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      const newIndex = currentIndex === 0 ? modes.length - 1 : currentIndex - 1;
+      setSearchMode(modes[newIndex]);
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      const newIndex = (currentIndex + 1) % modes.length;
+      setSearchMode(modes[newIndex]);
+    }
+  }, [searchMode]);
+
+  // دالة صوت التنبيه عند إضافة منتج بالباركود
+  const playBeep = useCallback(() => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = 1000; // Hz
+      oscillator.type = 'sine';
+      gainNode.gain.value = 0.3;
+
+      oscillator.start();
+      setTimeout(() => {
+        oscillator.stop();
+        audioContext.close();
+      }, 100); // 100ms beep
+    } catch (e) {
+      console.log('Audio not supported');
+    }
+  }, []);
+
+  // Map للبحث السريع بالباركود (منتج أساسي + ألوان/أشكال)
+  const barcodeMap = useMemo(() => {
+    const map = new Map<string, { product: any; variantName?: string; variantType?: 'color' | 'shape' }>();
+
+    products.forEach((product) => {
+      // باركود المنتج الأساسي
+      if (product.barcode) {
+        map.set(product.barcode.toLowerCase(), { product });
+      }
+
+      // باركود الألوان من colors (من جدول product_color_shape_definitions)
+      const productColors = (product as any).colors;
+      if (productColors && Array.isArray(productColors)) {
+        productColors.forEach((color: any) => {
+          if (color.barcode) {
+            map.set(color.barcode.toLowerCase(), {
+              product,
+              variantName: color.name,
+              variantType: 'color'
+            });
+          }
+        });
+      }
+    });
+
+    return map;
+  }, [products]);
+
+  // Ref للتتبع - سيتم استخدامه في useEffect لاحقاً
+  const barcodeAddedRef = useRef<string | null>(null);
+
+  // =============================================
 
   // OPTIMIZED: Memoized POS Cart Functions
   const handleAddToCart = useCallback(
@@ -1566,6 +1673,77 @@ function POSPageContent() {
 
     return Math.max(0, itemsTotal);
   }, [cartItems, cartDiscount, cartDiscountType]);
+
+  // =============================================
+  // 🔍 useEffect للإضافة المباشرة عند مسح الباركود
+  // =============================================
+  useEffect(() => {
+    // فقط في وضع الباركود وعندما يكون هناك نص بحث
+    if (searchMode !== 'barcode' || !searchQuery.trim()) {
+      barcodeAddedRef.current = null;
+      return;
+    }
+
+    const trimmedQuery = searchQuery.trim().toLowerCase();
+
+    // تجنب إضافة نفس الباركود مرتين متتاليتين
+    if (barcodeAddedRef.current === trimmedQuery) {
+      return;
+    }
+
+    // البحث عن تطابق في الـ map
+    const match = barcodeMap.get(trimmedQuery);
+
+    if (match) {
+      const { product, variantName, variantType } = match;
+
+      // التحقق من المتطلبات قبل الإضافة
+      if (isPurchaseMode) {
+        if (!selectedSupplier || !selectedWarehouse || !selections.record) {
+          return; // لا تضيف - المتطلبات غير مكتملة
+        }
+      } else if (isTransferMode) {
+        if (!transferFromLocation || !transferToLocation) {
+          return;
+        }
+      } else {
+        if (!hasRequiredForCart()) {
+          return;
+        }
+      }
+
+      // حفظ الباركود الذي تم إضافته
+      barcodeAddedRef.current = trimmedQuery;
+
+      // إضافة للسلة
+      const productPrice = isPurchaseMode
+        ? (product.cost_price || 0)
+        : getProductPriceByType(product);
+
+      const productWithPrice = {
+        ...product,
+        price: isTransferMode ? 0 : productPrice,
+      };
+
+      if (variantName && variantType === 'color') {
+        // إضافة مع اللون المحدد
+        handleAddToCart(productWithPrice, 1, variantName);
+      } else {
+        // إضافة بدون لون
+        handleAddToCart(productWithPrice, 1);
+      }
+
+      // صوت التنبيه
+      playBeep();
+
+      // مسح البحث وإعادة التركيز بعد تأخير قصير
+      setTimeout(() => {
+        setSearchQuery('');
+        barcodeAddedRef.current = null;
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [searchQuery, searchMode, barcodeMap, isPurchaseMode, isTransferMode, selectedSupplier, selectedWarehouse, selections.record, transferFromLocation, transferToLocation, hasRequiredForCart, getProductPriceByType, handleAddToCart, playBeep]);
 
   const handleColorSelection = async (
     selections: { [key: string]: number },
@@ -4661,16 +4839,27 @@ function POSPageContent() {
             <div className="flex items-center justify-between">
               {/* Left Side Elements */}
               <div className="flex items-center gap-2">
-                {/* Search */}
+                {/* Search with Mode Indicator */}
                 <div className="relative">
+                  {/* مؤشر وضع البحث - يتغير بأسهم الكيبورد ↑↓ */}
+                  <div className="absolute left-2 top-1/2 -translate-y-1/2 bg-blue-600 px-2 py-0.5 rounded text-xs text-white font-medium z-10 select-none">
+                    {searchMode === 'all' ? '*' :
+                     searchMode === 'name' ? 'اسم' :
+                     searchMode === 'code' ? 'كود' : 'باركود'}
+                  </div>
                   <MagnifyingGlassIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <input
                     ref={searchInputRef}
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="اسم المنتج..."
-                    className="w-64 pl-4 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder={
+                      searchMode === 'all' ? 'بحث بالاسم أو الكود أو الباركود...' :
+                      searchMode === 'name' ? 'بحث بالاسم...' :
+                      searchMode === 'code' ? 'بحث بالكود...' : 'ضع الباركود هنا...'
+                    }
+                    className="w-72 pl-16 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -4731,15 +4920,35 @@ function POSPageContent() {
                 WebkitOverflowScrolling: "touch",
               }}
             >
-              {/* 1. Search Bar */}
-              <div className="relative flex-shrink-0 w-64">
+              {/* 1. Search Bar with Mode Indicator */}
+              <div className="relative flex-shrink-0 w-72">
+                {/* مؤشر وضع البحث - يتغير بأسهم الكيبورد ↑↓ */}
+                <div
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-blue-600 px-2 py-0.5 rounded text-xs text-white font-medium z-10 select-none"
+                  onClick={() => {
+                    // تبديل الوضع عند النقر على الموبايل
+                    const modes: SearchMode[] = ['all', 'name', 'code', 'barcode'];
+                    const currentIndex = modes.indexOf(searchMode);
+                    const newIndex = (currentIndex + 1) % modes.length;
+                    setSearchMode(modes[newIndex]);
+                  }}
+                >
+                  {searchMode === 'all' ? '*' :
+                   searchMode === 'name' ? 'اسم' :
+                   searchMode === 'code' ? 'كود' : 'باركود'}
+                </div>
                 <MagnifyingGlassIcon className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="اسم المنتج..."
-                  className="w-full pl-4 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#5DADE2] focus:border-transparent"
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder={
+                    searchMode === 'all' ? 'بحث...' :
+                    searchMode === 'name' ? 'بحث بالاسم...' :
+                    searchMode === 'code' ? 'بحث بالكود...' : 'الباركود...'
+                  }
+                  className="w-full pl-16 pr-10 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#5DADE2] focus:border-transparent"
                   style={{ fontSize: "16px" }}
                 />
               </div>

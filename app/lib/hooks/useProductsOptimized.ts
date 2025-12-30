@@ -519,13 +519,15 @@ export function useProducts() {
       }
 
       // Extract color variants for website format and sort by quantity (highest first)
+      // Also include barcode for POS barcode scanning feature
       const colorVariants = productVariantsData
-        .filter((variant: any) => variant.variant_type === 'color' && variant.color_hex && variant.color_name)
+        .filter((variant: any) => variant.variant_type === 'color' && variant.color_hex && variant.name)
         .map((variant: any) => ({
           id: variant.id,
-          name: variant.color_name,
+          name: variant.name,
           hex: variant.color_hex,
           image_url: variant.image_url,
+          barcode: variant.barcode || null, // ✨ إضافة الباركود للبحث في POS
           quantity: variant.quantity || 0
         }))
         .sort((a: any, b: any) => b.quantity - a.quantity);
