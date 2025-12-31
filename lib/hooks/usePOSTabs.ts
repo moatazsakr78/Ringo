@@ -50,6 +50,8 @@ interface UsePOSTabsReturn {
   addTab: (title: string, inheritedSelections?: InheritedSelections) => void;
   addTabWithCustomer: (customer: any, inheritedSelections?: InheritedSelections) => void;
   addTabWithCustomerAndCart: (customer: any, cartItems: any[], title: string, inheritedSelections?: InheritedSelections, editModeOptions?: EditModeOptions) => string;
+  createTabFromMainWithCart: (customer: any, cartItems: any[], inheritedSelections?: InheritedSelections, defaultCustomer?: any) => string;
+  updateTabCustomerAndTitle: (tabId: string, customer: any, title: string) => void;
   closeTab: (tabId: string) => void;
   switchTab: (tabId: string) => void;
   updateActiveTabCart: (cartItems: any[]) => void;
@@ -186,7 +188,10 @@ export function usePOSTabs(): UsePOSTabsReturn {
   // Falls back to inherited selections (from main tab)
   const addTabWithCustomer = useCallback((customer: any, inheritedSelections?: InheritedSelections) => {
     const newTabId = `pos-${Date.now()}`;
-    const title = customer?.name || 'فاتورة جديدة';
+    // Default customer gets "نقطة البيع" as title, others get customer name
+    const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001';
+    const isDefaultCustomer = customer?.id === DEFAULT_CUSTOMER_ID || customer?.name === 'عميل';
+    const title = isDefaultCustomer ? 'نقطة البيع' : (customer?.name || 'فاتورة جديدة');
 
     // Get customer's default record if set
     let customerRecord = null;
@@ -266,6 +271,97 @@ export function usePOSTabs(): UsePOSTabsReturn {
     setActiveTabId(newTabId);
     return newTabId;
   }, [saveState]);
+
+  // Create tab from main tab with cart transfer
+  // This function transfers the cart from main tab to a new customer tab
+  // and resets the main tab (clears cart and resets customer to default)
+  const createTabFromMainWithCart = useCallback((
+    customer: any,
+    cartItems: any[],
+    inheritedSelections?: InheritedSelections,
+    defaultCustomer?: any
+  ): string => {
+    const newTabId = `pos-${Date.now()}`;
+    // Default customer gets "نقطة البيع" as title, others get customer name
+    const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001';
+    const isDefaultCustomer = customer?.id === DEFAULT_CUSTOMER_ID || customer?.name === 'عميل';
+    const tabTitle = isDefaultCustomer ? 'نقطة البيع' : (customer?.name || 'فاتورة جديدة');
+
+    // Get customer's default record if set
+    let customerRecord = null;
+    if (customer?.default_record_id) {
+      customerRecord = { id: customer.default_record_id };
+    } else if (inheritedSelections?.record) {
+      customerRecord = inheritedSelections.record;
+    }
+
+    // Get customer's default price type if set
+    const customerPriceType = customer?.default_price_type || inheritedSelections?.priceType || 'price';
+
+    setTabs(prev => {
+      const newTabs: POSTab[] = [];
+
+      // Process existing tabs
+      for (const tab of prev) {
+        if (tab.id === 'main') {
+          // Reset main tab: clear cart and reset customer to default
+          newTabs.push({
+            ...tab,
+            active: false,
+            cartItems: [],
+            selections: {
+              ...tab.selections,
+              customer: defaultCustomer || null,
+            },
+          });
+        } else {
+          newTabs.push({ ...tab, active: false });
+        }
+      }
+
+      // Add the new customer tab with the cart items
+      newTabs.push({
+        id: newTabId,
+        title: tabTitle,
+        active: true,
+        cartItems: cartItems,
+        selections: {
+          customer: customer,
+          branch: inheritedSelections?.branch || null,
+          record: customerRecord,
+          priceType: customerPriceType as any,
+        },
+      });
+
+      // Instant save
+      saveState(newTabs, newTabId);
+      return newTabs;
+    });
+
+    setActiveTabId(newTabId);
+    return newTabId;
+  }, [saveState]);
+
+  // Update tab's customer and title (for changing customer from context menu)
+  const updateTabCustomerAndTitle = useCallback((tabId: string, customer: any, title: string) => {
+    setTabs(prev => {
+      const newTabs = prev.map(tab => {
+        if (tab.id === tabId) {
+          return {
+            ...tab,
+            title: title,
+            selections: {
+              ...tab.selections,
+              customer: customer,
+            },
+          };
+        }
+        return tab;
+      });
+      saveState(newTabs, activeTabId);
+      return newTabs;
+    });
+  }, [activeTabId, saveState]);
 
   const closeTab = useCallback((tabId: string) => {
     if (tabId === 'main') return;
@@ -574,6 +670,8 @@ export function usePOSTabs(): UsePOSTabsReturn {
     addTab,
     addTabWithCustomer,
     addTabWithCustomerAndCart,
+    createTabFromMainWithCart,
+    updateTabCustomerAndTitle,
     closeTab,
     switchTab,
     updateActiveTabCart,

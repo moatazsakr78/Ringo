@@ -144,6 +144,7 @@ import {
   FolderIcon,
   MinusIcon,
   ChevronRightIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 function POSPageContent() {
@@ -175,6 +176,8 @@ function POSPageContent() {
     addTab,
     addTabWithCustomer,
     addTabWithCustomerAndCart,
+    createTabFromMainWithCart,
+    updateTabCustomerAndTitle,
     closeTab,
     switchTab,
     updateActiveTabCart,
@@ -286,6 +289,13 @@ function POSPageContent() {
   // Postponed Invoices States
   const [isPostponedModalOpen, setIsPostponedModalOpen] = useState(false);
   const [tabContextMenu, setTabContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+
+  // Close Tab Confirmation States
+  const [showCloseTabConfirm, setShowCloseTabConfirm] = useState(false);
+  const [tabToClose, setTabToClose] = useState<string | null>(null);
+
+  // Context Menu Customer Change State
+  const [contextMenuCustomerTabId, setContextMenuCustomerTabId] = useState<string | null>(null);
 
   // Cash Drawer States
   const [isCashDrawerModalOpen, setIsCashDrawerModalOpen] = useState(false);
@@ -1137,10 +1147,81 @@ function POSPageContent() {
   };
 
   const handleCustomerSelect = (customer: any) => {
-    // Always update the current tab's customer (for changing customer in existing tab)
-    setCustomer(customer);
+    // Default customer UUID
+    const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001';
+    const isDefault = customer?.id === DEFAULT_CUSTOMER_ID || customer?.name === 'عميل';
+    const newTitle = isDefault ? 'نقطة البيع' : (customer?.name || 'فاتورة جديدة');
+
+    // If coming from context menu (change customer for specific tab)
+    if (contextMenuCustomerTabId) {
+      const targetTabId = contextMenuCustomerTabId;
+
+      // If main tab and selecting non-default customer
+      if (targetTabId === 'main' && !isDefault) {
+        if (cartItems.length > 0) {
+          // Transfer cart to new customer tab
+          createTabFromMainWithCart(
+            customer,
+            cartItems,
+            {
+              branch: globalSelections.branch,
+              record: globalSelections.record,
+              priceType: selectedPriceType,
+            },
+            defaultCustomer
+          );
+          setCartItems([]);
+          console.log("Transferred cart to new customer tab from context menu:", customer?.name);
+        } else {
+          // Empty cart - create new tab
+          addTabWithCustomer(customer, {
+            branch: globalSelections.branch,
+            record: globalSelections.record,
+            priceType: selectedPriceType,
+          });
+          console.log("Created new tab for customer from context menu:", customer?.name);
+        }
+      } else {
+        // Update the specific tab's customer and title
+        updateTabCustomerAndTitle(targetTabId, customer, newTitle);
+        console.log("Changed customer for tab:", targetTabId, "to:", customer?.name);
+      }
+
+      setContextMenuCustomerTabId(null);
+    }
+    // Normal behavior - not from context menu
+    else if (activeTabId === 'main' && !isDefault) {
+      if (cartItems.length > 0) {
+        // Transfer cart to new customer tab
+        createTabFromMainWithCart(
+          customer,
+          cartItems,
+          {
+            branch: globalSelections.branch,
+            record: globalSelections.record,
+            priceType: selectedPriceType,
+          },
+          defaultCustomer
+        );
+        // Clear local cart state (main tab cart is reset by createTabFromMainWithCart)
+        setCartItems([]);
+        console.log("Transferred cart to new customer tab:", customer?.name);
+      } else {
+        // Empty cart - create new tab without transfer
+        addTabWithCustomer(customer, {
+          branch: globalSelections.branch,
+          record: globalSelections.record,
+          priceType: selectedPriceType,
+        });
+        console.log("Created new tab for customer:", customer?.name);
+      }
+    } else {
+      // Either not main tab OR selecting default customer - just update customer
+      setCustomer(customer);
+      console.log("Selected customer:", customer);
+    }
+
     setIsCustomerModalOpen(false);
-    console.log("Selected customer:", customer);
   };
 
   // Handler for creating a new tab with selected customer (from + button)
@@ -1159,6 +1240,38 @@ function POSPageContent() {
     setBranch(branch);
     setIsBranchModalOpen(false);
     console.log("Selected branch:", branch);
+  };
+
+  // Handler for tab close with confirmation
+  const handleCloseTab = (tabId: string) => {
+    if (tabId === 'main') return; // Main tab cannot be closed
+
+    // Find the tab to check if it has items
+    const tab = posTabs.find(t => t.id === tabId);
+
+    if (tab && tab.cartItems && tab.cartItems.length > 0) {
+      // Has items - show confirmation
+      setTabToClose(tabId);
+      setShowCloseTabConfirm(true);
+    } else {
+      // No items - close directly
+      closeTab(tabId);
+    }
+  };
+
+  // Confirm close handler
+  const confirmCloseTab = () => {
+    if (tabToClose) {
+      closeTab(tabToClose);
+    }
+    setShowCloseTabConfirm(false);
+    setTabToClose(null);
+  };
+
+  // Cancel close handler
+  const cancelCloseTab = () => {
+    setShowCloseTabConfirm(false);
+    setTabToClose(null);
   };
 
   // Categories fetching function
@@ -4710,7 +4823,7 @@ function POSPageContent() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        closeTab(tab.id);
+                        handleCloseTab(tab.id);
                       }}
                       className="ml-1 p-1 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
                       title="إغلاق"
@@ -4796,6 +4909,18 @@ function POSPageContent() {
                         أضف منتجات للتأجيل
                       </div>
                     )}
+                    {/* Change Customer Button for Main Tab */}
+                    <button
+                      onClick={() => {
+                        setContextMenuCustomerTabId(tabContextMenu.tabId);
+                        setIsCustomerModalOpen(true);
+                        setTabContextMenu(null);
+                      }}
+                      className="w-full px-4 py-2 text-right text-sm text-gray-300 hover:bg-blue-500/20 hover:text-blue-400 flex items-center gap-2 transition-colors"
+                    >
+                      <UserIcon className="h-4 w-4" />
+                      تغيير العميل
+                    </button>
                   </>
                 ) : (
                   // Non-main tab context menu
@@ -4818,15 +4943,17 @@ function POSPageContent() {
                       <ClockIcon className="h-4 w-4" />
                       تأجيل الفاتورة
                     </button>
+                    {/* Change Customer Button for Non-main Tab */}
                     <button
                       onClick={() => {
-                        closeTab(tabContextMenu.tabId);
+                        setContextMenuCustomerTabId(tabContextMenu.tabId);
+                        setIsCustomerModalOpen(true);
                         setTabContextMenu(null);
                       }}
-                      className="w-full px-4 py-2 text-right text-sm text-gray-300 hover:bg-red-500/20 hover:text-red-400 flex items-center gap-2 transition-colors"
+                      className="w-full px-4 py-2 text-right text-sm text-gray-300 hover:bg-blue-500/20 hover:text-blue-400 flex items-center gap-2 transition-colors"
                     >
-                      <XMarkIcon className="h-4 w-4" />
-                      إغلاق الفاتورة
+                      <UserIcon className="h-4 w-4" />
+                      تغيير العميل
                     </button>
                   </>
                 )}
@@ -6593,6 +6720,68 @@ function POSPageContent() {
                     تفعيل وضع الشراء
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Close Tab Confirmation Modal */}
+      {showCloseTabConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            onClick={cancelCloseTab}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-[#2B3544] rounded-2xl shadow-2xl border border-[#4A5568] w-full max-w-md">
+              {/* Header */}
+              <div className="flex items-center justify-between p-6 border-b border-[#4A5568]">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-orange-500 rounded-full flex items-center justify-center">
+                    <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">
+                      إغلاق الفاتورة
+                    </h2>
+                    <p className="text-gray-400 text-sm">تأكيد الإغلاق</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6">
+                <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
+                  <p className="text-red-400 text-sm flex items-center gap-2">
+                    <span className="text-red-400">⚠️</span>
+                    متأكد؟ الفاتورة هتتحذف
+                  </p>
+                </div>
+
+                <p className="text-gray-300 text-sm">
+                  يوجد منتجات في السلة. هل تريد إغلاق الفاتورة وحذف جميع المنتجات؟
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 p-6 border-t border-[#4A5568]">
+                <button
+                  onClick={cancelCloseTab}
+                  className="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-3 rounded-lg font-medium transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={confirmCloseTab}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                  إغلاق الفاتورة
+                </button>
               </div>
             </div>
           </div>
