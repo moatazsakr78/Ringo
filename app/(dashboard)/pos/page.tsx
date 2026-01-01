@@ -1791,8 +1791,8 @@ function POSPageContent() {
   // 🔍 useEffect للإضافة المباشرة عند مسح الباركود
   // =============================================
   useEffect(() => {
-    // فقط في وضع الباركود وعندما يكون هناك نص بحث
-    if (searchMode !== 'barcode' || !searchQuery.trim()) {
+    // تخطي إذا لم يكن هناك نص بحث
+    if (!searchQuery.trim()) {
       barcodeAddedRef.current = null;
       return;
     }
@@ -1806,6 +1806,12 @@ function POSPageContent() {
 
     // البحث عن تطابق في الـ map
     const match = barcodeMap.get(trimmedQuery);
+
+    // في وضع 'barcode': دائماً حاول المطابقة
+    // في وضع 'all': فقط أضف تلقائياً لو وجد تطابق دقيق للباركود
+    if (searchMode !== 'barcode' && !match) {
+      return;
+    }
 
     if (match) {
       const { product, variantName, variantType } = match;
