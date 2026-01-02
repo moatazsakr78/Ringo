@@ -1399,10 +1399,10 @@ export default function ProductsPage() {
           setIsProductSidebarOpen(false)
           setSelectedProduct(null)
         }}
-        onProductCreated={() => {
+        onProductCreated={async () => {
           // Explicitly refresh products list to ensure inventory data is loaded
           console.log('🔄 Refreshing products list after creation')
-          fetchProducts()
+          await fetchProducts()  // Already uses force=true internally + await to wait
           setIsProductSidebarOpen(false)
           setSelectedProduct(null)
         }}
