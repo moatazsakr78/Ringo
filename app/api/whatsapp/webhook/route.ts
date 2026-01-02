@@ -343,13 +343,35 @@ function parseWasenderMessage(msgData: any): ParsedMessage | null {
       console.log('📎 Quoted message detected:', { quotedMessageId, quotedMessageSender, quotedMessageText });
     }
 
-    // Get timestamp
+    // Get timestamp with validation
     let timestamp = new Date();
     if (msgData.messageTimestamp) {
-      const ts = typeof msgData.messageTimestamp === 'number'
-        ? msgData.messageTimestamp * 1000
-        : parseInt(msgData.messageTimestamp) * 1000;
-      timestamp = new Date(ts);
+      try {
+        const rawTs = msgData.messageTimestamp;
+        let ts: number;
+
+        if (typeof rawTs === 'number') {
+          // Check if it's already in milliseconds (13 digits) or seconds (10 digits)
+          ts = rawTs > 9999999999 ? rawTs : rawTs * 1000;
+        } else if (typeof rawTs === 'string') {
+          const parsed = parseInt(rawTs, 10);
+          if (!isNaN(parsed)) {
+            ts = parsed > 9999999999 ? parsed : parsed * 1000;
+          } else {
+            ts = Date.now();
+          }
+        } else {
+          ts = Date.now();
+        }
+
+        const newDate = new Date(ts);
+        // Validate the date is valid
+        if (!isNaN(newDate.getTime())) {
+          timestamp = newDate;
+        }
+      } catch (e) {
+        console.log('⚠️ Could not parse timestamp, using current time');
+      }
     }
 
     return {

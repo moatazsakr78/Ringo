@@ -884,7 +884,7 @@ export default function InventoryPage() {
 
       // Refresh the products data to show the updated quantity
       console.log('Refreshing products data...')
-      await fetchProducts()
+      await fetchProducts()  // Force refetch (wrapper already uses force=true)
       console.log('Products data refreshed')
 
       // ✨ Refresh website cache instantly (On-Demand ISR)
