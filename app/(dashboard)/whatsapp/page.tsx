@@ -265,9 +265,13 @@ export default function WhatsAppPage() {
   }
 
   // دالة لاختيار المحادثة
-  const handleSelectConversation = (phoneNumber: string, unreadCount: number) => {
+  const handleSelectConversation = async (phoneNumber: string, unreadCount: number) => {
     setSelectedConversation(phoneNumber)
     setShowMobileChat(true) // إظهار الدردشة على الموبايل
+
+    // Fetch messages for this conversation (lazy loading)
+    await fetchConversationMessages(phoneNumber)
+
     if (unreadCount > 0) {
       markConversationAsRead(phoneNumber)
     }
@@ -284,20 +288,32 @@ export default function WhatsAppPage() {
     }
   }, [])
 
-  // Fetch messages and conversations
-  const fetchMessages = useCallback(async () => {
+  // Fetch conversations list only (not all messages - for performance)
+  const fetchConversations = useCallback(async () => {
     try {
       setError(null)
-      // Fetch messages and contacts in parallel
+      console.log('📱 Fetching conversations...')
+
+      // Fetch conversations and contacts in parallel
       const [messagesRes, contactsRes] = await Promise.all([
-        fetch('/api/whatsapp/messages'),
+        fetch('/api/whatsapp/messages?conversationsOnly=true'),
         fetch('/api/whatsapp/contacts')
       ])
+
+      console.log('📱 Response status:', messagesRes.status, contactsRes.status)
+
+      if (!messagesRes.ok) {
+        console.error('📱 Messages API error:', messagesRes.status, messagesRes.statusText)
+        throw new Error(`Messages API error: ${messagesRes.status}`)
+      }
 
       const messagesData = await messagesRes.json()
       const contactsData = await contactsRes.json()
 
-      setMessages(messagesData.messages || [])
+      console.log('📱 Loaded conversations:', messagesData.conversations?.length || 0)
+      console.log('📱 First 3 conversations:', JSON.stringify(messagesData.conversations?.slice(0, 3), null, 2))
+      console.log('📱 contactsData:', contactsData?.length || 0)
+
       setContacts(contactsData || [])
 
       // Merge profile pictures into conversations
@@ -310,12 +326,40 @@ export default function WhatsAppPage() {
           profilePictureUrl: contact?.profile_picture_url || null
         }
       })
+      console.log('📱 Setting conversations:', conversationsWithPictures.length)
+      // DEBUG: Alert to confirm data is received
+      if (conversationsWithPictures.length > 0) {
+        console.log('✅ SUCCESS: Got', conversationsWithPictures.length, 'conversations!')
+      } else {
+        console.warn('⚠️ WARNING: No conversations received from API!')
+      }
       setConversations(conversationsWithPictures)
     } catch (err) {
-      console.error('Error fetching messages:', err)
-      setError('فشل في تحميل الرسائل')
+      console.error('Error fetching conversations:', err)
+      setError('فشل في تحميل المحادثات')
     } finally {
+      console.log('📱 Setting isLoading to false')
       setIsLoading(false)
+    }
+  }, [])
+
+  // Fetch messages for a specific conversation (lazy loading)
+  const fetchConversationMessages = useCallback(async (phoneNumber: string) => {
+    try {
+      console.log('📨 Loading messages for:', phoneNumber)
+      const response = await fetch(`/api/whatsapp/messages?phone=${encodeURIComponent(phoneNumber)}`)
+      const data = await response.json()
+
+      console.log('📨 Loaded messages:', data.messages?.length || 0)
+
+      // Update messages for this conversation
+      setMessages(prevMessages => {
+        // Remove old messages for this conversation and add new ones
+        const otherMessages = prevMessages.filter(m => m.from_number !== phoneNumber)
+        return [...otherMessages, ...(data.messages || [])]
+      })
+    } catch (err) {
+      console.error('Error fetching conversation messages:', err)
     }
   }, [])
 
@@ -328,8 +372,8 @@ export default function WhatsAppPage() {
 
       if (data.success) {
         console.log('✅ Contacts synced:', data.results)
-        // Refresh messages to get updated profile pictures
-        await fetchMessages()
+        // Refresh conversations to get updated profile pictures
+        await fetchConversations()
       } else {
         console.error('❌ Sync failed:', data.error)
       }
@@ -338,7 +382,7 @@ export default function WhatsAppPage() {
     } finally {
       setIsSyncing(false)
     }
-  }, [fetchMessages])
+  }, [fetchConversations])
 
   // Mark messages as read when conversation is opened
   const markConversationAsRead = useCallback(async (phoneNumber: string) => {
@@ -362,11 +406,11 @@ export default function WhatsAppPage() {
 
   // Initial fetch and polling
   useEffect(() => {
-    fetchMessages()
+    fetchConversations()
     checkConnectionStatus()
 
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(fetchMessages, 5000)
+    // Poll for new conversations every 10 seconds (reduced frequency for better performance)
+    const interval = setInterval(fetchConversations, 10000)
     // Check connection status every 30 seconds
     const statusInterval = setInterval(checkConnectionStatus, 30000)
 
@@ -374,7 +418,19 @@ export default function WhatsAppPage() {
       clearInterval(interval)
       clearInterval(statusInterval)
     }
-  }, [fetchMessages, checkConnectionStatus])
+  }, [fetchConversations, checkConnectionStatus])
+
+  // Refresh selected conversation messages when conversations update
+  useEffect(() => {
+    if (selectedConversation) {
+      // Refresh messages for the selected conversation every 5 seconds
+      const messageInterval = setInterval(() => {
+        fetchConversationMessages(selectedConversation)
+      }, 5000)
+
+      return () => clearInterval(messageInterval)
+    }
+  }, [selectedConversation, fetchConversationMessages])
 
   // Scroll to bottom only when needed (new messages or conversation change)
   useEffect(() => {
@@ -408,6 +464,9 @@ export default function WhatsAppPage() {
     conv.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     conv.phoneNumber.includes(searchQuery)
   )
+
+  // Debug logging for render
+  console.log('🔄 Render: isLoading=', isLoading, 'conversations=', conversations.length, 'filtered=', filteredConversations.length)
 
   // Reset attachment state
   const resetAttachment = () => {
@@ -499,7 +558,7 @@ export default function WhatsAppPage() {
 
       if (data.success) {
         resetAttachment()
-        await fetchMessages()
+        if (selectedConversation) await fetchConversationMessages(selectedConversation)
       } else {
         setError(data.error || 'فشل في إرسال الموقع')
       }
@@ -573,7 +632,7 @@ export default function WhatsAppPage() {
       if (sendResult.success) {
         resetAttachment()
         setNewMessage('')
-        await fetchMessages()
+        if (selectedConversation) await fetchConversationMessages(selectedConversation)
       } else {
         setError(sendResult.error || 'فشل في إرسال الملف')
       }
@@ -623,7 +682,7 @@ export default function WhatsAppPage() {
 
       if (sendResult.success) {
         // Refresh messages
-        await fetchMessages()
+        if (selectedConversation) await fetchConversationMessages(selectedConversation)
       } else {
         setError(sendResult.error || 'فشل في إرسال الرسالة الصوتية')
       }
@@ -707,7 +766,7 @@ export default function WhatsAppPage() {
         setNewMessage('')
         resetAttachment()
         setReplyingTo(null) // Clear reply after sending
-        await fetchMessages() // Await to ensure messages are loaded
+        if (selectedConversation) await fetchConversationMessages(selectedConversation)
       } else {
         setError(data.error || 'فشل في إرسال الرسالة')
       }
@@ -890,7 +949,10 @@ export default function WhatsAppPage() {
               <span className="text-xs md:text-sm whitespace-nowrap">{isSyncing ? 'مزامنة...' : 'الصور'}</span>
             </button>
             <button
-              onClick={fetchMessages}
+              onClick={async () => {
+                await fetchConversations()
+                if (selectedConversation) await fetchConversationMessages(selectedConversation)
+              }}
               className="flex items-center gap-1 md:gap-2 px-2 py-1 md:px-3 md:py-2 text-gray-300 hover:text-white hover:bg-gray-600/30 rounded-md transition-colors flex-shrink-0"
             >
               <ArrowPathIcon className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />

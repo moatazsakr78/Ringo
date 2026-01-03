@@ -21,11 +21,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// GET - Fetch all messages (for chat UI)
+// GET - Fetch messages or conversations
+// ?phone=XXX - Fetch messages for specific conversation
+// ?conversationsOnly=true - Fetch only conversations list (no messages)
+// No params - Fetch all (legacy, not recommended)
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const phoneNumber = searchParams.get('phone');
+    const conversationsOnly = searchParams.get('conversationsOnly') === 'true';
+
+    console.log(`📱 WhatsApp API: phone=${phoneNumber}, conversationsOnly=${conversationsOnly}`);
 
     // Try to fetch from database first
     let query = supabase
@@ -39,6 +45,8 @@ export async function GET(request: NextRequest) {
     }
 
     const { data, error } = await query;
+
+    console.log(`📨 Fetched ${data?.length || 0} messages from database`);
 
     if (error) {
       // If table doesn't exist, return empty array
@@ -145,8 +153,13 @@ export async function GET(request: NextRequest) {
       new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime()
     );
 
+    console.log(`💬 Built ${sortedConversations.length} conversations`);
+
+    // If conversationsOnly mode, don't return all messages (saves bandwidth)
+    const returnMessages = conversationsOnly ? [] : messagesWithReactions;
+
     return NextResponse.json({
-      messages: messagesWithReactions,
+      messages: returnMessages,
       conversations: sortedConversations,
     }, {
       headers: {

@@ -342,7 +342,8 @@
       "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" log --oneline -20)",
       "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" show 4f9c543 --stat)",
       "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" diff lib/hooks/useProductsAdmin.ts)",
-      "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" diff .claude/settings.local.json)"
+      "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" diff .claude/settings.local.json)",
+      "Bash(start http://localhost:3001/whatsapp)"
     ],
     "deny": [],
     "additionalDirectories": [
