@@ -424,15 +424,13 @@ export default function WhatsAppPage() {
           console.log('📩 Realtime: New message received', payload)
           const newMsg = payload.new as Message
 
-          // Only add incoming messages (outgoing are handled by Optimistic Update)
-          if (newMsg.message_type === 'incoming') {
-            setMessages(prev => {
-              // Avoid duplicates
-              const exists = prev.some(m => m.message_id === newMsg.message_id)
-              if (exists) return prev
-              return [...prev, newMsg]
-            })
-          }
+          // Add message to state (both incoming and outgoing for multi-device sync)
+          setMessages(prev => {
+            // Avoid duplicates (Optimistic Update may have added it already)
+            const exists = prev.some(m => m.message_id === newMsg.message_id)
+            if (exists) return prev
+            return [...prev, newMsg]
+          })
         }
       )
       .subscribe((status) => {
