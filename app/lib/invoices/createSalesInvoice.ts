@@ -362,7 +362,7 @@ export async function createSalesInvoice({
     // This allows all sales (including "لا يوجد") to appear in the records
     // But only update cash drawer balance when there IS a safe selected
     try {
-      const transactionAmount = cashToDrawer !== 0 ? cashToDrawer : totalAmount
+      const transactionAmount = cashToDrawer
       let drawer: any = null
       let newBalance: number | null = null
 
