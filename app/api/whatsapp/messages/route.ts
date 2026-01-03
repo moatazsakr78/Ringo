@@ -5,6 +5,17 @@ import { createClient } from '@supabase/supabase-js';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Helper function to chunk array for batched queries (Supabase URL limit)
+const chunkArray = <T,>(array: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+};
+
+const QUERY_BATCH_SIZE = 200;
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -41,28 +52,39 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch reactions for all messages
+    // Fetch reactions for all messages (using batched queries to avoid URL length limit)
     const messageIds = (data || []).map(m => m.message_id);
     let reactionsMap: Record<string, { emoji: string; from_number: string; is_from_me: boolean }[]> = {};
 
     if (messageIds.length > 0) {
-      const { data: reactions, error: reactionsError } = await supabase
-        .schema('elfaroukgroup')
-        .from('whatsapp_reactions')
-        .select('message_id, emoji, from_number, is_from_me')
-        .in('message_id', messageIds);
+      // Split messageIds into batches to avoid Supabase URL limit
+      const messageIdChunks = chunkArray(messageIds, QUERY_BATCH_SIZE);
+      console.log(`📦 Fetching reactions for ${messageIds.length} messages in ${messageIdChunks.length} batches`);
 
-      if (!reactionsError && reactions) {
-        // Group reactions by message_id
-        for (const reaction of reactions) {
-          if (!reactionsMap[reaction.message_id]) {
-            reactionsMap[reaction.message_id] = [];
+      // Fetch reactions in batches
+      const reactionsPromises = messageIdChunks.map(chunk =>
+        supabase
+          .schema('elfaroukgroup')
+          .from('whatsapp_reactions')
+          .select('message_id, emoji, from_number, is_from_me')
+          .in('message_id', chunk)
+      );
+
+      const reactionsResults = await Promise.all(reactionsPromises);
+
+      // Merge results and build reactionsMap
+      for (const result of reactionsResults) {
+        if (!result.error && result.data) {
+          for (const reaction of result.data) {
+            if (!reactionsMap[reaction.message_id]) {
+              reactionsMap[reaction.message_id] = [];
+            }
+            reactionsMap[reaction.message_id].push({
+              emoji: reaction.emoji,
+              from_number: reaction.from_number,
+              is_from_me: reaction.is_from_me
+            });
           }
-          reactionsMap[reaction.message_id].push({
-            emoji: reaction.emoji,
-            from_number: reaction.from_number,
-            is_from_me: reaction.is_from_me
-          });
         }
       }
     }
