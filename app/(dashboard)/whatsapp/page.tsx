@@ -391,8 +391,8 @@ export default function WhatsAppPage() {
     fetchConversations()
     checkConnectionStatus()
 
-    // Poll for new conversations every 10 seconds (reduced frequency for better performance)
-    const interval = setInterval(fetchConversations, 10000)
+    // Poll for new conversations every 30 seconds (reduced frequency for better performance)
+    const interval = setInterval(fetchConversations, 30000)
     // Check connection status every 30 seconds
     const statusInterval = setInterval(checkConnectionStatus, 30000)
 
@@ -405,10 +405,11 @@ export default function WhatsAppPage() {
   // Refresh selected conversation messages when conversations update
   useEffect(() => {
     if (selectedConversation) {
-      // Refresh messages for the selected conversation every 5 seconds
+      // Refresh messages for the selected conversation every 30 seconds
+      // (Optimistic Update handles sent messages immediately)
       const messageInterval = setInterval(() => {
         fetchConversationMessages(selectedConversation)
-      }, 5000)
+      }, 30000)
 
       return () => clearInterval(messageInterval)
     }
@@ -742,10 +743,31 @@ export default function WhatsAppPage() {
       const data = await response.json()
 
       if (data.success) {
+        // Optimistic Update - إضافة الرسالة فوراً للـ state
+        const sentMessage: Message = {
+          id: data.messageId || `temp-${Date.now()}`,
+          message_id: data.messageId || `temp-${Date.now()}`,
+          msg_id: data.msgId, // WasenderAPI integer ID
+          from_number: selectedConversation,
+          customer_name: 'أنت',
+          message_text: attachmentType === 'location'
+            ? (locationName || 'موقع')
+            : (newMessage || caption || `[${attachmentType === 'image' ? 'صورة' : attachmentType === 'video' ? 'فيديو' : attachmentType === 'document' ? 'مستند' : 'رسالة'}]`),
+          message_type: 'outgoing',
+          media_type: attachmentType || 'text',
+          media_url: mediaUrl || undefined,
+          created_at: new Date().toISOString(),
+          quoted_message_id: replyingTo?.message_id,
+          quoted_message_text: replyingTo?.message_text,
+          quoted_message_sender: replyingTo ? (replyingTo.message_type === 'outgoing' ? 'أنت' : replyingTo.customer_name) : undefined,
+        }
+
+        setMessages(prev => [...prev, sentMessage])
+
+        // مسح الـ input
         setNewMessage('')
         resetAttachment()
-        setReplyingTo(null) // Clear reply after sending
-        if (selectedConversation) await fetchConversationMessages(selectedConversation)
+        setReplyingTo(null)
       } else {
         setError(data.error || 'فشل في إرسال الرسالة')
       }
