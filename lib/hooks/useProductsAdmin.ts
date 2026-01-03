@@ -13,6 +13,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/app/lib/supabase/client';
 
+// ✨ Helper function to chunk array for batched queries (Supabase URL limit ~2000 chars)
+const chunkArray = <T,>(array: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < array.length; i += size) {
+    chunks.push(array.slice(i, i + size));
+  }
+  return chunks;
+};
+
+// Batch size for .in() queries (safe limit for UUIDs)
+const QUERY_BATCH_SIZE = 200;
+
 // ✨ Video interface for product_videos table
 export interface ProductVideo {
   id: string;
@@ -182,54 +194,96 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
 
       const productIds = (rawProducts as any[]).map(p => p.id);
 
-      // ✨ OPTIMIZED: Run inventory, variant definitions, and videos queries in PARALLEL
-      const [inventoryResult, variantDefinitionsResult, videosResult] = await Promise.all([
-        // Query 3: Get ALL inventory for ALL products in ONE query
+      // ✨ BATCHED QUERIES: Split product IDs into chunks to avoid URL length limits
+      const productIdChunks = chunkArray(productIds, QUERY_BATCH_SIZE);
+      console.log(`📦 Split ${productIds.length} products into ${productIdChunks.length} batches`);
+
+      // ✨ Fetch inventory in batches
+      const inventoryPromises = productIdChunks.map(chunk =>
         supabase
           .from('inventory')
           .select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status')
-          .in('product_id', productIds),
-        // Query 4a: Get ALL variant DEFINITIONS for ALL products
+          .in('product_id', chunk)
+      );
+
+      // ✨ Fetch variant definitions in batches
+      const variantDefinitionsPromises = productIdChunks.map(chunk =>
         supabase
           .from('product_color_shape_definitions')
           .select('id, product_id, variant_type, name, color_hex, image_url, barcode, sort_order')
-          .in('product_id', productIds),
-        // Query 5: Get ALL videos for ALL products in ONE query
+          .in('product_id', chunk)
+      );
+
+      // ✨ Fetch videos in batches
+      const videosPromises = productIdChunks.map(chunk =>
         (supabase as any)
           .from('product_videos')
           .select('id, product_id, video_url, thumbnail_url, video_name, video_size, duration, sort_order, created_at')
-          .in('product_id', productIds)
+          .in('product_id', chunk)
           .order('sort_order', { ascending: true })
+      );
+
+      // Run all batched queries in parallel
+      const [inventoryResults, variantDefinitionsResults, videosResults] = await Promise.all([
+        Promise.all(inventoryPromises),
+        Promise.all(variantDefinitionsPromises),
+        Promise.all(videosPromises)
       ]);
 
-      const { data: inventory, error: inventoryError } = inventoryResult;
-      const { data: variantDefinitions, error: definitionsError } = variantDefinitionsResult;
-      const { data: videos, error: videosError } = videosResult;
+      // Merge results from all batches
+      const inventory: any[] = [];
+      const variantDefinitions: any[] = [];
+      const videos: any[] = [];
 
-      if (inventoryError) {
-        console.warn('Error fetching inventory:', inventoryError);
-      }
+      inventoryResults.forEach((result, idx) => {
+        if (result.error) {
+          console.warn(`Error fetching inventory batch ${idx}:`, result.error);
+        } else if (result.data) {
+          inventory.push(...result.data);
+        }
+      });
 
-      if (definitionsError) {
-        console.warn('Error fetching variant definitions:', definitionsError);
-      }
+      variantDefinitionsResults.forEach((result, idx) => {
+        if (result.error) {
+          console.warn(`Error fetching variant definitions batch ${idx}:`, result.error);
+        } else if (result.data) {
+          variantDefinitions.push(...result.data);
+        }
+      });
 
-      if (videosError) {
-        console.warn('Error fetching videos:', videosError);
-      }
+      videosResults.forEach((result, idx) => {
+        if (result.error) {
+          console.warn(`Error fetching videos batch ${idx}:`, result.error);
+        } else if (result.data) {
+          videos.push(...result.data);
+        }
+      });
+
+      console.log(`✅ Fetched: ${inventory.length} inventory records, ${variantDefinitions.length} definitions, ${videos.length} videos`);
 
       // ✨ Query 4b: Get ALL variant QUANTITIES (depends on variant definitions)
       let variants: any[] = [];
       if (variantDefinitions && variantDefinitions.length > 0) {
         const definitionIds = variantDefinitions.map(d => d.id);
-        const { data: quantities, error: quantitiesError } = await supabase
-          .from('product_variant_quantities')
-          .select('variant_definition_id, branch_id, quantity')
-          .in('variant_definition_id', definitionIds);
+        const definitionIdChunks = chunkArray(definitionIds, QUERY_BATCH_SIZE);
 
-        if (quantitiesError) {
-          console.warn('Error fetching variant quantities:', quantitiesError);
-        }
+        const quantitiesPromises = definitionIdChunks.map(chunk =>
+          supabase
+            .from('product_variant_quantities')
+            .select('variant_definition_id, branch_id, quantity')
+            .in('variant_definition_id', chunk)
+        );
+
+        const quantitiesResults = await Promise.all(quantitiesPromises);
+        const quantities: any[] = [];
+
+        quantitiesResults.forEach((result, idx) => {
+          if (result.error) {
+            console.warn(`Error fetching variant quantities batch ${idx}:`, result.error);
+          } else if (result.data) {
+            quantities.push(...result.data);
+          }
+        });
 
         // Build variants array from definitions + quantities
         if (quantities && quantities.length > 0) {
