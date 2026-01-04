@@ -147,6 +147,7 @@ import {
   MinusIcon,
   ChevronRightIcon,
   ExclamationTriangleIcon,
+  PencilIcon,
 } from "@heroicons/react/24/outline";
 
 function POSPageContent() {
@@ -227,6 +228,7 @@ function POSPageContent() {
   const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
   const [showQuickAddProductModal, setShowQuickAddProductModal] =
     useState(false);
+  const [editingCartItem, setEditingCartItem] = useState<any>(null);
   const [showColumnsModal, setShowColumnsModal] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<{
     [key: string]: boolean;
@@ -2070,14 +2072,17 @@ function POSPageContent() {
       const totalPaid = paymentSplitData.reduce((sum, p) => sum + (p.amount || 0), 0);
       const isDefaultCustomer = selections.customer?.id === '00000000-0000-0000-0000-000000000001';
 
+      // استخدام الإجمالي بعد الخصم للتحقق من صحة الدفع
+      const discountedTotal = calculateTotalWithDiscounts();
+
       // التحقق من صحة المدفوعات للعميل الافتراضي
       if (isDefaultCustomer) {
         // العميل الافتراضي: المبلغ المدفوع يجب أن يساوي قيمة الفاتورة بالضبط
-        if (totalPaid < cartTotal) {
+        if (totalPaid < discountedTotal) {
           alert('العميل الافتراضي لا يقبل البيع بالآجل - يجب دفع قيمة الفاتورة كاملة');
           return;
         }
-        if (totalPaid > cartTotal) {
+        if (totalPaid > discountedTotal) {
           alert('المبلغ المدفوع أعلى من قيمة الفاتورة - العميل الافتراضي يقبل الدفع بقيمة الفاتورة فقط');
           return;
         }
@@ -2085,10 +2090,10 @@ function POSPageContent() {
         // العملاء العاديين: يمكنهم الدفع أكثر من الفاتورة بشرط أن لا يتجاوز رصيدهم
         const customerBalance = selections.customer?.credit_balance || selections.customer?.calculatedBalance || 0;
         // الحد الأقصى للدفع = قيمة الفاتورة + رصيد العميل (ما عليه)
-        const maxPaymentAllowed = cartTotal + customerBalance;
+        const maxPaymentAllowed = discountedTotal + customerBalance;
 
         if (totalPaid > maxPaymentAllowed) {
-          alert(`المبلغ المدفوع (${totalPaid.toFixed(0)}) أعلى من رصيد العميل (${customerBalance.toFixed(0)}) + قيمة الفاتورة (${cartTotal.toFixed(0)})`);
+          alert(`المبلغ المدفوع (${totalPaid.toFixed(0)}) أعلى من رصيد العميل (${customerBalance.toFixed(0)}) + قيمة الفاتورة (${discountedTotal.toFixed(0)})`);
           return;
         }
       }
@@ -2643,6 +2648,24 @@ function POSPageContent() {
     setTimeout(() => {
       searchInputRef.current?.focus();
     }, 100);
+  };
+
+  // Handle update cart item (for editing new products in purchase mode)
+  const handleUpdateCartItem = (itemId: string, updatedData: any) => {
+    const newCart = cartItems.map(item =>
+      item.id === itemId
+        ? {
+            ...item,
+            product: { ...item.product, ...updatedData },
+            price: updatedData.cost_price || item.price,
+            quantity: updatedData.quantity || item.quantity
+          }
+        : item
+    );
+    setCartItems(newCart);
+    updateActiveTabCart(newCart);
+    setShowQuickAddProductModal(false);
+    setEditingCartItem(null);
   };
 
   // Check if all required selections are made for purchase mode
@@ -4021,8 +4044,13 @@ function POSPageContent() {
 
         <QuickAddProductModal
           isOpen={showQuickAddProductModal}
-          onClose={() => setShowQuickAddProductModal(false)}
+          onClose={() => {
+            setShowQuickAddProductModal(false);
+            setEditingCartItem(null);
+          }}
           onAddToCart={handleQuickAddToCart}
+          editingItem={editingCartItem}
+          onUpdateCartItem={handleUpdateCartItem}
         />
 
         <ColumnsControlModal
@@ -5331,13 +5359,28 @@ function POSPageContent() {
                                     <h4 className="font-medium text-white text-sm truncate">
                                       {item.product.name}
                                     </h4>
-                                    <button
-                                      onClick={() => removeFromCart(item.id)}
-                                      className="text-red-400 hover:text-red-300 p-1 ml-2 flex-shrink-0"
-                                      title="إزالة من السلة"
-                                    >
-                                      <XMarkIcon className="h-4 w-4" />
-                                    </button>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {/* زر تعديل المنتج - يظهر فقط للمنتجات الجديدة في وضع الشراء */}
+                                      {isPurchaseMode && item.product?.isNewProduct && (
+                                        <button
+                                          onClick={() => {
+                                            setEditingCartItem(item);
+                                            setShowQuickAddProductModal(true);
+                                          }}
+                                          className="text-blue-400 hover:text-blue-300 p-1"
+                                          title="تعديل المنتج"
+                                        >
+                                          <PencilIcon className="h-4 w-4" />
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => removeFromCart(item.id)}
+                                        className="text-red-400 hover:text-red-300 p-1"
+                                        title="إزالة من السلة"
+                                      >
+                                        <XMarkIcon className="h-4 w-4" />
+                                      </button>
+                                    </div>
                                   </div>
 
                                   {/* Quantity and Price Controls */}
@@ -5805,13 +5848,28 @@ function POSPageContent() {
                             <h4 className="text-white text-sm font-medium leading-tight flex-1">
                               {item.product.name}
                             </h4>
-                            <button
-                              onClick={() => removeFromCart(item.id)}
-                              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-full p-1 transition-colors text-lg leading-none ml-2"
-                              title="إزالة من السلة"
-                            >
-                              ×
-                            </button>
+                            <div className="flex items-center gap-1 ml-2">
+                              {/* زر تعديل المنتج - يظهر فقط للمنتجات الجديدة في وضع الشراء */}
+                              {isPurchaseMode && item.product?.isNewProduct && (
+                                <button
+                                  onClick={() => {
+                                    setEditingCartItem(item);
+                                    setShowQuickAddProductModal(true);
+                                  }}
+                                  className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10 rounded-full p-1 transition-colors"
+                                  title="تعديل المنتج"
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => removeFromCart(item.id)}
+                                className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-full p-1 transition-colors text-lg leading-none"
+                                title="إزالة من السلة"
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -6189,8 +6247,13 @@ function POSPageContent() {
       {/* Quick Add Product Modal */}
       <QuickAddProductModal
         isOpen={showQuickAddProductModal}
-        onClose={() => setShowQuickAddProductModal(false)}
+        onClose={() => {
+          setShowQuickAddProductModal(false);
+          setEditingCartItem(null);
+        }}
         onAddToCart={handleQuickAddToCart}
+        editingItem={editingCartItem}
+        onUpdateCartItem={handleUpdateCartItem}
       />
 
       {/* Product Details Modal */}

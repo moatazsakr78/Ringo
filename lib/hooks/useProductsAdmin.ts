@@ -470,53 +470,6 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     fetchProducts();
   }, [fetchProducts]);
 
-  // ✨ Real-time updates (optimized - single subscription for ALL products)
-  useEffect(() => {
-    console.log('🔴 Setting up real-time subscription');
-
-    // Subscribe to products changes
-    const productsChannel = supabase
-      .channel('products-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'elfaroukgroup',
-          table: 'products',
-        },
-        (payload) => {
-          console.log('📡 Products change detected:', payload.eventType);
-          // Debounce: wait 500ms before refetching
-          setTimeout(() => fetchProducts(true), 500);
-        }
-      )
-      .subscribe();
-
-    // Subscribe to inventory changes
-    const inventoryChannel = supabase
-      .channel('inventory-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'elfaroukgroup',
-          table: 'inventory',
-        },
-        (payload) => {
-          console.log('📡 Inventory change detected:', payload.eventType);
-          setTimeout(() => fetchProducts(true), 500);
-        }
-      )
-      .subscribe();
-
-    // Cleanup subscriptions on unmount
-    return () => {
-      console.log('🔴 Cleaning up real-time subscriptions');
-      supabase.removeChannel(productsChannel);
-      supabase.removeChannel(inventoryChannel);
-    };
-  }, [fetchProducts]);
-
   // ✨ Create new product
   const createProduct = useCallback(async (productData: Partial<Product>): Promise<Product | null> => {
     try {
@@ -798,6 +751,327 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     }
   }, [])
 
+  // ✨ Fetch a single product with all enrichments (for smart real-time updates)
+  const fetchSingleProduct = useCallback(async (productId: string): Promise<Product | null> => {
+    try {
+      // Fetch product with category
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select(`
+          id, name, barcode, price, cost_price, main_image_url, sub_image_url,
+          additional_images_urls, category_id, is_active, display_order, stock,
+          min_stock, max_stock, unit, description, wholesale_price, price1, price2,
+          price3, price4, rating, rating_count, discount_percentage, discount_amount,
+          discount_start_date, discount_end_date,
+          categories (id, name)
+        `)
+        .eq('id', productId)
+        .eq('is_active', true)
+        .or('is_deleted.is.null,is_deleted.eq.false')
+        .single();
+
+      if (productError || !product) return null;
+
+      // Fetch inventory, variants, and videos for this product
+      const [inventoryResult, variantDefsResult, videosResult] = await Promise.all([
+        supabase.from('inventory').select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status').eq('product_id', productId),
+        supabase.from('product_color_shape_definitions').select('id, product_id, variant_type, name, color_hex, image_url, barcode, sort_order').eq('product_id', productId),
+        (supabase as any).from('product_videos').select('id, product_id, video_url, thumbnail_url, video_name, video_size, duration, sort_order, created_at').eq('product_id', productId).order('sort_order', { ascending: true })
+      ]);
+
+      const productInventory = inventoryResult.data || [];
+      const variantDefinitions = variantDefsResult.data || [];
+      const productVideos: ProductVideo[] = videosResult.data || [];
+
+      // Fetch variant quantities if there are definitions
+      let productVariants: any[] = [];
+      if (variantDefinitions.length > 0) {
+        const definitionIds = variantDefinitions.map(d => d.id);
+        const { data: quantities } = await supabase
+          .from('product_variant_quantities')
+          .select('variant_definition_id, branch_id, quantity')
+          .in('variant_definition_id', definitionIds);
+
+        if (quantities) {
+          productVariants = quantities.map(qty => {
+            const definition = variantDefinitions.find(d => d.id === qty.variant_definition_id);
+            if (!definition) return null;
+            return {
+              product_id: definition.product_id,
+              variant_type: definition.variant_type,
+              name: definition.name,
+              quantity: qty.quantity || 0,
+              color_hex: definition.color_hex,
+              color_name: definition.name,
+              image_url: definition.image_url,
+              branch_id: qty.branch_id
+            };
+          }).filter(v => v !== null);
+        }
+      }
+
+      // Build productColors from color definitions
+      const productColors = variantDefinitions
+        .filter(d => d.variant_type === 'color')
+        .map(colorDef => ({
+          id: colorDef.id,
+          name: colorDef.name || '',
+          color: colorDef.color_hex || '#6B7280',
+          image: colorDef.image_url || undefined
+        }));
+
+      // Calculate total stock
+      let totalQuantity = 0;
+      productInventory.forEach((inv: any) => {
+        const locationId = inv.branch_id || inv.warehouse_id;
+        if (selectedBranches.length === 0 || selectedBranches.includes(locationId)) {
+          totalQuantity += inv.quantity || 0;
+        }
+      });
+
+      // Group inventory by branch
+      const inventoryData: Record<string, any> = {};
+      productInventory.forEach((inv: any) => {
+        const locationId = inv.branch_id || inv.warehouse_id;
+        if (locationId) {
+          inventoryData[locationId] = {
+            quantity: inv.quantity || 0,
+            min_stock: inv.min_stock || 0,
+            audit_status: inv.audit_status || 'غير مجرود',
+          };
+        }
+      });
+
+      // Group variants by branch
+      const variantsData: Record<string, any[]> = {};
+      productVariants.forEach((variant: any) => {
+        if (variant.branch_id) {
+          if (!variantsData[variant.branch_id]) {
+            variantsData[variant.branch_id] = [];
+          }
+          variantsData[variant.branch_id].push(variant);
+        }
+      });
+
+      // Process all images
+      const allProductImages: string[] = [];
+      if (product.main_image_url) allProductImages.push(product.main_image_url);
+      if (product.sub_image_url) allProductImages.push(product.sub_image_url);
+      const additionalImages = (product as any).additional_images_urls;
+      if (additionalImages && Array.isArray(additionalImages)) {
+        additionalImages.forEach((imgUrl: string) => {
+          if (imgUrl && imgUrl.trim() !== '') allProductImages.push(imgUrl);
+        });
+      }
+      productVariants.forEach((variant: any) => {
+        if (variant.image_url) allProductImages.push(variant.image_url);
+      });
+      const allImages = Array.from(new Set(allProductImages.filter(img => img && img.trim() !== '')));
+
+      // Calculate discount info
+      const now = new Date();
+      const discountStart = product.discount_start_date ? new Date(product.discount_start_date) : null;
+      const discountEnd = product.discount_end_date ? new Date(product.discount_end_date) : null;
+      const discountPercentage = product.discount_percentage || 0;
+      const discountAmount = product.discount_amount || 0;
+      const isDiscountActive = (
+        (discountPercentage > 0 || discountAmount > 0) &&
+        (!discountStart || now >= discountStart) &&
+        (!discountEnd || now <= discountEnd)
+      );
+
+      let finalPrice = product.price;
+      let discountLabel = '';
+      if (isDiscountActive) {
+        if (discountPercentage > 0) {
+          finalPrice = product.price * (1 - (discountPercentage / 100));
+          discountLabel = `-${discountPercentage}%`;
+        } else if (discountAmount > 0) {
+          finalPrice = Math.max(0, product.price - discountAmount);
+          discountLabel = `-${discountAmount}`;
+        }
+      }
+
+      return {
+        ...product,
+        totalQuantity,
+        inventoryData,
+        variantsData,
+        productColors,
+        allImages,
+        additional_images: additionalImages || [],
+        productVideos,
+        finalPrice,
+        isDiscounted: isDiscountActive,
+        discountLabel,
+      } as Product;
+    } catch (err) {
+      console.error('❌ Error fetching single product:', err);
+      return null;
+    }
+  }, [selectedBranches]);
+
+  // ✨ Update inventory for a single product (for smart real-time updates)
+  const updateProductInventory = useCallback(async (productId: string): Promise<void> => {
+    try {
+      const { data: inventoryData } = await supabase
+        .from('inventory')
+        .select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status')
+        .eq('product_id', productId);
+
+      if (!inventoryData) return;
+
+      // Calculate total quantity and inventory map
+      let totalQuantity = 0;
+      const inventoryMap: Record<string, any> = {};
+
+      inventoryData.forEach((inv: any) => {
+        const locationId = inv.branch_id || inv.warehouse_id;
+        if (selectedBranches.length === 0 || selectedBranches.includes(locationId)) {
+          totalQuantity += inv.quantity || 0;
+        }
+        if (locationId) {
+          inventoryMap[locationId] = {
+            quantity: inv.quantity || 0,
+            min_stock: inv.min_stock || 0,
+            audit_status: inv.audit_status || 'غير مجرود',
+          };
+        }
+      });
+
+      // Update only this product in the state (no full refetch!)
+      setProducts(prev => prev.map(p =>
+        p.id === productId
+          ? { ...p, totalQuantity, inventoryData: inventoryMap }
+          : p
+      ));
+    } catch (err) {
+      console.error('❌ Error updating product inventory:', err);
+    }
+  }, [selectedBranches]);
+
+  // ✨ Real-time updates (SMART - selective updates without full refetch)
+  useEffect(() => {
+    console.log('🔴 Setting up smart real-time subscriptions');
+
+    // Handler for product changes - SMART selective update
+    const handleProductChange = async (payload: any) => {
+      console.log('📡 Products change detected:', payload.eventType);
+
+      if (payload.eventType === 'INSERT') {
+        // New product - fetch and add to list
+        const productId = payload.new?.id;
+        if (productId) {
+          const newProduct = await fetchSingleProduct(productId);
+          if (newProduct) {
+            setProducts(prev => [...prev, newProduct]);
+            console.log('✅ New product added:', newProduct.name);
+          }
+        }
+      } else if (payload.eventType === 'UPDATE') {
+        // Updated product - fetch and merge
+        const productId = payload.new?.id;
+        if (productId) {
+          const updatedProduct = await fetchSingleProduct(productId);
+          if (updatedProduct) {
+            setProducts(prev => prev.map(p =>
+              p.id === productId ? updatedProduct : p
+            ));
+            console.log('✅ Product updated:', updatedProduct.name);
+          } else {
+            // Product might have been deactivated/deleted - remove from list
+            setProducts(prev => prev.filter(p => p.id !== productId));
+            console.log('🗑️ Product removed from list (deactivated or deleted)');
+          }
+        }
+      } else if (payload.eventType === 'DELETE') {
+        // Deleted product - remove from list
+        const productId = payload.old?.id;
+        if (productId) {
+          setProducts(prev => prev.filter(p => p.id !== productId));
+          console.log('🗑️ Product removed:', productId);
+        }
+      }
+    };
+
+    // Handler for inventory changes - SMART selective update
+    const handleInventoryChange = async (payload: any) => {
+      console.log('📡 Inventory change detected:', payload.eventType);
+
+      const productId = payload.new?.product_id || payload.old?.product_id;
+      if (!productId) return;
+
+      // Fetch updated inventory for this specific product
+      const { data: inventoryData } = await supabase
+        .from('inventory')
+        .select('product_id, branch_id, warehouse_id, quantity, min_stock, audit_status')
+        .eq('product_id', productId);
+
+      if (!inventoryData) return;
+
+      // Calculate total quantity and inventory map
+      let totalQuantity = 0;
+      const inventoryMap: Record<string, any> = {};
+
+      inventoryData.forEach((inv: any) => {
+        const locationId = inv.branch_id || inv.warehouse_id;
+        if (selectedBranches.length === 0 || selectedBranches.includes(locationId)) {
+          totalQuantity += inv.quantity || 0;
+        }
+        if (locationId) {
+          inventoryMap[locationId] = {
+            quantity: inv.quantity || 0,
+            min_stock: inv.min_stock || 0,
+            audit_status: inv.audit_status || 'غير مجرود',
+          };
+        }
+      });
+
+      // Update only this product in the state (NO full refetch!)
+      setProducts(prev => prev.map(p =>
+        p.id === productId
+          ? { ...p, totalQuantity, inventoryData: inventoryMap }
+          : p
+      ));
+      console.log('✅ Inventory updated for product:', productId);
+    };
+
+    // Subscribe to products changes
+    const productsChannel = supabase
+      .channel('products-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'elfaroukgroup',
+          table: 'products',
+        },
+        handleProductChange
+      )
+      .subscribe();
+
+    // Subscribe to inventory changes
+    const inventoryChannel = supabase
+      .channel('inventory-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'elfaroukgroup',
+          table: 'inventory',
+        },
+        handleInventoryChange
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      console.log('🔴 Cleaning up real-time subscriptions');
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(inventoryChannel);
+    };
+  }, [fetchSingleProduct, selectedBranches]);
+
   return {
     products,
     setProducts, // ✨ Expose setProducts for optimistic updates
@@ -805,6 +1079,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
     isLoading,
     error,
     fetchProducts: () => fetchProducts(true), // Force refetch
+    fetchSingleProduct, // ✨ Expose for manual single product refresh
     createProduct, // ✨ Expose createProduct
     updateProduct, // ✨ Expose updateProduct
     deleteProduct, // ✨ Expose deleteProduct

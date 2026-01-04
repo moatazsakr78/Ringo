@@ -45,7 +45,7 @@ export default function DiscountModal({
   onRemoveItemDiscount,
   onRemoveCartDiscount,
 }: DiscountModalProps) {
-  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(1);
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
   const [discountValue, setDiscountValue] = useState("");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);

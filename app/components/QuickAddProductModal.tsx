@@ -23,12 +23,15 @@ interface QuickAddProductModalProps {
   isOpen: boolean
   onClose: () => void
   onAddToCart: (productData: any) => void
+  editingItem?: any  // Item being edited (for edit mode)
+  onUpdateCartItem?: (itemId: string, updatedData: any) => void  // Handler for updating cart item
 }
 
 // Persistent category selection (survives form reset)
 let persistedCategoryId: string | null = null
 
-export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: QuickAddProductModalProps) {
+export default function QuickAddProductModal({ isOpen, onClose, onAddToCart, editingItem, onUpdateCartItem }: QuickAddProductModalProps) {
+  const isEditMode = !!editingItem
   const [productName, setProductName] = useState('')
   const [productQuantity, setProductQuantity] = useState('1')
   const [productCostPrice, setProductCostPrice] = useState('')
@@ -91,6 +94,31 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Populate form when editing
+  useEffect(() => {
+    if (isOpen && editingItem) {
+      const product = editingItem.product
+      setProductName(product.name || '')
+      setProductQuantity(String(editingItem.quantity || 1))
+      setProductCostPrice(String(product.cost_price || ''))
+      setProductPrice(String(product.price || ''))
+      setWholesalePrice(String(product.wholesale_price || ''))
+      setPrice1(String(product.price_1 || ''))
+      setPrice2(String(product.price_2 || ''))
+      setPrice3(String(product.price_3 || ''))
+      setPrice4(String(product.price_4 || ''))
+      setProductBarcode(product.barcode || '')
+      setProductCode(product.product_code || '')
+      setProductDescription(product.description || '')
+      setProductImage(product.main_image_url || null)
+      setSelectedCategoryId(product.category_id || null)
+    } else if (isOpen && !editingItem) {
+      // Reset form for new product (keep category persisted)
+      resetForm()
+      setSelectedCategoryId(persistedCategoryId)
+    }
+  }, [isOpen, editingItem])
 
   // Update persisted category when selection changes
   const handleCategoryChange = (categoryId: string | null) => {
@@ -200,6 +228,57 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
     }
   }
 
+  // Handle update cart item (edit mode)
+  const handleUpdateCartItem = async () => {
+    // Validate required fields
+    if (!productName.trim()) {
+      alert('يجب إدخال اسم المنتج')
+      return
+    }
+
+    const quantity = parseInt(productQuantity) || 1
+    if (quantity <= 0) {
+      alert('يجب إدخال كمية صحيحة')
+      return
+    }
+
+    if (!productCostPrice || parseFloat(productCostPrice) < 0) {
+      alert('يجب إدخال سعر الشراء')
+      return
+    }
+
+    setIsProcessing(true)
+
+    try {
+      // Create updated product data
+      const updatedProductData = {
+        name: productName.trim(),
+        price: productPrice ? parseFloat(productPrice) : 0,
+        cost_price: parseFloat(productCostPrice) || 0,
+        wholesale_price: wholesalePrice ? parseFloat(wholesalePrice) : 0,
+        price_1: price1 ? parseFloat(price1) : 0,
+        price_2: price2 ? parseFloat(price2) : 0,
+        price_3: price3 ? parseFloat(price3) : 0,
+        price_4: price4 ? parseFloat(price4) : 0,
+        barcode: productBarcode.trim() || null,
+        product_code: productCode.trim() || null,
+        description: productDescription.trim() || null,
+        main_image_url: productImage,
+        category_id: selectedCategoryId,
+        isNewProduct: true
+      }
+
+      if (onUpdateCartItem && editingItem) {
+        onUpdateCartItem(editingItem.id, { ...updatedProductData, quantity })
+      }
+      handleClose()
+    } catch (error: any) {
+      alert(`خطأ في تحديث المنتج: ${error.message}`)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -222,7 +301,7 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
           >
             <ArrowLeftIcon className="h-5 w-5" />
           </button>
-          <h2 className="text-lg font-bold text-white">إضافة منتج سريع</h2>
+          <h2 className="text-lg font-bold text-white">{isEditMode ? 'تعديل المنتج' : 'إضافة منتج سريع'}</h2>
           <div className="w-9" /> {/* Spacer for alignment */}
         </div>
 
@@ -553,19 +632,19 @@ export default function QuickAddProductModal({ isOpen, onClose, onAddToCart }: Q
               إلغاء
             </button>
             <button
-              onClick={handleAddToCart}
+              onClick={isEditMode ? handleUpdateCartItem : handleAddToCart}
               disabled={isProcessing || !productName.trim() || !productCostPrice}
-              className="flex-1 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+              className={`flex-1 ${isEditMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
             >
               {isProcessing ? (
                 <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  جاري الإضافة...
+                  {isEditMode ? 'جاري الحفظ...' : 'جاري الإضافة...'}
                 </>
               ) : (
                 <>
                   <ShoppingCartIcon className="h-5 w-5" />
-                  إضافة للسلة
+                  {isEditMode ? 'حفظ التعديلات' : 'إضافة للسلة'}
                 </>
               )}
             </button>
