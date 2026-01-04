@@ -159,6 +159,7 @@ function POSPageContent() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const cartContainerRef = useRef<HTMLDivElement>(null);
 
   // Keep CartContext for website functionality
   const {
@@ -1818,6 +1819,18 @@ function POSPageContent() {
       return totalProfit + itemProfit
     }, 0)
   }, [cartItems])
+
+  // Auto-scroll السلة لآخر منتج عند الإضافة
+  useEffect(() => {
+    if (cartContainerRef.current && cartItems.length > 0) {
+      // setTimeout لضمان تحديث DOM قبل الـ scroll
+      setTimeout(() => {
+        if (cartContainerRef.current) {
+          cartContainerRef.current.scrollTop = cartContainerRef.current.scrollHeight;
+        }
+      }, 50);
+    }
+  }, [cartItems]);
 
   // =============================================
   // 🔍 useEffect للإضافة المباشرة عند مسح الباركود
@@ -5008,10 +5021,10 @@ function POSPageContent() {
                 <div className="flex items-start gap-6">
                   {/* معلومات سرية - ربح الفاتورة ورصيد العميل */}
                   <div className="flex items-center gap-4 text-xs text-gray-500 font-mono self-center">
-                    {/* PD: الربح - يظهر دائماً مع وجود منتجات */}
+                    {/* PD: الربح - يظهر دائماً مع وجود منتجات (مخفي كباركود) */}
                     {cartItems.length > 0 && (
                       <span title="ربح الفاتورة">
-                        PD: {calculateProfit().toFixed(0)}
+                        PD0{calculateProfit().toFixed(0)}U68
                       </span>
                     )}
                     {/* قبل/بعد: رصيد العميل - يظهر فقط مع عميل غير افتراضي */}
@@ -5294,7 +5307,10 @@ function POSPageContent() {
                         </div>
 
                         {/* Cart Items */}
-                        <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3 min-h-0">
+                        <div
+                          ref={cartContainerRef}
+                          className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3 min-h-0"
+                        >
                           {cartItems.map((item) => (
                             <div
                               key={item.id}
@@ -5767,7 +5783,10 @@ function POSPageContent() {
                   </div>
 
                   {/* Cart Items */}
-                  <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3 min-h-0">
+                  <div
+                    ref={cartContainerRef}
+                    className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3 min-h-0"
+                  >
                     {cartItems.map((item) => (
                       <div
                         key={item.id}
