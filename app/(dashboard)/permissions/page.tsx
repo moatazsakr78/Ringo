@@ -24,6 +24,7 @@ import TreeView, { TreeNode } from '@/app/components/TreeView';
 import ResizableTable from '@/app/components/tables/ResizableTable';
 import AddPermissionModal from '@/app/components/AddPermissionModal';
 import PermissionDetails from '@/app/components/PermissionDetails';
+import { RolePermissionManager } from '@/app/components/permissions';
 import { supabase } from '@/app/lib/supabase/client';
 import { useUserProfile } from '@/lib/contexts/UserProfileContext';
 import { useAuth } from '@/lib/useAuth';
@@ -1096,35 +1097,19 @@ export default function PermissionsPage() {
 
             {/* Data Table Container */}
             <div className="flex-1 overflow-hidden bg-[#2B3544]">
-              {activeView === 'permissions' && selectedPermissionPage ? (
-                <div className="p-6">
-                  <PermissionDetails
-                    pageName={selectedPermissionPage.name}
-                    pageId={selectedPermissionPage.id}
-                    onClose={() => setSelectedPermissionPage(null)}
-                    isSelected={true}
+              {activeView === 'permissions' ? (
+                <div className="p-6 h-full overflow-auto">
+                  <RolePermissionManager
+                    roles={derivedRoles.map(r => ({
+                      id: r.id,
+                      name: r.name,
+                      description: r.description,
+                      role_type: r.roleType,
+                      is_active: true
+                    }))}
+                    selectedRoleId={selectedRoleId}
+                    onRoleChange={setSelectedRoleId}
                   />
-                </div>
-              ) : activeView === 'permissions' ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <KeyIcon className="h-16 w-16 text-gray-500 mx-auto mb-4" />
-                    <h3 className="text-xl font-medium text-white mb-2">إدارة الصلاحيات</h3>
-                    <p className="text-gray-400 mb-6 max-w-md">
-                      اختر صفحة من شجرة الصلاحيات على اليمين لعرض وإدارة الصلاحيات الخاصة بها
-                    </p>
-                    <div className="bg-[#374151] rounded-lg p-6 border border-gray-600 max-w-md mx-auto">
-                      <h4 className="text-white font-medium mb-3">الصفحات المتاحة:</h4>
-                      <div className="text-right space-y-2 text-sm text-gray-300">
-                        <div>• نقطة البيع</div>
-                        <div>• المنتجات</div>
-                        <div>• المخزون</div>
-                        <div>• العملاء والموردين</div>
-                        <div>• طلبات العملاء والخزن</div>
-                        <div>• صفحات المتجر الإلكتروني</div>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <ResizableTable

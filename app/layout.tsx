@@ -7,6 +7,7 @@ import { SystemSettingsProvider } from '@/lib/hooks/useSystemSettings'
 import { CartProvider } from '@/lib/contexts/CartContext'
 import { UserProfileProvider } from '@/lib/contexts/UserProfileContext'
 import { ThemeProvider } from '@/lib/contexts/ThemeContext'
+import { PermissionsProvider } from '@/lib/contexts/PermissionsContext'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
@@ -57,10 +58,12 @@ export default function RootLayout({
             <SystemSettingsProvider>
               <CurrencyProvider>
                 <UserProfileProvider>
-                  <CartProvider>
-                    <TopHeader />
-                    {children}
-                  </CartProvider>
+                  <PermissionsProvider>
+                    <CartProvider>
+                      <TopHeader />
+                      {children}
+                    </CartProvider>
+                  </PermissionsProvider>
                 </UserProfileProvider>
               </CurrencyProvider>
             </SystemSettingsProvider>

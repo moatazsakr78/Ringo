@@ -13,6 +13,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/profile', // الملف الشخصي
     '/favorites', // المفضلة
     '/checkout', // إتمام الطلب
+    '/social-media', // السوشيال ميديا
   ],
   'جملة': [
     // نفس صلاحيات العميل + أسعار الجملة
@@ -24,6 +25,7 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/profile',
     '/favorites',
     '/checkout',
+    '/social-media', // السوشيال ميديا
   ],
   'موظف': [
     // كل صفحات النظام + المتجر
@@ -31,10 +33,11 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/',
     '/store',
     '/product',
+    '/social-media', // السوشيال ميديا
 
     // صفحات الإدارة
     '/customer-orders', // طلبات العملاء (مش my-orders)
-    '/admin/products', // إدارة المتجر
+    '/admin/products', // إدارة المتجر (يشمل /admin/products/social-media)
     '/shipping', // الشحن
 
     // صفحات النظام
@@ -55,10 +58,11 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/',
     '/store',
     '/product',
+    '/social-media', // السوشيال ميديا
 
     // صفحات الإدارة (مش my-orders - العميل فقط)
     '/customer-orders', // طلبات العملاء
-    '/admin/products', // إدارة المتجر
+    '/admin/products', // إدارة المتجر (يشمل /admin/products/social-media)
     '/shipping', // الشحن
 
     // صفحات النظام
