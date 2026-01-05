@@ -330,21 +330,79 @@ export default function SuppliersPage() {
     }
   }, [suppliers, fetchAllSupplierBalances])
 
-  // Set up real-time subscription for balance updates
+  // ✨ Calculate balance for a SINGLE supplier (for selective updates)
+  const updateSingleSupplierBalance = useCallback(async (supplierId: string) => {
+    if (!supplierId) return
+
+    try {
+      // Get invoices for this supplier only
+      const { data: invoices } = await supabase
+        .from('purchase_invoices')
+        .select('total_amount, invoice_type')
+        .eq('supplier_id', supplierId)
+
+      // Get payments for this supplier only
+      const { data: payments } = await supabase
+        .from('supplier_payments')
+        .select('amount')
+        .eq('supplier_id', supplierId)
+
+      // Calculate balance
+      let balance = 0
+
+      // Add invoices (Purchase Invoice adds, Purchase Return subtracts)
+      for (const invoice of (invoices || [])) {
+        if (invoice.invoice_type === 'Purchase Invoice') {
+          balance += (invoice.total_amount || 0)
+        } else if (invoice.invoice_type === 'Purchase Return') {
+          balance -= (invoice.total_amount || 0)
+        }
+      }
+
+      // Subtract payments
+      for (const payment of (payments || [])) {
+        balance -= (payment.amount || 0)
+      }
+
+      // Update only this supplier's balance in state
+      setSupplierBalances(prev => ({
+        ...prev,
+        [supplierId]: balance
+      }))
+
+      console.log(`✅ Updated balance for supplier ${supplierId}: ${balance}`)
+    } catch (error) {
+      console.error('Error updating single supplier balance:', error)
+    }
+  }, [])
+
+  // Set up real-time subscription for balance updates (SMART - selective updates)
   useEffect(() => {
     const invoicesChannel = supabase
       .channel('suppliers_page_invoices')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'purchase_invoices' },
-        () => fetchAllSupplierBalances()
+        { event: '*', schema: 'elfaroukgroup', table: 'purchase_invoices' },
+        (payload: any) => {
+          // ✨ Only update the affected supplier's balance
+          const supplierId = payload.new?.supplier_id || payload.old?.supplier_id
+          if (supplierId) {
+            updateSingleSupplierBalance(supplierId)
+          }
+        }
       )
       .subscribe()
 
     const paymentsChannel = supabase
       .channel('suppliers_page_payments')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'supplier_payments' },
-        () => fetchAllSupplierBalances()
+        { event: '*', schema: 'elfaroukgroup', table: 'supplier_payments' },
+        (payload: any) => {
+          // ✨ Only update the affected supplier's balance
+          const supplierId = payload.new?.supplier_id || payload.old?.supplier_id
+          if (supplierId) {
+            updateSingleSupplierBalance(supplierId)
+          }
+        }
       )
       .subscribe()
 
@@ -352,7 +410,7 @@ export default function SuppliersPage() {
       supabase.removeChannel(invoicesChannel)
       supabase.removeChannel(paymentsChannel)
     }
-  }, [fetchAllSupplierBalances])
+  }, [updateSingleSupplierBalance])
 
   // Get all columns for columns control modal
   const getAllColumns = () => {
