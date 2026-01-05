@@ -27,10 +27,25 @@ const supabase = createClient<Database, 'elfaroukgroup'>(supabaseUrl, supabaseAn
  * ✨ Optimized strategy:
  * - Product colors (static - rarely change) ✅
  * - Stock quantities (static - updated every 60s via ISR) ✅
+ * - Display mode filtering (respects selected branches) ✅
  * - Result: 1 DB query serves 1000s of users, fresh data every minute!
  */
 export async function getWebsiteProducts() {
   try {
+    // ✨ Step 0: Fetch product display settings
+    const { data: displaySettingsData } = await supabase
+      .from('product_display_settings')
+      .select('display_mode, selected_branches, selected_warehouses')
+      .single();
+
+    const displayMode = displaySettingsData?.display_mode || 'show_all';
+    const selectedBranches = displaySettingsData?.selected_branches || [];
+    const selectedWarehouses = displaySettingsData?.selected_warehouses || [];
+    const allSelectedLocations = [...selectedBranches, ...selectedWarehouses];
+
+    console.log('🎛️ Display mode:', displayMode);
+    console.log('🏢 Selected branches:', selectedBranches.length);
+
     const { data: products, error } = await supabase
       .from('products')
       .select(`
@@ -75,11 +90,19 @@ export async function getWebsiteProducts() {
         .eq('variant_type', 'color')
         .order('sort_order', { ascending: true });
 
-      // Query 2: Fetch ALL inventory totals (avoid .in() with large arrays - causes Bad Request)
-      // Then filter in JavaScript - more efficient for 800+ products
-      const { data: inventoryData, error: inventoryError } = await supabase
+      // Query 2: Fetch inventory totals
+      // ✨ If display_mode requires stock filtering, only fetch from selected branches
+      let inventoryQuery = supabase
         .from('inventory')
-        .select('product_id, quantity');
+        .select('product_id, quantity, branch_id');
+
+      // Filter by selected branches if display_mode is not 'show_all' and branches are selected
+      if (displayMode !== 'show_all' && allSelectedLocations.length > 0) {
+        inventoryQuery = inventoryQuery.in('branch_id', allSelectedLocations);
+        console.log('🔍 Filtering inventory by selected branches:', allSelectedLocations.length);
+      }
+
+      const { data: inventoryData, error: inventoryError } = await inventoryQuery;
 
       if (inventoryError) {
         console.error('Error fetching inventory data:', inventoryError);
@@ -144,6 +167,18 @@ export async function getWebsiteProducts() {
 
         product.allImages = images;
       });
+
+      // ✨ Step 3: Filter products based on display_mode
+      if (displayMode === 'show_with_stock') {
+        const beforeCount = products.length;
+        const filteredProducts = products.filter((product: any) => {
+          const hasStock = (product.totalQuantity || product.stock || 0) > 0;
+          return hasStock;
+        });
+        const afterCount = filteredProducts.length;
+        console.log(`🎯 Display mode 'show_with_stock': Filtered ${beforeCount} → ${afterCount} products (hidden ${beforeCount - afterCount} with 0 stock)`);
+        return filteredProducts;
+      }
     }
 
     return products || [];
@@ -430,16 +465,38 @@ export async function getStoreTheme() {
 }
 
 /**
- * Get product display settings
- *
- * Note: Returning default settings for now
- * Can be connected to actual settings table when available
+ * Get product display settings from database
+ * Used for controlling how products appear in the store
  */
 export async function getProductDisplaySettings() {
-  // TODO: Connect to actual settings table if exists
-  return {
-    show_ratings: true,
-    show_stock: true,
-    show_prices: true
-  };
+  try {
+    const { data, error } = await supabase
+      .from('product_display_settings')
+      .select('*')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching product display settings:', error);
+    }
+
+    return {
+      display_mode: data?.display_mode || 'show_all',
+      selected_branches: data?.selected_branches || [],
+      selected_warehouses: data?.selected_warehouses || [],
+      // Legacy fields for compatibility
+      show_ratings: true,
+      show_stock: true,
+      show_prices: true
+    };
+  } catch (error) {
+    console.error('Error in getProductDisplaySettings:', error);
+    return {
+      display_mode: 'show_all',
+      selected_branches: [],
+      selected_warehouses: [],
+      show_ratings: true,
+      show_stock: true,
+      show_prices: true
+    };
+  }
 }
