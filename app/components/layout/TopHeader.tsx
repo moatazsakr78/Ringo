@@ -55,7 +55,7 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
     };
   }, []);
   
-  // Hide header on website pages (root, individual product pages, cart page, auth pages, admin product management pages, shipping pages, my-orders page, profile page, customer-orders page, and my-invoices page)
+  // Hide header on website pages (root, individual product pages, cart page, auth pages, admin product management pages, shipping pages, my-orders page, profile page, customer-orders page, my-invoices page, and social-media page)
   if (pathname === '/' ||
       (pathname?.startsWith('/product') && pathname !== '/products') ||
       pathname === '/cart' ||
@@ -65,7 +65,8 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
       pathname === '/my-orders' ||
       pathname === '/profile' ||
       pathname === '/customer-orders' ||
-      pathname === '/my-invoices') {
+      pathname === '/my-invoices' ||
+      pathname === '/social-media') {
     return null;
   }
 
