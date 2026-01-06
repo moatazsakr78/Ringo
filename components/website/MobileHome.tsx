@@ -640,7 +640,7 @@ export default function MobileHome({
               </div>
 
               {/* Menu Items */}
-              <div className="p-3 overflow-y-auto scrollbar-hide h-[calc(100%-140px)]">
+              <div className="p-3 pb-16 overflow-y-auto scrollbar-hide h-[calc(100%-140px)]">
                 <div className="space-y-1">
                   
                   {/* Admin-specific buttons */}
