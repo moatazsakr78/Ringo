@@ -72,6 +72,7 @@ export default function OrdersPage() {
   // Get store theme colors
   const { primaryColor, primaryHoverColor, isLoading: isThemeLoading } = useStoreTheme();
   const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('completed');
+  const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -217,6 +218,18 @@ export default function OrdersPage() {
     });
     setExpandedOrders(newExpandedOrders);
   }, [orders, activeTab, dateFrom, dateTo]);
+
+  // Set default tab based on pending orders - run only once after orders load
+  useEffect(() => {
+    if (!loading && orders.length > 0 && !hasSetDefaultTab) {
+      const hasPendingOrders = orders.some(order => order.status !== 'delivered');
+      if (hasPendingOrders) {
+        setActiveTab('pending');
+      }
+      // If no pending orders, keep the default 'completed'
+      setHasSetDefaultTab(true);
+    }
+  }, [loading, orders, hasSetDefaultTab]);
 
   // Load payment progress for all orders
   useEffect(() => {
@@ -639,7 +652,7 @@ export default function OrdersPage() {
                   >
                     
                     {/* Mobile View: Stacked Layout */}
-                    <div className="md:hidden pt-2 pb-3">
+                    <div className="sm:hidden pt-2 pb-3">
                       <div className="flex items-center justify-between mb-2">
                         <h4 className="text-sm font-semibold text-blue-600">معلومات الطلب</h4>
                         {/* Collapse/Expand Arrow */}
@@ -687,7 +700,7 @@ export default function OrdersPage() {
                     </div>
 
                     {/* Desktop/Tablet View: Side by Side Layout */}
-                    <div className="hidden md:block pt-2 pb-4">
+                    <div className="hidden sm:block pt-2 pb-4">
                       <div className="grid grid-cols-12 gap-4 md:gap-6 lg:gap-8">
                         {/* Customer Information - Left Side (takes more space) */}
                         <div className="col-span-5">
@@ -882,7 +895,7 @@ export default function OrdersPage() {
                         <h4 className="text-sm font-semibold text-blue-600 mb-3">عناصر الطلب</h4>
                         
                         {/* Mobile View: Items as Cards */}
-                        <div className="md:hidden space-y-3">
+                        <div className="sm:hidden space-y-3">
                           {order.items.map((item) => (
                             <div key={item.id} className="bg-gray-50 rounded-lg p-3">
                               <div className="flex gap-3">
@@ -987,7 +1000,7 @@ export default function OrdersPage() {
                         </div>
 
                         {/* Tablet View: Compact Table (No Notes/Weights) */}
-                        <div className="hidden md:block lg:hidden bg-gray-50 rounded-lg overflow-hidden">
+                        <div className="hidden sm:block lg:hidden bg-gray-50 rounded-lg overflow-hidden">
                           <table className="w-full">
                             <thead style={{backgroundColor: '#f8f8f8'}}>
                               <tr className="text-right">

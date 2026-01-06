@@ -1,14 +1,18 @@
 'use client';
 
-import { 
-  PlusIcon, 
-  MinusIcon, 
-  FolderIcon 
+import React from 'react';
+import {
+  PlusIcon,
+  MinusIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
 } from '@heroicons/react/24/outline';
 
 export interface TreeNode {
   id: string;
   name: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  count?: { selected: number; total: number };
   isExpanded?: boolean;
   children?: TreeNode[];
 }
@@ -28,15 +32,17 @@ interface TreeNodeProps {
   selectedId?: string;
 }
 
-const TreeNodeComponent = ({ 
-  node, 
-  level = 0, 
+const TreeNodeComponent = ({
+  node,
+  level = 0,
   onItemClick,
   onToggle,
   selectedId
 }: TreeNodeProps) => {
   const hasChildren = node.children && node.children.length > 0;
-  
+  const isSelected = selectedId === node.id && !hasChildren;
+  const IconComponent = node.icon;
+
   const handleClick = () => {
     if (hasChildren && onToggle) {
       onToggle(node.id);
@@ -45,48 +51,69 @@ const TreeNodeComponent = ({
       onItemClick(node);
     }
   };
-  
+
   return (
     <div>
-      <div 
-        className={`flex items-center px-3 py-2 cursor-pointer transition-colors ${
-          selectedId === node.id && !hasChildren
+      <div
+        className={`flex items-center justify-between px-3 py-2.5 cursor-pointer transition-all duration-200 rounded-lg mx-1 my-0.5 ${
+          isSelected
             ? 'bg-blue-600 text-white'
-            : 'hover:bg-[#2B3544] text-gray-300 hover:text-white'
+            : hasChildren
+              ? 'hover:bg-[#3A4553] text-gray-200'
+              : 'hover:bg-[#2B3544] text-gray-300 hover:text-white'
         }`}
-        style={{ paddingRight: `${12 + level * 20}px` }}
+        style={{ paddingRight: `${12 + level * 16}px` }}
         onClick={handleClick}
       >
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center gap-2.5 flex-1 min-w-0">
           {hasChildren ? (
-            <button className="text-gray-400 hover:text-white flex-shrink-0">
+            <button className="text-gray-400 hover:text-white flex-shrink-0 transition-colors">
               {node.isExpanded ? (
-                <MinusIcon className="h-4 w-4" />
+                <ChevronDownIcon className="h-4 w-4" />
               ) : (
-                <PlusIcon className="h-4 w-4" />
+                <ChevronLeftIcon className="h-4 w-4" />
               )}
             </button>
           ) : (
-            <div className="w-3" />
+            <div className="w-4" />
           )}
-          
-          <FolderIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-          
-          <span className={`text-base truncate ${
-            selectedId === node.id && !hasChildren ? 'text-white' : 'text-gray-300'
+
+          {IconComponent ? (
+            <IconComponent className={`h-5 w-5 flex-shrink-0 ${isSelected ? 'text-white' : 'text-gray-400'}`} />
+          ) : null}
+
+          <span className={`text-sm font-medium truncate ${
+            isSelected ? 'text-white' : hasChildren ? 'text-gray-200' : 'text-gray-300'
           }`}>
             {node.name}
           </span>
         </div>
+
+        {/* العداد */}
+        {node.count && (
+          <span
+            className={`
+              text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 font-medium
+              ${isSelected
+                ? 'bg-white/20 text-white'
+                : node.count.selected > 0
+                  ? 'bg-red-500/20 text-red-400'
+                  : 'bg-gray-600/50 text-gray-400'
+              }
+            `}
+          >
+            {node.count.selected}/{node.count.total}
+          </span>
+        )}
       </div>
-      
+
       {hasChildren && node.isExpanded && (
-        <div>
+        <div className="mt-0.5">
           {node.children!.map((child) => (
             <TreeNodeComponent
-              key={child.id} 
-              node={child} 
-              level={level + 1} 
+              key={child.id}
+              node={child}
+              level={level + 1}
               onItemClick={onItemClick}
               onToggle={onToggle}
               selectedId={selectedId}

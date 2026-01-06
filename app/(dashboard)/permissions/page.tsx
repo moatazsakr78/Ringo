@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   UserGroupIcon,
   UserPlusIcon,
@@ -16,7 +16,19 @@ import {
   CogIcon,
   LockClosedIcon,
   ClipboardDocumentListIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  ShoppingCartIcon,
+  CubeIcon,
+  ArchiveBoxIcon,
+  TruckIcon,
+  BanknotesIcon,
+  ChartBarIcon,
+  BuildingStorefrontIcon,
+  ChatBubbleLeftRightIcon,
+  Cog6ToothIcon,
+  ComputerDesktopIcon,
+  CheckIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import TopHeader from '@/app/components/layout/TopHeader';
 import Sidebar from '@/app/components/layout/Sidebar';
@@ -25,9 +37,29 @@ import ResizableTable from '@/app/components/tables/ResizableTable';
 import AddPermissionModal from '@/app/components/AddPermissionModal';
 import PermissionDetails from '@/app/components/PermissionDetails';
 import { RolePermissionManager } from '@/app/components/permissions';
+import PermissionGrid from '@/app/components/permissions/PermissionGrid';
 import { supabase } from '@/app/lib/supabase/client';
 import { useUserProfile } from '@/lib/contexts/UserProfileContext';
 import { useAuth } from '@/lib/useAuth';
+import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useRoleRestrictions } from '@/lib/hooks/useRoleRestrictions';
+import { usePermissionTemplates, PermissionTemplate } from '@/lib/hooks/usePermissionTemplates';
+
+// Map icon names to components
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  ShoppingCartIcon,
+  CubeIcon,
+  ArchiveBoxIcon,
+  UserGroupIcon,
+  TruckIcon,
+  ClipboardDocumentListIcon,
+  BanknotesIcon,
+  ChartBarIcon,
+  BuildingStorefrontIcon,
+  ChatBubbleLeftRightIcon,
+  ShieldCheckIcon,
+  Cog6ToothIcon,
+};
 
 
 interface Permission {
@@ -73,6 +105,34 @@ export default function PermissionsPage() {
   const { profile: currentUserProfile, isAdmin } = useUserProfile();
   const { user: authUser, isAuthenticated } = useAuth();
 
+  // استخدام hook الصلاحيات لجلب التصنيفات والصلاحيات
+  const { categories, permissions: permissionDefinitions, loading: permissionsLoading } = usePermissions();
+
+  // استخدام hook قيود الدور
+  const {
+    restrictions: roleRestrictions,
+    loading: restrictionsLoading,
+    setRoleId: setRestrictionRoleId,
+    toggleRestriction,
+    restrictAll,
+    unrestrictAll,
+  } = useRoleRestrictions();
+
+  // استخدام hook قوالب الصلاحيات
+  const {
+    templates,
+    loading: templatesLoading,
+    createTemplate,
+    updateTemplate,
+    deleteTemplate,
+    getTemplateRestrictions,
+    setRestrictions: setTemplateRestrictions,
+    refetch: refetchTemplates,
+  } = usePermissionTemplates();
+
+  // سيتم تحديثه عند اختيار دور
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<'roles' | 'users' | 'permissions'>('roles');
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
@@ -92,6 +152,197 @@ export default function PermissionsPage() {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDescription, setNewRoleDescription] = useState('');
   const [newRolePriceLevel, setNewRolePriceLevel] = useState<number>(1);
+  const [selectedRoleTemplateId, setSelectedRoleTemplateId] = useState<string | null>(null);
+
+  // وضع تعديل صلاحيات الدور
+  const [isEditingRolePermissions, setIsEditingRolePermissions] = useState(false);
+  const [selectedRoleForPermissions, setSelectedRoleForPermissions] = useState<string | null>(null);
+  const [selectedPermissionCategoryId, setSelectedPermissionCategoryId] = useState<string | null>(null);
+
+  // قوالب الصلاحيات
+  const [isAddTemplateModalOpen, setIsAddTemplateModalOpen] = useState(false);
+  const [isEditTemplateModalOpen, setIsEditTemplateModalOpen] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [newTemplateDescription, setNewTemplateDescription] = useState('');
+  const [editingTemplateRestrictions, setEditingTemplateRestrictions] = useState<string[]>([]);
+  const [isEditingTemplatePermissions, setIsEditingTemplatePermissions] = useState(false);
+  const [selectedTemplateCategoryId, setSelectedTemplateCategoryId] = useState<string | null>(null);
+
+  // تحديث roleId عند تغيير selectedRoleForPermissions
+  useEffect(() => {
+    if (selectedRoleForPermissions && isEditingRolePermissions) {
+      setRestrictionRoleId(selectedRoleForPermissions);
+    }
+  }, [selectedRoleForPermissions, isEditingRolePermissions, setRestrictionRoleId]);
+
+  // دالة بدء تعديل صلاحيات الدور
+  const handleStartEditRolePermissions = (roleId: string) => {
+    setSelectedRoleForPermissions(roleId);
+    setIsEditingRolePermissions(true);
+    setSelectedPermissionCategoryId(null);
+    setRestrictionRoleId(roleId);
+  };
+
+  // دالة إلغاء تعديل صلاحيات الدور
+  const handleCancelEditRolePermissions = () => {
+    setIsEditingRolePermissions(false);
+    setSelectedRoleForPermissions(null);
+    setSelectedPermissionCategoryId(null);
+  };
+
+  // دالة حفظ صلاحيات الدور
+  const handleSaveRolePermissions = () => {
+    // الحفظ يتم تلقائياً عند كل تغيير عبر toggleRestriction
+    setIsEditingRolePermissions(false);
+    setSelectedRoleForPermissions(null);
+    setSelectedPermissionCategoryId(null);
+  };
+
+  // ============ دوال إدارة قوالب الصلاحيات ============
+
+  // فتح نموذج إنشاء قالب جديد
+  const handleOpenAddTemplateModal = () => {
+    setNewTemplateName('');
+    setNewTemplateDescription('');
+    setIsAddTemplateModalOpen(true);
+  };
+
+  // إنشاء قالب جديد
+  const handleCreateTemplate = async () => {
+    if (!newTemplateName.trim()) return;
+
+    const newTemplate = await createTemplate(newTemplateName.trim(), newTemplateDescription.trim());
+    if (newTemplate) {
+      setNewTemplateName('');
+      setNewTemplateDescription('');
+      setIsAddTemplateModalOpen(false);
+      // فتح شاشة تعديل صلاحيات القالب الجديد
+      handleStartEditTemplatePermissions(newTemplate.id);
+    }
+  };
+
+  // فتح تعديل قالب
+  const handleOpenEditTemplateModal = (template: PermissionTemplate) => {
+    setSelectedTemplateId(template.id);
+    setNewTemplateName(template.name);
+    setNewTemplateDescription(template.description || '');
+    setIsEditTemplateModalOpen(true);
+  };
+
+  // تحديث قالب
+  const handleUpdateTemplate = async () => {
+    if (!selectedTemplateId || !newTemplateName.trim()) return;
+
+    const success = await updateTemplate(selectedTemplateId, newTemplateName.trim(), newTemplateDescription.trim());
+    if (success) {
+      setNewTemplateName('');
+      setNewTemplateDescription('');
+      setSelectedTemplateId(null);
+      setIsEditTemplateModalOpen(false);
+    }
+  };
+
+  // حذف قالب
+  const handleDeleteTemplate = async (templateId: string) => {
+    if (!confirm('هل أنت متأكد من حذف هذا القالب؟\nسيتم حذف القالب نهائياً ولا يمكن التراجع عن هذا الإجراء.')) {
+      return;
+    }
+
+    const success = await deleteTemplate(templateId);
+    if (success && selectedTemplateId === templateId) {
+      setSelectedTemplateId(null);
+    }
+  };
+
+  // بدء تعديل صلاحيات القالب
+  const handleStartEditTemplatePermissions = async (templateId: string) => {
+    const restrictions = await getTemplateRestrictions(templateId);
+    setSelectedTemplateId(templateId);
+    setEditingTemplateRestrictions(restrictions);
+    setIsEditingTemplatePermissions(true);
+    setSelectedTemplateCategoryId(null);
+  };
+
+  // إلغاء تعديل صلاحيات القالب
+  const handleCancelEditTemplatePermissions = () => {
+    setIsEditingTemplatePermissions(false);
+    setSelectedTemplateId(null);
+    setEditingTemplateRestrictions([]);
+    setSelectedTemplateCategoryId(null);
+  };
+
+  // حفظ صلاحيات القالب
+  const handleSaveTemplatePermissions = async () => {
+    if (!selectedTemplateId) return;
+
+    const success = await setTemplateRestrictions(selectedTemplateId, editingTemplateRestrictions);
+    if (success) {
+      handleCancelEditTemplatePermissions();
+    }
+  };
+
+  // تبديل قيد صلاحية في القالب
+  const toggleTemplateRestriction = (permissionCode: string) => {
+    setEditingTemplateRestrictions(prev => {
+      if (prev.includes(permissionCode)) {
+        return prev.filter(code => code !== permissionCode);
+      } else {
+        return [...prev, permissionCode];
+      }
+    });
+  };
+
+  // تفعيل كل الصلاحيات في تصنيف معين (إضافة للممنوعات)
+  const restrictAllTemplateCategory = (codes: string[]) => {
+    setEditingTemplateRestrictions(prev => {
+      const newRestrictions = [...prev];
+      codes.forEach(code => {
+        if (!newRestrictions.includes(code)) {
+          newRestrictions.push(code);
+        }
+      });
+      return newRestrictions;
+    });
+  };
+
+  // إلغاء كل الصلاحيات في تصنيف معين (إزالة من الممنوعات)
+  const unrestrictAllTemplateCategory = (codes: string[]) => {
+    setEditingTemplateRestrictions(prev => prev.filter(code => !codes.includes(code)));
+  };
+
+  // القالب المحدد حالياً
+  const selectedTemplate = useMemo(() => {
+    return templates.find(t => t.id === selectedTemplateId) || null;
+  }, [templates, selectedTemplateId]);
+
+  // الصلاحيات الخاصة بالتصنيف المحدد في وضع تعديل القالب
+  const editingTemplateCategoryPermissions = useMemo(() => {
+    if (!selectedTemplateCategoryId) return [];
+    return permissionDefinitions.filter((p) => p.category_id === selectedTemplateCategoryId);
+  }, [permissionDefinitions, selectedTemplateCategoryId]);
+
+  // اسم التصنيف المحدد في وضع تعديل القالب
+  const editingTemplateCategoryName = useMemo(() => {
+    if (!selectedTemplateCategoryId) return '';
+    const cat = categories.find((c) => c.id === selectedTemplateCategoryId);
+    return cat?.name || '';
+  }, [categories, selectedTemplateCategoryId]);
+
+  // ============ نهاية دوال إدارة قوالب الصلاحيات ============
+
+  // الصلاحيات الخاصة بالتصنيف المحدد في وضع تعديل الصلاحيات
+  const editingCategoryPermissions = useMemo(() => {
+    if (!selectedPermissionCategoryId) return [];
+    return permissionDefinitions.filter((p) => p.category_id === selectedPermissionCategoryId);
+  }, [permissionDefinitions, selectedPermissionCategoryId]);
+
+  // اسم التصنيف المحدد في وضع تعديل الصلاحيات
+  const editingCategoryName = useMemo(() => {
+    if (!selectedPermissionCategoryId) return '';
+    const cat = categories.find((c) => c.id === selectedPermissionCategoryId);
+    return cat?.name || '';
+  }, [categories, selectedPermissionCategoryId]);
 
   // Add new derived role function
   const handleAddDerivedRole = async () => {
@@ -251,19 +502,11 @@ export default function PermissionsPage() {
 
 
   const toggleTreeNode = (nodeId: string) => {
-    const updateNode = (nodes: TreeNode[]): TreeNode[] => {
-      return nodes.map(node => {
-        if (node.id === nodeId) {
-          return { ...node, isExpanded: !node.isExpanded };
-        }
-        if (node.children) {
-          return { ...node, children: updateNode(node.children) };
-        }
-        return node;
-      });
-    };
-    
-    setPermissionTreeData(updateNode(permissionTreeData));
+    if (nodeId === 'admin-pages') {
+      setTreeExpanded((prev) => ({ ...prev, admin: !prev.admin }));
+    } else if (nodeId === 'store-pages') {
+      setTreeExpanded((prev) => ({ ...prev, store: !prev.store }));
+    }
   };
 
   // REMOVED: updateUserRoles function that was overriding manual role changes
@@ -538,37 +781,79 @@ export default function PermissionsPage() {
   // Combine main roles with derived roles
   const roles = [...mainRoles, ...derivedRoles];
 
+  // الدور المحدد للتعديل
+  const selectedRoleForEdit = useMemo(() => {
+    if (!selectedRoleForPermissions) return null;
+    return roles.find(r => r.id === selectedRoleForPermissions) || null;
+  }, [selectedRoleForPermissions, roles]);
 
 
-  const [permissionTreeData, setPermissionTreeData] = useState<TreeNode[]>([
-    {
-      id: 'admin-pages',
-      name: 'صفحات الإدارة',
-      isExpanded: true,
-      children: [
-        { id: 'pos', name: 'نقطة البيع' },
-        { id: 'products', name: 'المنتجات' },
-        { id: 'inventory', name: 'المخزون' },
-        { id: 'customers', name: 'العملاء' },
-        { id: 'suppliers', name: 'الموردين' },
-        { id: 'customer-orders', name: 'طلبات العملاء' },
-        { id: 'records', name: 'الخزن' },
-        { id: 'reports', name: 'التقارير (غير مكتملة)' },
-        { id: 'permissions', name: 'الصلاحيات' }
-      ]
-    },
-    {
-      id: 'store-pages',
-      name: 'صفحات المتجر',
-      isExpanded: false,
-      children: [
-        { id: 'store-customer-orders', name: 'طلبات العملاء' },
-        { id: 'store-products', name: 'إدارة المنتجات' },
-        { id: 'store-management', name: 'إدارة المتجر' },
-        { id: 'shipping-details', name: 'تفاصيل الشحن' }
-      ]
-    }
-  ]);
+
+  // حالة فتح/إغلاق الشجرة
+  const [treeExpanded, setTreeExpanded] = useState<{ admin: boolean; store: boolean }>({
+    admin: true,
+    store: false,
+  });
+
+  // حساب إحصائيات كل تصنيف
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, { selected: number; total: number }> = {};
+    categories.forEach((cat) => {
+      const catPerms = permissionDefinitions.filter((p) => p.category_id === cat.id);
+      stats[cat.id] = {
+        selected: 0, // سيتم تحديثه لاحقاً عند اختيار دور
+        total: catPerms.length,
+      };
+    });
+    return stats;
+  }, [categories, permissionDefinitions]);
+
+  // بناء شجرة الصلاحيات ديناميكياً من قاعدة البيانات
+  const permissionTreeData: TreeNode[] = useMemo(() => {
+    // تصفية التصنيفات حسب parent_type
+    const adminCategories = categories.filter((c) => c.parent_type === 'admin');
+    const storeCategories = categories.filter((c) => c.parent_type === 'store');
+
+    return [
+      {
+        id: 'admin-pages',
+        name: 'صفحات الإدارة',
+        icon: ComputerDesktopIcon,
+        isExpanded: treeExpanded.admin,
+        children: adminCategories.map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon ? iconMap[cat.icon] : undefined,
+          count: categoryStats[cat.id],
+        })),
+      },
+      {
+        id: 'store-pages',
+        name: 'صفحات المتجر',
+        icon: BuildingStorefrontIcon,
+        isExpanded: treeExpanded.store,
+        children: storeCategories.map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          icon: cat.icon ? iconMap[cat.icon] : undefined,
+          count: categoryStats[cat.id],
+        })),
+      },
+    ];
+  }, [categories, categoryStats, treeExpanded]);
+
+  // الصلاحيات الخاصة بالتصنيف المحدد
+  const selectedCategoryPermissions = useMemo(() => {
+    if (!selectedPermissionPage?.id) return [];
+    return permissionDefinitions.filter((p) => p.category_id === selectedPermissionPage.id);
+  }, [permissionDefinitions, selectedPermissionPage]);
+
+  // اسم التصنيف المحدد
+  const selectedCategoryName = useMemo(() => {
+    if (!selectedPermissionPage?.id) return '';
+    const cat = categories.find((c) => c.id === selectedPermissionPage.id);
+    return cat?.name || '';
+  }, [categories, selectedPermissionPage]);
 
 
 
@@ -631,6 +916,53 @@ export default function PermissionsPage() {
       width: 120,
       render: (value: any) => (
         <span className="text-gray-400 text-sm">{value}</span>
+      )
+    }
+  ];
+
+  // أعمدة جدول قوالب الصلاحيات
+  const templateColumns = [
+    {
+      id: 'name',
+      header: 'اسم القالب',
+      accessor: 'name' as keyof PermissionTemplate,
+      width: 250,
+      render: (value: any) => (
+        <div className="flex items-center gap-2">
+          <KeyIcon className="h-4 w-4 text-blue-400" />
+          <span className="font-medium text-white">{value}</span>
+        </div>
+      )
+    },
+    {
+      id: 'description',
+      header: 'الوصف',
+      accessor: 'description' as keyof PermissionTemplate,
+      width: 400,
+      render: (value: any) => (
+        <span className="text-gray-300 text-sm">{value || 'بدون وصف'}</span>
+      )
+    },
+    {
+      id: 'created_at',
+      header: 'تاريخ الإنشاء',
+      accessor: 'created_at' as keyof PermissionTemplate,
+      width: 150,
+      render: (value: any) => (
+        <span className="text-gray-400 text-sm">
+          {value ? new Date(value).toLocaleDateString('ar-EG') : '-'}
+        </span>
+      )
+    },
+    {
+      id: 'updated_at',
+      header: 'آخر تعديل',
+      accessor: 'updated_at' as keyof PermissionTemplate,
+      width: 150,
+      render: (value: any) => (
+        <span className="text-gray-400 text-sm">
+          {value ? new Date(value).toLocaleDateString('ar-EG') : '-'}
+        </span>
       )
     }
   ];
@@ -872,9 +1204,45 @@ export default function PermissionsPage() {
           { icon: TrashIcon, label: 'حذف', action: () => {} }
         ];
       case 'permissions':
+        // إذا كنا في وضع تعديل صلاحيات القالب
+        if (isEditingTemplatePermissions) {
+          return [
+            {
+              icon: ArrowRightIcon,
+              label: 'رجوع',
+              action: handleCancelEditTemplatePermissions,
+              disabled: false
+            },
+            { icon: ClipboardDocumentListIcon, label: 'تصدير', action: () => {} }
+          ];
+        }
+        // وضع عرض قوالب الصلاحيات
+        const selectedTemplateForActions = templates.find(t => t.id === selectedTemplateId);
         return [
-          { icon: KeyIcon, label: 'صلاحية جديدة', action: () => setIsAddPermissionModalOpen(true) },
-          { icon: CogIcon, label: 'إعدادات', action: () => {} },
+          {
+            icon: KeyIcon,
+            label: 'صلاحية جديدة',
+            action: handleOpenAddTemplateModal,
+            disabled: false
+          },
+          {
+            icon: PencilIcon,
+            label: 'تعديل',
+            action: () => selectedTemplateForActions && handleOpenEditTemplateModal(selectedTemplateForActions),
+            disabled: !selectedTemplateId
+          },
+          {
+            icon: CogIcon,
+            label: 'إعدادات',
+            action: () => selectedTemplateId && handleStartEditTemplatePermissions(selectedTemplateId),
+            disabled: !selectedTemplateId
+          },
+          {
+            icon: TrashIcon,
+            label: 'حذف',
+            action: () => selectedTemplateId && handleDeleteTemplate(selectedTemplateId),
+            disabled: !selectedTemplateId
+          },
           { icon: ClipboardDocumentListIcon, label: 'تصدير', action: () => {} }
         ];
       default:
@@ -953,32 +1321,68 @@ export default function PermissionsPage() {
               </div>
             </div>
 
-            {/* Permissions Tree - Only show when viewing permissions */}
-            {activeView === 'permissions' && (
+            {/* Permissions Tree - Only show when editing template permissions */}
+            {activeView === 'permissions' && isEditingTemplatePermissions && (
               <div className="flex-1 overflow-y-auto scrollbar-hide">
                 <div className="p-4">
+                  {/* عنوان القالب المحدد */}
+                  <div className="mb-4 p-3 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+                    <span className="text-gray-400 text-xs">تعديل صلاحيات:</span>
+                    <h3 className="text-white font-bold">{selectedTemplate?.name || 'غير محدد'}</h3>
+                  </div>
+
+                  {/* زر حفظ التغييرات */}
+                  <button
+                    onClick={handleSaveTemplatePermissions}
+                    className="w-full mb-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    حفظ التغييرات
+                  </button>
+
                   <h4 className="text-gray-300 text-sm font-medium mb-3">شجرة الصلاحيات</h4>
-                  <TreeView 
+                  <TreeView
                     data={permissionTreeData}
-                    selectedId={selectedPermissionPage?.id}
+                    selectedId={selectedTemplateCategoryId || undefined}
                     onItemClick={(item) => {
-                      if (item.children) {
-                        toggleTreeNode(item.id);
-                      } else {
-                        // إذا كانت الصفحة محددة بالفعل، قم بإلغاء التحديد
-                        if (selectedPermissionPage && selectedPermissionPage.id === item.id) {
-                          setSelectedPermissionPage(null);
+                      // لا نستدعي toggleTreeNode هنا لأن onToggle يتولى ذلك تلقائياً
+                      if (!item.children) {
+                        // إذا كان التصنيف محدد بالفعل، قم بإلغاء التحديد
+                        if (selectedTemplateCategoryId === item.id) {
+                          setSelectedTemplateCategoryId(null);
                         } else {
-                          // إذا لم تكن محددة، قم بتحديدها
-                          setSelectedPermissionPage({
-                            id: item.id,
-                            name: item.name
-                          });
+                          // إذا لم يكن محدداً، قم بتحديده
+                          setSelectedTemplateCategoryId(item.id);
                         }
                       }
                     }}
                     onToggle={toggleTreeNode}
                   />
+                </div>
+              </div>
+            )}
+
+            {/* Permissions Stats - Only show when viewing permissions but not editing */}
+            {activeView === 'permissions' && !isEditingTemplatePermissions && (
+              <div className="p-4">
+                <h4 className="text-gray-300 text-sm font-medium mb-3">إرشادات</h4>
+                <div className="space-y-2 text-sm text-gray-400">
+                  <p>1. اضغط على "صلاحية جديدة" لإنشاء قالب</p>
+                  <p>2. اختر قالباً من الجدول</p>
+                  <p>3. اضغط على "إعدادات" لتعديل صلاحياته</p>
+                </div>
+                <div className="mt-4 p-3 bg-blue-600/10 border border-blue-500/30 rounded-lg">
+                  <span className="text-blue-400 text-xs">معلومة:</span>
+                  <p className="text-gray-300 text-xs mt-1">كل قالب يحدد الصلاحيات الممنوعة، وكل ما عداها يكون مسموحاً</p>
+                </div>
+                {/* إحصائيات القوالب */}
+                <div className="mt-4">
+                  <h4 className="text-gray-300 text-sm font-medium mb-3">إحصائيات</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-400">عدد القوالب:</span>
+                      <span className="text-white font-medium">{templates.length}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1098,19 +1502,185 @@ export default function PermissionsPage() {
             {/* Data Table Container */}
             <div className="flex-1 overflow-hidden bg-[#2B3544]">
               {activeView === 'permissions' ? (
-                <div className="p-6 h-full overflow-auto">
-                  <RolePermissionManager
-                    roles={derivedRoles.map(r => ({
-                      id: r.id,
-                      name: r.name,
-                      description: r.description,
-                      role_type: r.roleType,
-                      is_active: true
-                    }))}
-                    selectedRoleId={selectedRoleId}
-                    onRoleChange={setSelectedRoleId}
-                  />
-                </div>
+                isEditingTemplatePermissions ? (
+                  /* وضع تعديل صلاحيات القالب */
+                  <div className="p-6 h-full overflow-auto scrollbar-hide">
+                    {selectedTemplateCategoryId ? (
+                      <div className="h-full flex flex-col">
+                        {/* Header with category name */}
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-3">
+                            <h2 className="text-xl font-bold text-white">{editingTemplateCategoryName}</h2>
+                            <span className="text-gray-400 text-sm">
+                              ({editingTemplateCategoryPermissions.length} صلاحية)
+                            </span>
+                          </div>
+                          {/* أزرار تفعيل/إلغاء الكل */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                const codes = editingTemplateCategoryPermissions.map(p => p.code);
+                                restrictAllTemplateCategory(codes);
+                              }}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-red-600 hover:bg-red-700 text-white transition-colors"
+                            >
+                              منع الكل
+                            </button>
+                            <button
+                              onClick={() => {
+                                const codes = editingTemplateCategoryPermissions.map(p => p.code);
+                                unrestrictAllTemplateCategory(codes);
+                              }}
+                              className="px-3 py-1.5 text-sm rounded-lg bg-green-600 hover:bg-green-700 text-white transition-colors"
+                            >
+                              السماح بالكل
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Stats Bar */}
+                        <div className="bg-[#374151] rounded-lg p-3 mb-4 flex-shrink-0">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-red-500" />
+                                <span className="text-gray-300 text-sm">
+                                  ممنوع: {editingTemplateCategoryPermissions.filter(p => editingTemplateRestrictions.includes(p.code)).length}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 rounded-full bg-green-500" />
+                                <span className="text-gray-300 text-sm">
+                                  مسموح: {editingTemplateCategoryPermissions.filter(p => !editingTemplateRestrictions.includes(p.code)).length}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Permissions Grid with Checkboxes */}
+                        {editingTemplateCategoryPermissions.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto scrollbar-hide pb-4">
+                            {editingTemplateCategoryPermissions.map((permission) => {
+                              const isRestricted = editingTemplateRestrictions.includes(permission.code);
+                              return (
+                                <div
+                                  key={permission.id}
+                                  onClick={() => toggleTemplateRestriction(permission.code)}
+                                  className={`
+                                    relative flex flex-col p-4 rounded-xl border transition-all duration-200 cursor-pointer hover:scale-[1.02]
+                                    ${isRestricted
+                                      ? 'bg-red-500/10 border-red-500/40 hover:border-red-500'
+                                      : 'bg-[#374151] border-gray-600/50 hover:border-green-500/50'
+                                    }
+                                  `}
+                                >
+                                  {/* Status Indicator */}
+                                  <div className={`absolute top-3 left-3 w-2 h-2 rounded-full ${isRestricted ? 'bg-red-500' : 'bg-green-500'}`} />
+
+                                  {/* Header: Checkbox + Title */}
+                                  <div className="flex items-start gap-3">
+                                    {/* Checkbox */}
+                                    <div className={`
+                                      flex-shrink-0 w-6 h-6 rounded border-2 flex items-center justify-center transition-colors duration-200
+                                      ${isRestricted
+                                        ? 'bg-red-500 border-red-500'
+                                        : 'border-green-500 bg-green-500'
+                                      }
+                                    `}>
+                                      {isRestricted ? (
+                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                      ) : (
+                                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                      )}
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <h4 className="text-white font-medium text-sm leading-tight">{permission.name}</h4>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                                          permission.permission_type === 'button' ? 'bg-blue-500/20 text-blue-400' :
+                                          permission.permission_type === 'feature' ? 'bg-green-500/20 text-green-400' :
+                                          'bg-purple-500/20 text-purple-400'
+                                        }`}>
+                                          {permission.permission_type === 'button' ? 'زر' :
+                                           permission.permission_type === 'feature' ? 'ميزة' : 'عرض'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Description */}
+                                  {permission.description && (
+                                    <p className="text-gray-400 text-xs mt-2 mr-9 line-clamp-2">{permission.description}</p>
+                                  )}
+
+                                  {/* Status Text */}
+                                  <div className="mt-3 mr-9">
+                                    {isRestricted ? (
+                                      <span className="text-xs text-red-400 font-medium">ممنوع</span>
+                                    ) : (
+                                      <span className="text-xs text-green-400 font-medium">مسموح</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="flex-1 flex items-center justify-center text-gray-400">
+                            <div className="text-center">
+                              <p className="text-lg mb-2">لا توجد صلاحيات في هذا التصنيف</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-gray-400">
+                        <div className="text-center">
+                          <KeyIcon className="h-16 w-16 mx-auto mb-4 text-gray-600" />
+                          <p className="text-lg mb-2">اختر صفحة من شجرة الصلاحيات</p>
+                          <p className="text-sm">حدد صفحة من القائمة الجانبية لعرض صلاحياتها وتعديلها</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* وضع عرض جدول قوالب الصلاحيات */
+                  templates.length > 0 ? (
+                    <ResizableTable
+                      columns={templateColumns}
+                      data={templates}
+                      selectedRowId={selectedTemplateId || undefined}
+                      onRowClick={(item) => {
+                        if (selectedTemplateId === item.id) {
+                          setSelectedTemplateId(null);
+                        } else {
+                          setSelectedTemplateId(item.id);
+                        }
+                      }}
+                    />
+                  ) : (
+                    <div className="h-full flex items-center justify-center">
+                      <div className="text-center text-gray-400">
+                        <KeyIcon className="h-16 w-16 mx-auto mb-4 text-gray-600" />
+                        <p className="text-lg mb-2">لا توجد قوالب صلاحيات</p>
+                        <p className="text-sm mb-4">قم بإنشاء قالب صلاحيات جديد للبدء</p>
+                        <button
+                          onClick={handleOpenAddTemplateModal}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        >
+                          إنشاء قالب جديد
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )
               ) : (
                 <ResizableTable
                   columns={getCurrentColumns()}
@@ -1217,6 +1787,28 @@ export default function PermissionsPage() {
               </p>
             </div>
 
+            {/* Permission Template Selection */}
+            <div className="space-y-2">
+              <label className="block text-white text-sm font-medium text-right">
+                قالب الصلاحيات
+              </label>
+              <select
+                value={selectedRoleTemplateId || ''}
+                onChange={(e) => setSelectedRoleTemplateId(e.target.value || null)}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"
+              >
+                <option value="">-- بدون قالب --</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-gray-400 text-xs text-right">
+                اختر قالب صلاحيات لربطه بهذا الدور (اختياري)
+              </p>
+            </div>
+
             {/* Description */}
             <div className="space-y-2">
               <label className="block text-white text-sm font-medium text-right">
@@ -1247,7 +1839,11 @@ export default function PermissionsPage() {
                   <span className="text-gray-300">مشتق من:</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-blue-300">نفس صلاحيات الجملة</span>
+                  <span className="text-blue-300">
+                    {selectedRoleTemplateId
+                      ? templates.find(t => t.id === selectedRoleTemplateId)?.name || 'قالب محدد'
+                      : 'نفس صلاحيات الجملة'}
+                  </span>
                   <span className="text-gray-300">الصلاحيات:</span>
                 </div>
               </div>
@@ -1258,11 +1854,14 @@ export default function PermissionsPage() {
           <div className="absolute bottom-0 left-0 right-0 p-4 bg-[#3A4553] border-t border-[#4A5568]">
             <div className="flex gap-2">
               <div className="flex-1"></div>
-              
+
               {/* Cancel and Save buttons */}
               <div className="flex gap-2">
                 <button
-                  onClick={() => setIsAddRoleModalOpen(false)}
+                  onClick={() => {
+                    setIsAddRoleModalOpen(false);
+                    setSelectedRoleTemplateId(null);
+                  }}
                   className="bg-transparent hover:bg-gray-600/10 text-gray-300 border border-gray-600 hover:border-gray-500 px-4 py-2 text-sm font-medium transition-all duration-200 min-w-[80px] flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1275,7 +1874,7 @@ export default function PermissionsPage() {
                   disabled={!newRoleName.trim() || !newRoleDescription.trim()}
                   className={`bg-transparent border px-4 py-2 text-sm font-medium transition-all duration-200 min-w-[80px] flex items-center gap-2 ${
                     !newRoleName.trim() || !newRoleDescription.trim()
-                      ? 'border-gray-600 text-gray-500 cursor-not-allowed' 
+                      ? 'border-gray-600 text-gray-500 cursor-not-allowed'
                       : 'hover:bg-gray-600/10 text-gray-300 border-gray-600 hover:border-gray-500'
                   }`}
                 >
@@ -1431,6 +2030,188 @@ export default function PermissionsPage() {
                   حفظ التعديل
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </>
+
+      {/* Add Template Modal - Side Panel */}
+      <>
+        {/* Backdrop */}
+        {isAddTemplateModalOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-25 z-40"
+            onClick={() => setIsAddTemplateModalOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <div className={`fixed top-12 right-0 h-[calc(100vh-3rem)] w-[500px] bg-[#3A4553] z-50 transform transition-transform duration-300 ease-in-out ${
+          isAddTemplateModalOpen ? 'translate-x-0' : 'translate-x-full'
+        } shadow-2xl`}>
+
+          {/* Header */}
+          <div className="bg-[#3A4553] px-4 py-3 flex items-center justify-start border-b border-[#4A5568]">
+            <h2 className="text-white text-lg font-medium flex-1 text-right">إضافة قالب صلاحيات جديد</h2>
+            <button
+              onClick={() => setIsAddTemplateModalOpen(false)}
+              className="text-gray-400 hover:text-white"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-4">
+
+            {/* Template Name */}
+            <div className="space-y-2">
+              <label className="block text-white text-sm font-medium text-right">
+                اسم القالب *
+              </label>
+              <input
+                type="text"
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                placeholder="مثال: صلاحيات كاشير"
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <label className="block text-white text-sm font-medium text-right">
+                وصف القالب
+              </label>
+              <textarea
+                value={newTemplateDescription}
+                onChange={(e) => setNewTemplateDescription(e.target.value)}
+                placeholder="وصف اختياري للقالب"
+                rows={4}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm resize-none"
+              />
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-blue-50/10 border border-blue-600/30 rounded-lg p-4">
+              <h4 className="text-blue-300 font-medium mb-2 flex items-center gap-2 justify-end">
+                <span>معلومات</span>
+                <KeyIcon className="h-4 w-4" />
+              </h4>
+              <div className="space-y-2 text-sm text-gray-300">
+                <p className="text-right">بعد إنشاء القالب، سيتم فتح شاشة تحديد الصلاحيات الممنوعة.</p>
+                <p className="text-right">يمكنك ربط هذا القالب بأي دور لاحقاً.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-[#3A4553] border-t border-[#4A5568]">
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setIsAddTemplateModalOpen(false)}
+                className="bg-transparent hover:bg-gray-600/10 text-gray-300 border border-gray-600 hover:border-gray-500 px-4 py-2 text-sm font-medium transition-all duration-200 flex items-center gap-2"
+              >
+                <XMarkIcon className="w-4 h-4" />
+                إلغاء
+              </button>
+              <button
+                onClick={handleCreateTemplate}
+                disabled={!newTemplateName.trim()}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-200 flex items-center gap-2 rounded ${
+                  !newTemplateName.trim()
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                <CheckIcon className="w-4 h-4" />
+                إنشاء القالب
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
+
+      {/* Edit Template Modal - Side Panel */}
+      <>
+        {/* Backdrop */}
+        {isEditTemplateModalOpen && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-25 z-40"
+            onClick={() => setIsEditTemplateModalOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <div className={`fixed top-12 right-0 h-[calc(100vh-3rem)] w-[500px] bg-[#3A4553] z-50 transform transition-transform duration-300 ease-in-out ${
+          isEditTemplateModalOpen ? 'translate-x-0' : 'translate-x-full'
+        } shadow-2xl`}>
+
+          {/* Header */}
+          <div className="bg-[#3A4553] px-4 py-3 flex items-center justify-start border-b border-[#4A5568]">
+            <h2 className="text-white text-lg font-medium flex-1 text-right">تعديل قالب الصلاحيات</h2>
+            <button
+              onClick={() => setIsEditTemplateModalOpen(false)}
+              className="text-gray-400 hover:text-white"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide p-6 space-y-4">
+
+            {/* Template Name */}
+            <div className="space-y-2">
+              <label className="block text-white text-sm font-medium text-right">
+                اسم القالب *
+              </label>
+              <input
+                type="text"
+                value={newTemplateName}
+                onChange={(e) => setNewTemplateName(e.target.value)}
+                placeholder="مثال: صلاحيات كاشير"
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <label className="block text-white text-sm font-medium text-right">
+                وصف القالب
+              </label>
+              <textarea
+                value={newTemplateDescription}
+                onChange={(e) => setNewTemplateDescription(e.target.value)}
+                placeholder="وصف اختياري للقالب"
+                rows={4}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm resize-none"
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-[#3A4553] border-t border-[#4A5568]">
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setIsEditTemplateModalOpen(false)}
+                className="bg-transparent hover:bg-gray-600/10 text-gray-300 border border-gray-600 hover:border-gray-500 px-4 py-2 text-sm font-medium transition-all duration-200 flex items-center gap-2"
+              >
+                <XMarkIcon className="w-4 h-4" />
+                إلغاء
+              </button>
+              <button
+                onClick={handleUpdateTemplate}
+                disabled={!newTemplateName.trim()}
+                className={`px-4 py-2 text-sm font-medium transition-all duration-200 flex items-center gap-2 rounded ${
+                  !newTemplateName.trim()
+                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                <CheckIcon className="w-4 h-4" />
+                حفظ التعديلات
+              </button>
             </div>
           </div>
         </div>

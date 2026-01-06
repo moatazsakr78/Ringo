@@ -38,15 +38,15 @@ export default function PermissionGrid({
   }
 
   return (
-    <div className="flex-1">
+    <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-4">
           {categoryName && (
-            <h2 className="text-xl font-bold text-white">{categoryName}</h2>
+            <h2 className="text-lg font-bold text-white">{categoryName}</h2>
           )}
           <span className="text-gray-400 text-sm">
-            إدارة صلاحيات هذه الصفحة ({restrictedCount} من {totalCount} مفعلة)
+            ({restrictedCount} من {totalCount} ممنوعة)
           </span>
         </div>
 
@@ -82,7 +82,7 @@ export default function PermissionGrid({
       </div>
 
       {/* Stats Bar */}
-      <div className="bg-[#2B3544] rounded-lg p-3 mb-4">
+      <div className="bg-[#2B3544] rounded-lg p-3 mb-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -101,23 +101,25 @@ export default function PermissionGrid({
             ) : restrictedCount === totalCount ? (
               <span className="text-red-400">كل الميزات ممنوعة عن هذا الدور</span>
             ) : (
-              <span>{restrictedCount} مفعلة من أصل {totalCount} صلاحية</span>
+              <span>عدد القيود: {restrictedCount}</span>
             )}
           </div>
         </div>
       </div>
 
-      {/* Grid of Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {permissions.map((permission) => (
-          <PermissionCard
-            key={permission.id}
-            permission={permission}
-            isRestricted={restrictions.includes(permission.code)}
-            onToggle={onToggle}
-            disabled={disabled}
-          />
-        ))}
+      {/* Grid of Cards - 4 columns with hidden scrollbar */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
+          {permissions.map((permission) => (
+            <PermissionCard
+              key={permission.id}
+              permission={permission}
+              isRestricted={restrictions.includes(permission.code)}
+              onToggle={onToggle}
+              disabled={disabled}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );

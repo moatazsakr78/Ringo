@@ -10,6 +10,7 @@ export interface PermissionCategory {
   icon: string | null;
   sort_order: number;
   is_active: boolean;
+  parent_type: 'admin' | 'store';
   created_at: string;
   updated_at: string;
 }
@@ -86,6 +87,7 @@ export interface CreateCategoryInput {
   name_en: string;
   icon?: string;
   sort_order?: number;
+  parent_type?: 'admin' | 'store';
 }
 
 /**
@@ -115,6 +117,7 @@ export const PERMISSION_TYPE_COLORS: Record<PermissionType, string> = {
  * أيقونات التصنيفات
  */
 export const CATEGORY_ICONS: Record<string, string> = {
+  // صفحات الإدارة
   pos: 'ShoppingCartIcon',
   products: 'CubeIcon',
   inventory: 'ArchiveBoxIcon',
@@ -123,5 +126,41 @@ export const CATEGORY_ICONS: Record<string, string> = {
   customer_orders: 'ClipboardDocumentListIcon',
   safes: 'BanknotesIcon',
   reports: 'ChartBarIcon',
-  store: 'BuildingStorefrontIcon',
+  whatsapp: 'ChatBubbleLeftRightIcon',
+  permissions: 'ShieldCheckIcon',
+  settings: 'Cog6ToothIcon',
+  // صفحات المتجر
+  store_orders: 'ClipboardDocumentListIcon',
+  store_products: 'CubeIcon',
+  store_management: 'BuildingStorefrontIcon',
+  shipping_details: 'TruckIcon',
 };
+
+/**
+ * قالب الصلاحيات
+ */
+export interface PermissionTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * قيد قالب الصلاحيات (الصلاحيات الممنوعة في القالب)
+ */
+export interface PermissionTemplateRestriction {
+  id: string;
+  template_id: string;
+  permission_code: string;
+  created_at: string;
+}
+
+/**
+ * قالب الصلاحيات مع القيود
+ */
+export interface TemplateWithRestrictions extends PermissionTemplate {
+  restrictions: string[];
+}
