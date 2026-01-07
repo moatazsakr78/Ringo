@@ -11,6 +11,7 @@ import { useStoreDisplaySettings } from '../../lib/hooks/useStoreDisplaySettings
 import { useProductVoting } from '@/app/lib/hooks/useProductVoting';
 import ProductVoteModal from './ProductVoteModal';
 import ShapeSelector from './ShapeSelector';
+import FavoriteButton from './FavoriteButton';
 
 interface InteractiveProductCardProps {
   product: Product;
@@ -366,6 +367,14 @@ export default function InteractiveProductCard({
             -{product.discount}%
           </span>
         )}
+
+        {/* Favorite Button */}
+        <div className="absolute top-2 left-2 z-10">
+          <FavoriteButton
+            productId={String(product.id)}
+            size={deviceType === 'mobile' ? 'sm' : 'md'}
+          />
+        </div>
 
       </div>
       

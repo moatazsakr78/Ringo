@@ -750,7 +750,7 @@ export default function MobileHome({
                       {/* Favorites */}
                       <button
                         onClick={() => {
-                          alert('سيتم إضافة صفحة المفضلة قريباً');
+                          window.location.href = '/favorites';
                           closeMenu();
                         }}
                         className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"

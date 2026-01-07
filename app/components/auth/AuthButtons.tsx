@@ -56,7 +56,7 @@ export default function AuthButtons({ onAuthSuccess, compact = false, mobileIcon
 
   const handleFavoritesClick = () => {
     setIsDropdownOpen(false);
-    alert('سيتم إضافة صفحة المفضلة قريباً');
+    window.location.href = '/favorites';
   };
 
   const handleCustomerOrdersClick = () => {

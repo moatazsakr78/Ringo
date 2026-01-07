@@ -71,7 +71,7 @@ export default function DropdownMenu({ isOpen, onClose }: DropdownMenuProps) {
         
         <button
           onClick={() => {
-            // Handle Favorites navigation
+            window.location.href = '/favorites';
             onClose();
           }}
           className="flex items-center gap-3 w-full px-4 py-3 text-white hover:bg-[#4B5563] transition-colors text-right"

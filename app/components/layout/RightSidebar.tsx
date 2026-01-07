@@ -219,8 +219,7 @@ export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
                 {/* Favorites */}
                 <button
                   onClick={() => {
-                    // Handle Favorites navigation
-                    alert('سيتم إضافة صفحة المفضلة قريباً');
+                    window.location.href = '/favorites';
                     onClose();
                   }}
                   className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
