@@ -103,7 +103,8 @@ export default function ProductManagementPage() {
         image: cat.image_url || '',
         isHidden: !cat.is_active,
         displayOrder: cat.sort_order || index,
-        color: cat.color || '#3B82F6'
+        color: cat.color || '#3B82F6',
+        is_all_category: cat.is_all_category || false
       }));
 
       setCategories(convertedCategories);
@@ -188,6 +189,13 @@ export default function ProductManagementPage() {
   const handleDeleteCategory = async () => {
     if (selectedCategoryId) {
       const category = categories.find(c => c.id === selectedCategoryId);
+
+      // Prevent deletion of "الكل" category
+      if ((category as any)?.is_all_category) {
+        alert('لا يمكن حذف فئة "الكل" - هذه فئة أساسية في النظام');
+        return;
+      }
+
       if (category && confirm(`هل أنت متأكد من حذف فئة "${category.name}"؟`)) {
         try {
           await deleteStoreCategory(selectedCategoryId);
@@ -197,7 +205,7 @@ export default function ProductManagementPage() {
           alert(`تم حذف فئة "${category.name}" بنجاح`);
         } catch (error) {
           console.error('Error deleting category:', error);
-          alert('حدث خطأ أثناء حذف الفئة');
+          alert(error instanceof Error ? error.message : 'حدث خطأ أثناء حذف الفئة');
         }
       }
     }
@@ -383,6 +391,7 @@ export default function ProductManagementPage() {
         color: category.color,
         is_active: !category.isHidden,
         sort_order: index,
+        is_all_category: (category as any).is_all_category || false,
         created_at: null,
         updated_at: null,
         created_by: null,
@@ -626,23 +635,32 @@ export default function ProductManagementPage() {
 
                 <div className="w-px h-8 bg-white/30 mx-1"></div>
 
-                {/* Delete Category Button */}
-                <button
-                  onClick={handleDeleteCategory}
-                  disabled={!selectedCategoryId}
-                  className={`flex flex-col items-center justify-center p-4 transition-colors group min-w-[100px] ${
-                    selectedCategoryId
-                      ? 'hover:bg-white/10 text-white'
-                      : 'text-white/30 cursor-not-allowed'
-                  }`}
-                >
-                  <svg className="w-8 h-8 mb-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  <span className="text-sm font-bold text-center leading-tight transition-colors">
-                    حذف فئة
-                  </span>
-                </button>
+                {/* Delete Category Button - Hidden for "الكل" category */}
+                {(() => {
+                  const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+                  const isAllCategory = (selectedCategory as any)?.is_all_category;
+                  const canDelete = selectedCategoryId && !isAllCategory;
+
+                  return (
+                    <button
+                      onClick={handleDeleteCategory}
+                      disabled={!canDelete}
+                      title={isAllCategory ? 'لا يمكن حذف فئة الكل' : 'حذف فئة'}
+                      className={`flex flex-col items-center justify-center p-4 transition-colors group min-w-[100px] ${
+                        canDelete
+                          ? 'hover:bg-white/10 text-white'
+                          : 'text-white/30 cursor-not-allowed'
+                      }`}
+                    >
+                      <svg className="w-8 h-8 mb-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      <span className="text-sm font-bold text-center leading-tight transition-colors">
+                        حذف فئة
+                      </span>
+                    </button>
+                  );
+                })()}
               </>
             )}
 

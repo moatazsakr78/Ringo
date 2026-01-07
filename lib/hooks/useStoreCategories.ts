@@ -12,6 +12,7 @@ export interface StoreCategory {
   color: string | null;
   is_active: boolean | null;
   sort_order: number | null;
+  is_all_category?: boolean | null;
   created_at: string | null;
   updated_at: string | null;
   created_by: string | null;
@@ -166,10 +167,17 @@ export function useStoreCategories() {
     try {
       setError(null);
 
+      // Check if this is the "الكل" category - prevent deletion
+      const categoryToDelete = categories.find(cat => cat.id === categoryId);
+      if (categoryToDelete?.is_all_category) {
+        throw new Error('لا يمكن حذف فئة "الكل" - هذه فئة أساسية في النظام');
+      }
+
       const { error } = await supabase
         .from('store_categories')
         .delete()
-        .eq('id', categoryId);
+        .eq('id', categoryId)
+        .eq('is_all_category', false); // Additional safety check
 
       if (error) throw error;
 

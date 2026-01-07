@@ -23,6 +23,8 @@ import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
+import { useSocialMediaPublic } from '@/lib/hooks/useSocialMedia';
+import WhatsAppFloatingButton from '@/app/components/WhatsAppFloatingButton';
 
 interface TabletHomeProps {
   userInfo: UserInfo;
@@ -57,7 +59,18 @@ export default function TabletHome({
   const { isRightSidebarOpen, toggleRightSidebar, closeRightSidebar } = useRightSidebar();
   
   // Get user profile to check admin status
-  const { isAdmin } = useUserProfile();
+  const { isAdmin, profile, loading: profileLoading } = useUserProfile();
+
+  // Check if user is admin or staff
+  const isAdminOrStaff = profile?.role === 'أدمن رئيسي' || profile?.role === 'موظف';
+
+  // Get social media links to find WhatsApp number
+  const { links: socialLinks } = useSocialMediaPublic();
+  const whatsappLink = socialLinks?.find((link: any) =>
+    link.platform?.toLowerCase() === 'whatsapp' && link.is_active
+  );
+  const whatsappNumber = whatsappLink?.whatsapp_number ||
+    whatsappLink?.link_url?.replace('https://wa.me/', '');
 
   // Get company settings
   const { companyName, logoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
@@ -561,7 +574,11 @@ export default function TabletHome({
   return (
     <>
     {/* Right Sidebar for Website Menu */}
-    <RightSidebar isOpen={isRightSidebarOpen} onClose={closeRightSidebar} />
+    <RightSidebar
+      isOpen={isRightSidebarOpen}
+      onClose={closeRightSidebar}
+      onCategorySelect={(categoryName) => setSelectedCategory(categoryName)}
+    />
     
     <div className="min-h-screen text-gray-800" style={{backgroundColor: '#c0c0c0'}}>
       {/* Hide system blue header */}
@@ -961,6 +978,11 @@ export default function TabletHome({
         onConfirm={handleQuantityConfirm}
         productName={selectedProduct?.name}
       />
+
+      {/* WhatsApp Floating Button - للعملاء فقط (ننتظر تحميل البيانات أولاً) */}
+      {!profileLoading && !isAdminOrStaff && whatsappNumber && (
+        <WhatsAppFloatingButton whatsappNumber={whatsappNumber} />
+      )}
     </>
   );
 }

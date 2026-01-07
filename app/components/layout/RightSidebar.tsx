@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   ClipboardDocumentListIcon,
   UserIcon,
@@ -10,23 +10,47 @@ import {
   BuildingStorefrontIcon,
   MapIcon,
   ReceiptPercentIcon,
-  ShareIcon
+  ShareIcon,
+  Squares2X2Icon,
+  ArrowRightIcon
 } from '@heroicons/react/24/outline';
 import { useUserProfile } from '@/lib/hooks/useUserProfile';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
+import { useStoreCategoriesWithProducts } from '@/lib/hooks/useStoreCategories';
 
 interface RightSidebarProps {
   isOpen: boolean;
   onClose: () => void;
+  onCategorySelect?: (categoryName: string) => void;
 }
 
-export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
+export default function RightSidebar({ isOpen, onClose, onCategorySelect }: RightSidebarProps) {
   const sidebarRef = useRef<HTMLDivElement>(null);
   const { profile, isAdmin, loading } = useUserProfile();
   const { companyName } = useCompanySettings();
+  const { categoriesWithProducts, isLoading: isCategoriesLoading } = useStoreCategoriesWithProducts();
+
+  // State لعرض الفئات
+  const [showCategories, setShowCategories] = useState(false);
 
   // تحديد ما إذا كان المستخدم أدمن رئيسي أو موظف (يظهر لهم قائمة الإدارة)
   const isAdminOrStaff = profile?.role === 'أدمن رئيسي' || profile?.role === 'موظف';
+
+  // إعادة تعيين عرض الفئات عند إغلاق القائمة
+  useEffect(() => {
+    if (!isOpen) {
+      setShowCategories(false);
+    }
+  }, [isOpen]);
+
+  // معالجة اختيار فئة
+  const handleCategorySelect = (categoryName: string) => {
+    if (onCategorySelect) {
+      onCategorySelect(categoryName);
+    }
+    onClose();
+    setShowCategories(false);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -80,7 +104,19 @@ export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
       >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-red-600 bg-[var(--primary-color)]">
-          <h2 className="text-lg font-bold text-white">القائمة الرئيسية</h2>
+          {showCategories ? (
+            <>
+              <button
+                onClick={() => setShowCategories(false)}
+                className="p-2 text-gray-200 hover:text-white hover:bg-gray-600 rounded-full transition-colors"
+              >
+                <ArrowRightIcon className="h-5 w-5" />
+              </button>
+              <h2 className="text-lg font-bold text-white">الفئات</h2>
+            </>
+          ) : (
+            <h2 className="text-lg font-bold text-white">القائمة الرئيسية</h2>
+          )}
           <button
             onClick={onClose}
             className="p-2 text-gray-200 hover:text-white hover:bg-gray-600 rounded-full transition-colors"
@@ -89,9 +125,58 @@ export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
           </button>
         </div>
 
-        {/* Menu Items */}
-        <div className="p-3">
-          <div className="space-y-1">
+        {/* Categories View */}
+        {showCategories ? (
+          <div className="p-3 overflow-y-auto h-[calc(100%-120px)]">
+            {isCategoriesLoading ? (
+              <div className="flex items-center justify-center p-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+                <span className="mr-2 text-gray-600">جاري التحميل...</span>
+              </div>
+            ) : categoriesWithProducts && categoriesWithProducts.length > 0 ? (
+              <div className="space-y-2">
+                {categoriesWithProducts.map((category: any) => (
+                  <button
+                    key={category.id}
+                    onClick={() => handleCategorySelect(category.is_all_category ? 'الكل' : category.name)}
+                    className={`flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group ${
+                      category.is_all_category ? 'bg-gray-200' : ''
+                    }`}
+                  >
+                    <div className="h-12 w-12 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+                      {category.image_url ? (
+                        <img
+                          src={category.image_url}
+                          alt={category.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center bg-[var(--primary-color)]">
+                          <Squares2X2Icon className="h-6 w-6 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 text-right">
+                      <h3 className="font-semibold text-base text-black">{category.name}</h3>
+                      {category.is_all_category ? (
+                        <p className="text-xs text-gray-600">{category.description || 'عرض جميع المنتجات'}</p>
+                      ) : category.products && (
+                        <p className="text-xs text-gray-600">{category.products.length} منتج</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 p-4">
+                لا توجد فئات متاحة
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Menu Items */
+          <div className="p-3">
+            <div className="space-y-1">
             
             {/* Show loading state */}
             {loading && (
@@ -191,6 +276,20 @@ export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
                   </div>
                 </button>
 
+                {/* Categories - الفئات */}
+                <button
+                  onClick={() => setShowCategories(true)}
+                  className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                >
+                  <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                    <Squares2X2Icon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="font-semibold text-base text-black">الفئات</h3>
+                    <p className="text-xs text-gray-600">تصفح جميع فئات المنتجات</p>
+                  </div>
+                </button>
+
               </>
             )}
 
@@ -266,11 +365,26 @@ export default function RightSidebar({ isOpen, onClose }: RightSidebarProps) {
                     <p className="text-xs text-gray-600">حساباتنا على السوشيال ميديا</p>
                   </div>
                 </button>
+
+                {/* Categories - الفئات */}
+                <button
+                  onClick={() => setShowCategories(true)}
+                  className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                >
+                  <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                    <Squares2X2Icon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="font-semibold text-base text-black">الفئات</h3>
+                    <p className="text-xs text-gray-600">تصفح جميع فئات المنتجات</p>
+                  </div>
+                </button>
               </>
             )}
 
           </div>
         </div>
+        )}
 
         {/* Footer */}
         <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-400 bg-[#eaeaea]">

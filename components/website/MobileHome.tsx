@@ -21,6 +21,8 @@ import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
+import { useSocialMediaPublic } from '@/lib/hooks/useSocialMedia';
+import WhatsAppFloatingButton from '@/app/components/WhatsAppFloatingButton';
 
 interface MobileHomeProps {
   userInfo: UserInfo;
@@ -57,10 +59,21 @@ export default function MobileHome({
   const { isAuthenticated } = useAuth();
 
   // Get user profile to check admin status
-  const { profile, isAdmin } = useUserProfile();
+  const { profile, isAdmin, loading: profileLoading } = useUserProfile();
 
   // تحديد ما إذا كان المستخدم أدمن رئيسي أو موظف (يظهر لهم قائمة الإدارة)
   const isAdminOrStaff = profile?.role === 'أدمن رئيسي' || profile?.role === 'موظف';
+
+  // State for showing categories in menu
+  const [showCategoriesInMenu, setShowCategoriesInMenu] = useState(false);
+
+  // Get social media links to find WhatsApp number
+  const { links: socialLinks } = useSocialMediaPublic();
+  const whatsappLink = socialLinks?.find((link: any) =>
+    link.platform?.toLowerCase() === 'whatsapp' && link.is_active
+  );
+  const whatsappNumber = whatsappLink?.whatsapp_number ||
+    whatsappLink?.link_url?.replace('https://wa.me/', '');
 
   // Get company settings
   const { companyName, logoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
@@ -432,6 +445,7 @@ export default function MobileHome({
     if (isMenuOpen) {
       // Close menu
       setIsMenuOpen(false);
+      setShowCategoriesInMenu(false); // Reset categories view
       setTimeout(() => setIsMenuVisible(false), 300); // Wait for animation to complete
     } else {
       // Open menu
@@ -442,7 +456,14 @@ export default function MobileHome({
 
   const closeMenu = () => {
     setIsMenuOpen(false);
+    setShowCategoriesInMenu(false); // Reset categories view
     setTimeout(() => setIsMenuVisible(false), 300);
+  };
+
+  // Handle category selection from menu
+  const handleCategorySelectFromMenu = (categoryName: string) => {
+    setSelectedCategory(categoryName);
+    closeMenu();
   };
 
   // Back button handler - manages browser back button behavior
@@ -657,7 +678,21 @@ export default function MobileHome({
             }`}>
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-red-600 bg-[var(--primary-color)]">
-                <h2 className="text-lg font-bold text-white">القائمة الرئيسية</h2>
+                {showCategoriesInMenu ? (
+                  <>
+                    <button
+                      onClick={() => setShowCategoriesInMenu(false)}
+                      className="p-2 text-gray-200 hover:text-white hover:bg-gray-600 rounded-full transition-colors"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                    <h2 className="text-lg font-bold text-white">الفئات</h2>
+                  </>
+                ) : (
+                  <h2 className="text-lg font-bold text-white">القائمة الرئيسية</h2>
+                )}
                 <button
                   onClick={closeMenu}
                   className="p-2 text-gray-200 hover:text-white hover:bg-gray-600 rounded-full transition-colors"
@@ -668,7 +703,58 @@ export default function MobileHome({
                 </button>
               </div>
 
-              {/* Menu Items */}
+              {/* Categories View */}
+              {showCategoriesInMenu ? (
+                <div className="p-3 pb-16 overflow-y-auto scrollbar-hide h-[calc(100%-140px)]">
+                  {isCategoriesLoading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600"></div>
+                      <span className="mr-2 text-gray-600">جاري التحميل...</span>
+                    </div>
+                  ) : categoriesWithProducts && categoriesWithProducts.length > 0 ? (
+                    <div className="space-y-2">
+                      {categoriesWithProducts.map((category: any) => (
+                        <button
+                          key={category.id}
+                          onClick={() => handleCategorySelectFromMenu(category.is_all_category ? 'الكل' : category.name)}
+                          className={`flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group ${
+                            category.is_all_category ? 'bg-gray-200' : ''
+                          }`}
+                        >
+                          <div className="h-12 w-12 rounded-lg overflow-hidden bg-gray-200 flex-shrink-0">
+                            {category.image_url ? (
+                              <img
+                                src={category.image_url}
+                                alt={category.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex items-center justify-center bg-[var(--primary-color)]">
+                                <svg className="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 text-right">
+                            <h3 className="font-semibold text-base text-black">{category.name}</h3>
+                            {category.is_all_category ? (
+                              <p className="text-xs text-gray-600">{category.description || 'عرض جميع المنتجات'}</p>
+                            ) : category.products && (
+                              <p className="text-xs text-gray-600">{category.products.length} منتج</p>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center text-gray-500 p-4">
+                      لا توجد فئات متاحة
+                    </div>
+                  )}
+                </div>
+              ) : (
+              /* Menu Items */
               <div className="p-3 pb-16 overflow-y-auto scrollbar-hide h-[calc(100%-140px)]">
                 <div className="space-y-1">
                   
@@ -749,6 +835,22 @@ export default function MobileHome({
                         <div className="flex-1 text-right">
                           <h3 className="font-semibold text-base text-black">تفاصيل الشحن</h3>
                           <p className="text-xs text-gray-600">إدارة شركات الشحن وأسعار المحافظات</p>
+                        </div>
+                      </button>
+
+                      {/* Categories Button */}
+                      <button
+                        onClick={() => setShowCategoriesInMenu(true)}
+                        className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                      >
+                        <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                          <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-right">
+                          <h3 className="font-semibold text-base text-black">الفئات</h3>
+                          <p className="text-xs text-gray-600">تصفح جميع فئات المنتجات</p>
                         </div>
                       </button>
                     </>
@@ -832,6 +934,22 @@ export default function MobileHome({
                           <p className="text-xs text-gray-600">الفواتير والدفعات وكشف الحساب</p>
                         </div>
                       </button>
+
+                      {/* Categories Button */}
+                      <button
+                        onClick={() => setShowCategoriesInMenu(true)}
+                        className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                      >
+                        <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                          <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                          </svg>
+                        </div>
+                        <div className="flex-1 text-right">
+                          <h3 className="font-semibold text-base text-black">الفئات</h3>
+                          <p className="text-xs text-gray-600">تصفح جميع فئات المنتجات</p>
+                        </div>
+                      </button>
                     </>
                   )}
 
@@ -856,6 +974,7 @@ export default function MobileHome({
 
                 </div>
               </div>
+              )}
 
               {/* Footer */}
               <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-gray-400 bg-[#eaeaea]">
@@ -1094,6 +1213,11 @@ export default function MobileHome({
         onConfirm={handleQuantityConfirm}
         productName={selectedProduct?.name}
       />
+
+      {/* WhatsApp Floating Button - للعملاء فقط (ننتظر تحميل البيانات أولاً) */}
+      {!profileLoading && !isAdminOrStaff && whatsappNumber && (
+        <WhatsAppFloatingButton whatsappNumber={whatsappNumber} />
+      )}
     </div>
   );
 }
