@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFavorites } from '@/lib/contexts/FavoritesContext';
-import { useAuth } from '@/lib/useAuth';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useWebsiteCurrency } from '@/lib/hooks/useCurrency';
@@ -12,33 +11,22 @@ import FavoriteButton from '@/components/website/FavoriteButton';
 interface FavoriteProduct {
   id: string;
   name: string;
-  description: string | null;
   price: number;
   main_image_url: string | null;
   discount_percentage: number | null;
-  discount_start_date: string | null;
-  discount_end_date: string | null;
 }
 
 export default function FavoritesPage() {
   const router = useRouter();
-  const { favorites, isLoading: isFavoritesLoading, removeFromFavorites } = useFavorites();
-  const { user, isAuthenticated, loading: isAuthLoading } = useAuth();
+  const { favorites, removeFromFavorites } = useFavorites();
   const { logoUrl, isLoading: isCompanyLoading } = useCompanySettings();
-  const { primaryColor, isLoading: isThemeLoading } = useStoreTheme();
+  const { isLoading: isThemeLoading } = useStoreTheme();
   const websiteCurrency = useWebsiteCurrency();
 
   const [products, setProducts] = useState<FavoriteProduct[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
 
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated) {
-      router.push('/auth/login?redirect=/favorites');
-    }
-  }, [isAuthLoading, isAuthenticated, router]);
-
-  // Load product details for favorites
+  // Load product details for favorites (only when opening the page)
   useEffect(() => {
     const loadProducts = async () => {
       if (favorites.length === 0) {
@@ -51,21 +39,19 @@ export default function FavoritesPage() {
         setIsLoadingProducts(true);
         const { supabase } = await import('@/app/lib/supabase/client');
 
-        const productIds = favorites.map(fav => fav.product_id);
-
         const { data, error } = await supabase
           .from('products')
-          .select('id, name, description, price, main_image_url, discount_percentage, discount_start_date, discount_end_date')
-          .in('id', productIds);
+          .select('id, name, price, main_image_url, discount_percentage')
+          .in('id', favorites);
 
         if (error) {
           console.error('Error loading favorite products:', error);
           setProducts([]);
         } else {
-          // Sort products by the order they were added to favorites (most recent first)
+          // Sort by favorites order
           const sortedProducts = (data || []).sort((a, b) => {
-            const aIndex = favorites.findIndex(f => f.product_id === a.id);
-            const bIndex = favorites.findIndex(f => f.product_id === b.id);
+            const aIndex = favorites.indexOf(a.id);
+            const bIndex = favorites.indexOf(b.id);
             return aIndex - bIndex;
           });
           setProducts(sortedProducts);
@@ -78,15 +64,8 @@ export default function FavoritesPage() {
       }
     };
 
-    if (!isFavoritesLoading) {
-      loadProducts();
-    }
-  }, [favorites, isFavoritesLoading]);
-
-  // Handle remove from favorites
-  const handleRemove = async (productId: string) => {
-    await removeFromFavorites(productId);
-  };
+    loadProducts();
+  }, [favorites]);
 
   // Handle product click
   const handleProductClick = (productId: string) => {
@@ -94,7 +73,7 @@ export default function FavoritesPage() {
   };
 
   // Loading state
-  if (isAuthLoading || isCompanyLoading || isThemeLoading || isFavoritesLoading || isLoadingProducts) {
+  if (isCompanyLoading || isThemeLoading || isLoadingProducts) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#c0c0c0' }}>
         <div className="text-center">
@@ -103,11 +82,6 @@ export default function FavoritesPage() {
         </div>
       </div>
     );
-  }
-
-  // Not authenticated
-  if (!isAuthenticated) {
-    return null; // Will redirect
   }
 
   return (
@@ -257,7 +231,7 @@ export default function FavoritesPage() {
 
                   {/* Remove from Favorites */}
                   <button
-                    onClick={() => handleRemove(product.id)}
+                    onClick={() => removeFromFavorites(product.id)}
                     className="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-200 hover:bg-red-100 text-gray-600 hover:text-red-600 transition-colors"
                     title="إزالة من المفضلة"
                   >
