@@ -24,6 +24,8 @@ interface Customer {
   loyalty_points: number | null;
   is_active: boolean | null;
   group_id: string | null;
+  default_record_id: string | null;
+  default_price_type: string | null;
 }
 
 interface CustomerGroup {
@@ -60,12 +62,12 @@ export default function CustomerSelectionModal({
       setIsLoading(true);
       setError(null);
 
-      // Fetch customers with opening_balance
+      // Fetch customers with opening_balance and default settings
       const { data: customersData, error: customersError } = await supabase
         .from("customers")
-        .select("id, name, phone, city, opening_balance, rank, category, loyalty_points, is_active, group_id")
+        .select("id, name, phone, city, opening_balance, rank, category, loyalty_points, is_active, group_id, default_record_id, default_price_type")
         .eq("is_active", true)
-        .order("name", { ascending: true });
+        .order("name", { ascending: true }) as { data: any[] | null; error: any };
 
       if (customersError) {
         console.error("Error fetching customers:", customersError);

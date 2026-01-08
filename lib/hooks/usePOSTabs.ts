@@ -343,16 +343,28 @@ export function usePOSTabs(): UsePOSTabsReturn {
   }, [saveState]);
 
   // Update tab's customer and title (for changing customer from context menu)
+  // Also applies customer's default record and price type if set
   const updateTabCustomerAndTitle = useCallback((tabId: string, customer: any, title: string) => {
     setTabs(prev => {
       const newTabs = prev.map(tab => {
         if (tab.id === tabId) {
+          // Get customer's default record if set, otherwise keep existing
+          let customerRecord = tab.selections.record;
+          if (customer?.default_record_id) {
+            customerRecord = { id: customer.default_record_id };
+          }
+
+          // Get customer's default price type if set, otherwise keep existing
+          const customerPriceType = customer?.default_price_type || tab.selections.priceType || 'price';
+
           return {
             ...tab,
             title: title,
             selections: {
               ...tab.selections,
               customer: customer,
+              record: customerRecord,
+              priceType: customerPriceType as any,
             },
           };
         }

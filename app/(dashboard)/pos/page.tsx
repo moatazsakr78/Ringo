@@ -1231,8 +1231,19 @@ function POSPageContent() {
         console.log("Created new tab for customer:", customer?.name);
       }
     } else {
-      // Either not main tab OR selecting default customer - just update customer
+      // Either not main tab OR selecting default customer - update customer and apply defaults
       setCustomer(customer);
+
+      // Apply customer's default record if set
+      if (customer?.default_record_id) {
+        setRecord({ id: customer.default_record_id });
+      }
+
+      // Apply customer's default price type if set
+      if (customer?.default_price_type) {
+        setSelectedPriceType(customer.default_price_type);
+      }
+
       console.log("Selected customer:", customer);
     }
 
@@ -1821,6 +1832,21 @@ function POSPageContent() {
       return totalProfit + itemProfit
     }, 0)
   }, [cartItems])
+
+  // Auto-fill paid amount based on customer type and cart total
+  useEffect(() => {
+    const currentCustomer = selections.customer;
+    const isDefaultCustomer = currentCustomer?.id === defaultCustomer?.id;
+
+    if (isDefaultCustomer && cartItems.length > 0) {
+      // Default customer always pays full amount - update with cart changes
+      const total = calculateTotalWithDiscounts();
+      setPaidAmount(total > 0 ? total.toString() : "");
+    } else if (!isDefaultCustomer) {
+      // Non-default customers (credit) - leave empty for manual entry
+      setPaidAmount("");
+    }
+  }, [selections.customer?.id, defaultCustomer?.id, cartItems, cartDiscount, cartDiscountType, calculateTotalWithDiscounts]);
 
   // Auto-scroll السلة لآخر منتج عند الإضافة
   useEffect(() => {
@@ -6178,6 +6204,7 @@ function POSPageContent() {
         isPurchaseMode={isPurchaseMode}
         isTransferMode={isTransferMode}
         transferFromLocation={transferFromLocation}
+        selectedPriceType={selectedPriceType}
       />
 
       {/* Supplier Selection Modal */}

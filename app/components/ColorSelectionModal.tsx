@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { XMarkIcon, PlusIcon, MinusIcon, ShoppingCartIcon } from '@heroicons/react/24/outline'
 import { useCurrency } from '../../lib/hooks/useCurrency'
+import { PriceType } from './PriceTypeSelectionModal'
 
 interface PurchasePricingData {
   purchasePrice: number
@@ -29,6 +30,7 @@ interface ColorSelectionModalProps {
     name: string
     type: 'branch' | 'warehouse'
   }
+  selectedPriceType?: PriceType
 }
 
 export default function ColorSelectionModal({
@@ -40,7 +42,8 @@ export default function ColorSelectionModal({
   selectedBranchId,
   isPurchaseMode = false,
   isTransferMode = false,
-  transferFromLocation
+  transferFromLocation,
+  selectedPriceType = 'price'
 }: ColorSelectionModalProps) {
   const [selections, setSelections] = useState<{[key: string]: number}>({})
   const [manualQuantity, setManualQuantity] = useState(1) // للمنتجات بدون ألوان
@@ -67,6 +70,25 @@ export default function ColorSelectionModal({
   // Use dynamic currency from system settings
   const { formatPrice, getCurrentCurrency } = useCurrency()
   const currentCurrency = getCurrentCurrency('system')
+
+  // Helper function to get display price based on selected price type
+  const getDisplayPrice = (prod: any): number => {
+    if (!prod) return 0;
+    switch (selectedPriceType) {
+      case 'wholesale_price':
+        return prod.wholesale_price || 0;
+      case 'price1':
+        return prod.price1 || 0;
+      case 'price2':
+        return prod.price2 || 0;
+      case 'price3':
+        return prod.price3 || 0;
+      case 'price4':
+        return prod.price4 || 0;
+      default:
+        return prod.price || 0;
+    }
+  };
 
   // Reset purchase price and other fields when product changes - Always use cost_price only
   useEffect(() => {
@@ -259,7 +281,7 @@ export default function ColorSelectionModal({
   }
 
   const selectedQuantity = Object.values(selections).reduce((sum, qty) => sum + qty, 0)
-  const totalPrice = isTransferMode ? 0 : totalQuantity * (isPurchaseMode ? purchasePrice : (product?.price || 0))
+  const totalPrice = isTransferMode ? 0 : totalQuantity * (isPurchaseMode ? purchasePrice : getDisplayPrice(product))
 
   // تحقق من صحة البيانات
   const getValidationInfo = () => {
@@ -367,7 +389,7 @@ export default function ColorSelectionModal({
                     ? `وضع النقل - من: ${transferFromLocation?.name || 'غير محدد'}`
                     : isPurchaseMode
                       ? 'وضع الشراء'
-                      : formatPrice(product.price || 0, 'system')
+                      : formatPrice(getDisplayPrice(product), 'system')
                   }
                 </p>
               </div>
