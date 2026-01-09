@@ -450,8 +450,11 @@ export default function WhatsAppPage() {
     const supabase = getSupabase()
 
     // Channel for broadcast (cross-device sync)
+    // self: false - prevents receiving our own broadcasts (avoids duplicate messages)
     const broadcastChannel = supabase
-      .channel(`whatsapp_broadcast_${selectedConversation}`)
+      .channel(`whatsapp_broadcast_${selectedConversation}`, {
+        config: { broadcast: { self: false } }
+      })
       .on('broadcast', { event: 'new_message' }, (payload) => {
         console.log('📡 Broadcast: New message received', payload)
         const newMsg = payload.payload as Message
