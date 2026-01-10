@@ -168,6 +168,7 @@ export default function PermissionsPage() {
   const [editingTemplateRestrictions, setEditingTemplateRestrictions] = useState<string[]>([]);
   const [isEditingTemplatePermissions, setIsEditingTemplatePermissions] = useState(false);
   const [selectedTemplateCategoryId, setSelectedTemplateCategoryId] = useState<string | null>(null);
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   // تحديث roleId عند تغيير selectedRoleForPermissions
   useEffect(() => {
@@ -210,15 +211,33 @@ export default function PermissionsPage() {
 
   // إنشاء قالب جديد
   const handleCreateTemplate = async () => {
-    if (!newTemplateName.trim()) return;
+    console.log('[PermissionsPage] handleCreateTemplate called');
+    console.log('[PermissionsPage] newTemplateName:', newTemplateName);
 
-    const newTemplate = await createTemplate(newTemplateName.trim(), newTemplateDescription.trim());
-    if (newTemplate) {
-      setNewTemplateName('');
-      setNewTemplateDescription('');
-      setIsAddTemplateModalOpen(false);
-      // فتح شاشة تعديل صلاحيات القالب الجديد
-      handleStartEditTemplatePermissions(newTemplate.id);
+    if (!newTemplateName.trim()) {
+      console.log('[PermissionsPage] Template name is empty, returning');
+      return;
+    }
+
+    setIsCreatingTemplate(true);
+    try {
+      const newTemplate = await createTemplate(newTemplateName.trim(), newTemplateDescription.trim());
+      console.log('[PermissionsPage] createTemplate result:', newTemplate);
+
+      if (newTemplate) {
+        setNewTemplateName('');
+        setNewTemplateDescription('');
+        setIsAddTemplateModalOpen(false);
+        // فتح شاشة تعديل صلاحيات القالب الجديد
+        handleStartEditTemplatePermissions(newTemplate.id);
+      } else {
+        alert('فشل في إنشاء القالب. يرجى المحاولة مرة أخرى.');
+      }
+    } catch (error) {
+      console.error('[PermissionsPage] Error in handleCreateTemplate:', error);
+      alert('حدث خطأ أثناء إنشاء القالب');
+    } finally {
+      setIsCreatingTemplate(false);
     }
   };
 
@@ -1242,13 +1261,13 @@ export default function PermissionsPage() {
           {
             icon: PencilIcon,
             label: 'تعديل',
-            action: () => selectedTemplateForActions && handleOpenEditTemplateModal(selectedTemplateForActions),
+            action: () => selectedTemplateId && handleStartEditTemplatePermissions(selectedTemplateId),
             disabled: !selectedTemplateId
           },
           {
             icon: CogIcon,
             label: 'إعدادات',
-            action: () => selectedTemplateId && handleStartEditTemplatePermissions(selectedTemplateId),
+            action: () => selectedTemplateForActions && handleOpenEditTemplateModal(selectedTemplateForActions),
             disabled: !selectedTemplateId
           },
           {
@@ -2131,15 +2150,27 @@ export default function PermissionsPage() {
               </button>
               <button
                 onClick={handleCreateTemplate}
-                disabled={!newTemplateName.trim()}
+                disabled={!newTemplateName.trim() || isCreatingTemplate}
                 className={`px-4 py-2 text-sm font-medium transition-all duration-200 flex items-center gap-2 rounded ${
-                  !newTemplateName.trim()
+                  !newTemplateName.trim() || isCreatingTemplate
                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
               >
-                <CheckIcon className="w-4 h-4" />
-                إنشاء القالب
+                {isCreatingTemplate ? (
+                  <>
+                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    جاري الإنشاء...
+                  </>
+                ) : (
+                  <>
+                    <CheckIcon className="w-4 h-4" />
+                    إنشاء القالب
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -82,19 +82,24 @@ export function usePermissionTemplates(): UsePermissionTemplatesReturn {
   const createTemplate = useCallback(
     async (name: string, description?: string): Promise<PermissionTemplate | null> => {
       try {
+        console.log('[usePermissionTemplates] Creating template:', { name, description });
+
         const { data, error } = await (supabase as any)
           .from('permission_templates')
           .insert([{ name, description: description || null }])
           .select()
           .single();
 
+        console.log('[usePermissionTemplates] Insert result:', { data, error });
+
         if (error) throw error;
 
         const newTemplate = data as PermissionTemplate;
         setTemplates((prev) => [newTemplate, ...prev]);
+        console.log('[usePermissionTemplates] Template created successfully:', newTemplate);
         return newTemplate;
       } catch (err) {
-        console.error('Error creating template:', err);
+        console.error('[usePermissionTemplates] Error creating template:', err);
         setError(err instanceof Error ? err.message : 'فشل في إنشاء القالب');
         return null;
       }
