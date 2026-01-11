@@ -1,6 +1,6 @@
 // Role-based access control utility
-// الأدوار الأساسية الثلاثة فقط
-export type UserRole = 'عميل' | 'جملة' | 'أدمن رئيسي';
+// الأدوار الأساسية الأربعة
+export type UserRole = 'عميل' | 'جملة' | 'موظف' | 'أدمن رئيسي';
 
 // Define allowed pages for each role
 export const rolePermissions: Record<UserRole, string[]> = {
@@ -27,6 +27,32 @@ export const rolePermissions: Record<UserRole, string[]> = {
     '/favorites',
     '/checkout',
     '/social-media', // السوشيال ميديا
+  ],
+  'موظف': [
+    // نفس صلاحيات أدمن رئيسي - صلاحيات كاملة
+    // صفحات المتجر
+    '/',
+    '/store',
+    '/product',
+    '/social-media',
+
+    // صفحات الإدارة
+    '/customer-orders',
+    '/admin/products',
+    '/shipping',
+
+    // صفحات النظام
+    '/dashboard',
+    '/pos',
+    '/products',
+    '/inventory',
+    '/customers',
+    '/suppliers',
+    '/whatsapp',
+    '/safes',
+    '/reports',
+    '/permissions',
+    '/settings',
   ],
   'أدمن رئيسي': [
     // كل الصفحات - صلاحيات كاملة
@@ -89,8 +115,8 @@ export const hasPageAccess = (userRole: UserRole | null, pagePath: string): bool
 
 // Get user role based on is_admin flag (for backwards compatibility)
 export const getUserRoleFromProfile = (role: string | null, isAdmin: boolean): UserRole => {
-  // If role is already set to one of our 3 main roles, use it
-  if (role && ['عميل', 'جملة', 'أدمن رئيسي'].includes(role)) {
+  // If role is already set to one of our 4 main roles, use it
+  if (role && ['عميل', 'جملة', 'موظف', 'أدمن رئيسي'].includes(role)) {
     return role as UserRole;
   }
 
@@ -98,9 +124,9 @@ export const getUserRoleFromProfile = (role: string | null, isAdmin: boolean): U
   return isAdmin ? 'أدمن رئيسي' : 'عميل';
 };
 
-// Check if user is admin
+// Check if user is admin (أدمن رئيسي or موظف)
 export const isAdminRole = (userRole: UserRole | null): boolean => {
-  return userRole === 'أدمن رئيسي';
+  return userRole === 'أدمن رئيسي' || userRole === 'موظف';
 };
 
 // Check if user is customer (client or wholesale)

@@ -25,8 +25,8 @@ export default function DashboardLayout({
     );
   }
 
-  // Check if user has admin access (أدمن رئيسي only)
-  const hasAdminAccess = userRole === 'أدمن رئيسي';
+  // Check if user has admin access (أدمن رئيسي or موظف)
+  const hasAdminAccess = userRole === 'أدمن رئيسي' || userRole === 'موظف';
 
   // Show unauthorized page if user is authenticated but doesn't have access
   if (userRole && !hasAdminAccess) {
