@@ -3,9 +3,56 @@ import type { NextRequest } from 'next/server'
 import { hasPageAccess, rolePermissions, type UserRole } from '@/app/lib/auth/roleBasedAccess'
 import { auth } from '@/lib/auth.config'
 import { PAGE_ACCESS_MAP } from '@/types/permissions'
+import { createClient } from '@supabase/supabase-js'
 
 // Cookie name for storing last valid page
 const LAST_PAGE_COOKIE = 'last_valid_page'
+
+// Create Supabase client for middleware (server-side)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    db: { schema: 'elfaroukgroup' },
+    auth: { persistSession: false, autoRefreshToken: false }
+  }
+)
+
+// Helper function to fetch page restrictions for an employee from database
+async function getEmployeePageRestrictions(userId: string): Promise<string[]> {
+  try {
+    // Get user's permission_id from user_profiles
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('permission_id')
+      .eq('id', userId)
+      .single()
+
+    if (profileError || !profile?.permission_id) {
+      console.log('📋 No permission_id found for user:', userId)
+      return [] // No permission template = no restrictions (full access)
+    }
+
+    // Get page access restrictions from permission_template_restrictions
+    const { data: restrictions, error: restrictionsError } = await supabase
+      .from('permission_template_restrictions')
+      .select('permission_code')
+      .eq('template_id', profile.permission_id)
+      .like('permission_code', 'page_access.%')
+
+    if (restrictionsError) {
+      console.error('❌ Error fetching restrictions:', restrictionsError)
+      return []
+    }
+
+    const codes = restrictions?.map(r => r.permission_code) || []
+    console.log('📋 Fetched restrictions for user:', userId, 'count:', codes.length, 'codes:', codes)
+    return codes
+  } catch (error) {
+    console.error('❌ Error in getEmployeePageRestrictions:', error)
+    return []
+  }
+}
 
 // Helper function to get page access code from pathname
 function getPageAccessCode(pathname: string): string | null {
@@ -57,7 +104,7 @@ const customerOnlyPaths = [
   '/checkout',
 ]
 
-export default auth((req) => {
+export default auth(async (req) => {
   const { pathname } = req.nextUrl
 
   // Skip NextAuth internal routes, static files, and WhatsApp webhook
@@ -121,23 +168,29 @@ export default auth((req) => {
       return NextResponse.redirect(new URL('/', req.url))
     }
 
-    // Check granular page permissions for employees
-    if (userRole === 'موظف') {
-      const pageRestrictions = session.user?.pageRestrictions || []
+    // Check granular page permissions for employees (fetch from database)
+    if (userRole === 'موظف' && session.user?.id) {
       const pageCode = getPageAccessCode(pathname)
 
-      console.log('🔍 Employee permission check:', {
-        pathname,
-        pageCode,
-        restrictionsCount: pageRestrictions.length,
-        isRestricted: pageCode ? pageRestrictions.includes(pageCode) : false
-      });
+      if (pageCode) {
+        // Fetch restrictions directly from database (most reliable)
+        const pageRestrictions = await getEmployeePageRestrictions(session.user.id)
 
-      if (pageCode && pageRestrictions.includes(pageCode)) {
-        // Employee is restricted from this page - redirect to last valid page
-        const lastPage = req.cookies.get(LAST_PAGE_COOKIE)?.value || '/dashboard'
-        console.log('🚫 Employee restricted from page, redirecting to:', lastPage);
-        return NextResponse.redirect(new URL(lastPage, req.url))
+        console.log('🔍 Employee permission check:', {
+          userId: session.user.id,
+          pathname,
+          pageCode,
+          restrictionsCount: pageRestrictions.length,
+          restrictions: pageRestrictions,
+          isRestricted: pageRestrictions.includes(pageCode)
+        });
+
+        if (pageRestrictions.includes(pageCode)) {
+          // Employee is restricted from this page - redirect to last valid page
+          const lastPage = req.cookies.get(LAST_PAGE_COOKIE)?.value || '/dashboard'
+          console.log('🚫 Employee restricted from page, redirecting to:', lastPage);
+          return NextResponse.redirect(new URL(lastPage, req.url))
+        }
       }
     }
 
