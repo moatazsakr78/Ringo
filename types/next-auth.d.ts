@@ -8,6 +8,7 @@ declare module 'next-auth' {
     name?: string | null
     image?: string | null
     role?: string
+    pageRestrictions?: string[]
   }
 
   interface Session {
@@ -17,6 +18,7 @@ declare module 'next-auth' {
       name?: string | null
       image?: string | null
       role?: string
+      pageRestrictions?: string[]
     }
   }
 }
@@ -25,5 +27,6 @@ declare module 'next-auth/jwt' {
   interface JWT {
     userId?: string
     role?: string
+    pageRestrictions?: string[]
   }
 }

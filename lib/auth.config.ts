@@ -82,16 +82,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null
           }
 
-          // Fetch role from user_profiles table
+          // Fetch role and permission_id from user_profiles table
           const { data: profiles, error: profileError } = await supabase
             .from('user_profiles')
-            .select('role')
+            .select('role, permission_id')
             .eq('id', authUser.id)
             .limit(1)
 
           const userRole = profiles && profiles.length > 0 ? profiles[0].role : 'عميل'
+          const permissionId = profiles && profiles.length > 0 ? profiles[0].permission_id : null
 
-          console.log('✅ Login successful for:', credentials.email, 'with role:', userRole)
+          // Fetch page restrictions for employees
+          let pageRestrictions: string[] = []
+          if (userRole === 'موظف' && permissionId) {
+            const { data: restrictions } = await supabase
+              .from('permission_template_restrictions')
+              .select('permission_code')
+              .eq('template_id', permissionId)
+              .like('permission_code', 'page_access.%')
+
+            pageRestrictions = restrictions?.map(r => r.permission_code) || []
+          }
+
+          console.log('✅ Login successful for:', credentials.email, 'with role:', userRole, 'restrictions:', pageRestrictions.length)
 
           // Return user object
           return {
@@ -99,7 +112,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email: authUser.email,
             name: authUser.name,
             image: authUser.image,
-            role: userRole
+            role: userRole,
+            pageRestrictions
           }
         } catch (error) {
           console.error('❌ Auth error during login:', error)
@@ -264,32 +278,62 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (!authError && authUsers && authUsers.length > 0) {
             token.userId = authUsers[0].id
 
-            // Fetch role from user_profiles
+            // Fetch role and permission_id from user_profiles
             const { data: profiles, error: profileError } = await supabase
               .from('user_profiles')
-              .select('role')
+              .select('role, permission_id')
               .eq('id', authUsers[0].id)
               .limit(1)
 
             token.role = profiles && profiles.length > 0 ? profiles[0].role : 'عميل'
+            const permissionId = profiles && profiles.length > 0 ? profiles[0].permission_id : null
+
+            // Fetch page restrictions for employees
+            if (token.role === 'موظف' && permissionId) {
+              const { data: restrictions } = await supabase
+                .from('permission_template_restrictions')
+                .select('permission_code')
+                .eq('template_id', permissionId)
+                .like('permission_code', 'page_access.%')
+
+              token.pageRestrictions = restrictions?.map(r => r.permission_code) || []
+            } else {
+              token.pageRestrictions = []
+            }
           }
         } else {
           // Credentials sign-in
           token.userId = user.id
           token.role = user.role
+          token.pageRestrictions = user.pageRestrictions || []
         }
       } else if (token.userId && !token.role) {
         // Subsequent requests - role is missing, fetch it again
         const { data: profiles, error: profileError } = await supabase
           .from('user_profiles')
-          .select('role')
+          .select('role, permission_id')
           .eq('id', token.userId as string)
           .limit(1)
 
         if (!profileError && profiles && profiles.length > 0) {
           token.role = profiles[0].role
+          const permissionId = profiles[0].permission_id
+
+          // Fetch page restrictions for employees
+          if (token.role === 'موظف' && permissionId) {
+            const { data: restrictions } = await supabase
+              .from('permission_template_restrictions')
+              .select('permission_code')
+              .eq('template_id', permissionId)
+              .like('permission_code', 'page_access.%')
+
+            token.pageRestrictions = restrictions?.map(r => r.permission_code) || []
+          } else {
+            token.pageRestrictions = []
+          }
         } else {
           token.role = 'عميل' // Default fallback
+          token.pageRestrictions = []
         }
       }
 
@@ -301,6 +345,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.userId as string
         session.user.role = token.role as string
+        session.user.pageRestrictions = token.pageRestrictions as string[] || []
       }
       return session
     }

@@ -2,6 +2,27 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { hasPageAccess, rolePermissions, type UserRole } from '@/app/lib/auth/roleBasedAccess'
 import { auth } from '@/lib/auth.config'
+import { PAGE_ACCESS_MAP } from '@/types/permissions'
+
+// Cookie name for storing last valid page
+const LAST_PAGE_COOKIE = 'last_valid_page'
+
+// Helper function to get page access code from pathname
+function getPageAccessCode(pathname: string): string | null {
+  // Direct match
+  if (PAGE_ACCESS_MAP[pathname]) {
+    return PAGE_ACCESS_MAP[pathname]
+  }
+
+  // Check for sub-paths (e.g., /products/123 -> /products)
+  for (const [path, code] of Object.entries(PAGE_ACCESS_MAP)) {
+    if (pathname.startsWith(path + '/')) {
+      return code
+    }
+  }
+
+  return null
+}
 
 // Paths that don't need any authentication or authorization
 const alwaysPublicPaths = [
@@ -100,7 +121,37 @@ export default auth((req) => {
       return NextResponse.redirect(new URL('/', req.url))
     }
 
+    // Check granular page permissions for employees
+    if (userRole === 'موظف') {
+      const pageRestrictions = session.user?.pageRestrictions || []
+      const pageCode = getPageAccessCode(pathname)
+
+      console.log('🔍 Employee permission check:', {
+        pathname,
+        pageCode,
+        restrictionsCount: pageRestrictions.length,
+        isRestricted: pageCode ? pageRestrictions.includes(pageCode) : false
+      });
+
+      if (pageCode && pageRestrictions.includes(pageCode)) {
+        // Employee is restricted from this page - redirect to last valid page
+        const lastPage = req.cookies.get(LAST_PAGE_COOKIE)?.value || '/dashboard'
+        console.log('🚫 Employee restricted from page, redirecting to:', lastPage);
+        return NextResponse.redirect(new URL(lastPage, req.url))
+      }
+    }
+
+    // Access granted - update last valid page cookie
     console.log('✅ Access granted');
+    const response = NextResponse.next()
+    response.cookies.set(LAST_PAGE_COOKIE, pathname, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+      path: '/',
+    })
+    return response
   }
 
   // Customer paths - just check for session
