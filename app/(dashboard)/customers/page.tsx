@@ -17,6 +17,7 @@ import { useCustomerGroups, CustomerGroup } from '../../lib/hooks/useCustomerGro
 import { useCustomers, Customer, DEFAULT_CUSTOMER_ID } from '../../lib/hooks/useCustomers'
 import CustomersGridView from '../../components/CustomersGridView'
 import MergeCustomersModal from '../../components/MergeCustomersModal'
+import ConvertPartyModal from '../../components/ConvertPartyModal'
 import {
   ArrowPathIcon,
   FolderPlusIcon,
@@ -37,7 +38,8 @@ import {
   FolderIcon,
   FolderOpenIcon,
   UserPlusIcon,
-  ArrowsRightLeftIcon
+  ArrowsRightLeftIcon,
+  TruckIcon
 } from '@heroicons/react/24/outline'
 import { ranks } from '@/app/lib/data/ranks'
 import Image from 'next/image'
@@ -261,6 +263,7 @@ export default function CustomersPage() {
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid')
   const [isGroupsHidden, setIsGroupsHidden] = useState(true)
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false)
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false)
 
   // Use the real-time hooks for customer groups and customers
   const { groups, isLoading: groupsLoading, error: groupsError, toggleGroup } = useCustomerGroups()
@@ -697,6 +700,20 @@ export default function CustomersPage() {
               <span className="text-sm">دمج العملاء</span>
             </button>
 
+            <button
+              onClick={() => setIsConvertModalOpen(true)}
+              disabled={!selectedCustomer || isDefaultCustomer(selectedCustomer?.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer whitespace-nowrap transition-colors ${
+                selectedCustomer && !isDefaultCustomer(selectedCustomer?.id)
+                  ? 'text-amber-300 hover:text-amber-200 hover:bg-amber-500/20'
+                  : 'text-gray-500 cursor-not-allowed'
+              }`}
+              title={!selectedCustomer ? 'اختر عميل أولاً' : isDefaultCustomer(selectedCustomer?.id) ? 'لا يمكن تحويل العميل الافتراضي' : 'تحويل العميل المحدد لمورد'}
+            >
+              <TruckIcon className="h-4 w-4" />
+              <span className="text-sm">تحويل لمورد</span>
+            </button>
+
             {viewMode === 'table' && (
               <button
                 onClick={() => setShowColumnsModal(true)}
@@ -1012,6 +1029,19 @@ export default function CustomersPage() {
           setSelectedCustomer(null)
         }}
         preSelectedCustomer={selectedCustomer}
+      />
+
+      {/* Convert Customer to Supplier Modal */}
+      <ConvertPartyModal
+        isOpen={isConvertModalOpen}
+        onClose={() => setIsConvertModalOpen(false)}
+        onConversionComplete={() => {
+          // Refresh is handled automatically by real-time hook
+          setSelectedCustomer(null)
+          setIsConvertModalOpen(false)
+        }}
+        party={selectedCustomer}
+        conversionType="customer-to-supplier"
       />
 
     </div>

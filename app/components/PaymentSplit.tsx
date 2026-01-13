@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { supabase } from '../lib/supabase/client'
 
@@ -38,6 +38,10 @@ export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultC
     }
   ])
 
+  // Ref to store callback to avoid re-renders
+  const onPaymentsChangeRef = useRef(onPaymentsChange)
+  onPaymentsChangeRef.current = onPaymentsChange
+
   // Load payment methods from database
   useEffect(() => {
     loadPaymentMethods()
@@ -55,28 +59,35 @@ export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultC
     }
   }, [paymentMethods])
 
-  // Update first payment amount when total changes
+  // Update first payment amount when total changes - only for default customer
   useEffect(() => {
-    if (payments.length === 1) {
+    // فقط للعميل الافتراضي نملأ المبلغ تلقائياً عند تغيير الإجمالي
+    if (payments.length === 1 && isDefaultCustomer) {
       const updatedPayments = [...payments]
       updatedPayments[0].amount = totalAmount
       setPayments(updatedPayments)
     }
-  }, [totalAmount])
+  }, [totalAmount, isDefaultCustomer])
 
   // Notify parent component when payments change
   useEffect(() => {
     const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0)
     // العميل الافتراضي: لا آجل - المبلغ المتبقي دائماً 0
     const creditAmount = isDefaultCustomer ? 0 : Math.max(0, totalAmount - totalPaid)
-    onPaymentsChange(payments, creditAmount)
-  }, [payments, totalAmount, onPaymentsChange, isDefaultCustomer])
+    onPaymentsChangeRef.current(payments, creditAmount)
+  }, [payments, totalAmount, isDefaultCustomer])
 
-  // Force full payment for default customer - reset amount when customer changes
+  // Reset amount when customer type changes
   useEffect(() => {
-    if (isDefaultCustomer && payments.length === 1) {
+    if (payments.length === 1) {
       const updatedPayments = [...payments]
-      updatedPayments[0].amount = totalAmount
+      if (isDefaultCustomer) {
+        // العميل الافتراضي: يدفع كامل المبلغ
+        updatedPayments[0].amount = totalAmount
+      } else {
+        // عميل آجل أو مورد: يبدأ من صفر
+        updatedPayments[0].amount = 0
+      }
       setPayments(updatedPayments)
     }
   }, [isDefaultCustomer])
@@ -106,6 +117,19 @@ export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultC
       p.id === id ? { ...p, amount: numValue } : p
     )
     setPayments(updatedPayments)
+  }
+
+  // Handle keyboard arrows to toggle between 0 and full amount
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, paymentId: string) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault()
+      const currentPayment = payments.find(p => p.id === paymentId)
+      if (currentPayment) {
+        // التبديل بين 0 ومبلغ الفاتورة الكامل
+        const newAmount = currentPayment.amount === 0 ? totalAmount : 0
+        handleAmountChange(paymentId, newAmount.toString())
+      }
+    }
   }
 
   const handlePaymentMethodChange = (id: string, methodId: string) => {
@@ -145,14 +169,17 @@ export default function PaymentSplit({ totalAmount, onPaymentsChange, isDefaultC
                 type="number"
                 value={payment.amount}
                 onChange={(e) => handleAmountChange(payment.id, e.target.value)}
+                onFocus={(e) => e.target.select()}
+                onKeyDown={(e) => handleKeyDown(e, payment.id)}
                 placeholder={isReturnMode ? "مبلغ المرتجع" : isPurchaseMode ? "المبلغ المدفوع للمورد" : "المبلغ"}
-                className={`w-full px-2 py-1 bg-gray-700 text-white rounded border focus:outline-none focus:ring-1 text-xs h-[26px] ${
+                className={`w-full px-2 py-1 bg-gray-700 text-white rounded border focus:outline-none focus:ring-1 text-xs h-[26px] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
                   isReturnMode
                     ? "border-red-500 focus:ring-red-500 text-red-400"
                     : isPurchaseMode
                     ? "border-purple-500 focus:ring-purple-500"
                     : "border-gray-600 focus:ring-blue-500"
                 }`}
+                style={{ MozAppearance: 'textfield' }}
                 min="0"
                 step="0.01"
               />

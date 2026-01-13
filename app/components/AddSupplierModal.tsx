@@ -22,7 +22,7 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
   const [formData, setFormData] = useState({
     name: '',
     group: '',
-    accountBalance: '',
+    openingBalance: '',
     allowedLimit: '',
     rank: '',
     phone: '',
@@ -106,7 +106,7 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
         group_id: formData.group || null,
         rank: selectedRank?.id || null,
         category: formData.group ? supplierGroupOptions.find(opt => opt.value === formData.group)?.label : null,
-        account_balance: formData.accountBalance ? parseFloat(formData.accountBalance) : 0,
+        opening_balance: formData.openingBalance ? parseFloat(formData.openingBalance) : 0,
         credit_limit: formData.allowedLimit ? parseFloat(formData.allowedLimit) : 5000,
         is_active: true
       }
@@ -143,7 +143,7 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
     setFormData({
       name: '',
       group: '',
-      accountBalance: '',
+      openingBalance: '',
       allowedLimit: '',
       rank: '',
       phone: '',
@@ -263,15 +263,15 @@ export default function AddSupplierModal({ isOpen, onClose }: AddSupplierModalPr
             )}
           </div>
 
-          {/* Account Balance */}
+          {/* Opening Balance */}
           <div className="space-y-2">
             <label className="block text-white text-sm font-medium text-right">
-              رصيد الحساب
+              الرصيد الافتتاحي
             </label>
             <input
               type="number"
-              name="accountBalance"
-              value={formData.accountBalance}
+              name="openingBalance"
+              value={formData.openingBalance}
               onChange={handleInputChange}
               placeholder="0.00"
               className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"

@@ -3,6 +3,8 @@
  * Comprehensive settings structure for the POS system
  */
 
+import { CLIENT_CONFIG } from '@/client.config'
+
 // Currency settings interface
 export interface CurrencySettings {
   mode: 'separate' | 'unified';
@@ -138,10 +140,10 @@ export interface SystemSettingsObject {
 export const DEFAULT_SETTINGS: SystemSettingsObject = {
   currency: {
     mode: 'separate',
-    system_currency: 'ريال',
-    website_currency: 'جنيه',
-    unified_currency: 'ريال',
-    default_currencies: ['ريال', 'جنيه']
+    system_currency: CLIENT_CONFIG.defaultCurrency,
+    website_currency: CLIENT_CONFIG.websiteCurrency,
+    unified_currency: CLIENT_CONFIG.defaultCurrency,
+    default_currencies: [CLIENT_CONFIG.defaultCurrency, CLIENT_CONFIG.websiteCurrency]
   },
   website: {
     show_categories: true,
@@ -213,8 +215,8 @@ export const DEFAULT_SETTINGS: SystemSettingsObject = {
     lockout_duration_minutes: 30
   },
   company: {
-    name: 'elfaroukgroup',
-    logoUrl: '',
+    name: CLIENT_CONFIG.companyName,
+    logoUrl: CLIENT_CONFIG.logoPath,
     logoShape: 'square',
     socialMedia: [{ platform: '', link: '' }],
     branches: []

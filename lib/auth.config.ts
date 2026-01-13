@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 import { createClient } from "@supabase/supabase-js"
+import { CLIENT_CONFIG } from "@/client.config"
 
 // Create Supabase client for server-side operations
 const supabase = createClient(
@@ -10,7 +11,7 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     db: {
-      schema: 'elfaroukgroup' // Use elfaroukgroup schema for multi-tenant architecture
+      schema: CLIENT_CONFIG.schema
     },
     auth: {
       persistSession: false,

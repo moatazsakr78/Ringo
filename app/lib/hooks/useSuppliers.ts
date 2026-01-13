@@ -16,6 +16,7 @@ export interface Supplier {
   category: string | null
   group_id: string | null
   account_balance: number | null
+  opening_balance: number | null
   credit_limit: number | null
   rank: string | null
   city: string | null

@@ -4,6 +4,7 @@ import { hasPageAccess, rolePermissions, type UserRole } from '@/app/lib/auth/ro
 import { auth } from '@/lib/auth.config'
 import { PAGE_ACCESS_MAP } from '@/types/permissions'
 import { createClient } from '@supabase/supabase-js'
+import { CLIENT_CONFIG } from '@/client.config'
 
 // Cookie name for storing last valid page
 const LAST_PAGE_COOKIE = 'last_valid_page'
@@ -13,7 +14,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
-    db: { schema: 'elfaroukgroup' },
+    db: { schema: CLIENT_CONFIG.schema },
     auth: { persistSession: false, autoRefreshToken: false }
   }
 )

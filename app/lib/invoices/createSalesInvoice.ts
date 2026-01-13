@@ -35,6 +35,10 @@ export interface CreateSalesInvoiceParams {
   creditAmount?: number
   userId?: string | null
   userName?: string | null
+  // Party type support (customer or supplier)
+  partyType?: 'customer' | 'supplier'
+  supplierId?: string | null
+  supplierName?: string | null
 }
 
 export async function createSalesInvoice({
@@ -46,7 +50,10 @@ export async function createSalesInvoice({
   paymentSplitData = [],
   creditAmount = 0,
   userId = null,
-  userName = null
+  userName = null,
+  partyType = 'customer',
+  supplierId = null,
+  supplierName = null
 }: CreateSalesInvoiceParams) {
   if (!selections.branch) {
     throw new Error('يجب تحديد الفرع قبل إنشاء الفاتورة')
@@ -65,13 +72,29 @@ export async function createSalesInvoice({
     throw new Error('لا يمكن إنشاء فاتورة بدون منتجات')
   }
 
-  // Use default customer if none selected
+  // Use default customer if none selected (for customer sales)
   const DEFAULT_CUSTOMER_ID = '00000000-0000-0000-0000-000000000001' // The default customer from database
-  const customerId = (selections.customer && selections.customer.id) ? selections.customer.id : DEFAULT_CUSTOMER_ID
 
-  console.log('Customer selection debug:', {
+  // Determine customer_id and supplier_id based on party type
+  let customerId: string | null = null
+  let effectiveSupplierId: string | null = null
+
+  if (partyType === 'supplier' && supplierId) {
+    // البيع لمورد - استخدام العميل الافتراضي + تسجيل المورد
+    customerId = DEFAULT_CUSTOMER_ID
+    effectiveSupplierId = supplierId
+  } else {
+    // البيع العادي لعميل
+    customerId = (selections.customer && selections.customer.id) ? selections.customer.id : DEFAULT_CUSTOMER_ID
+    effectiveSupplierId = null
+  }
+
+  console.log('Party selection debug:', {
+    partyType: partyType,
     hasCustomer: !!selections.customer,
     customerId: customerId,
+    supplierId: effectiveSupplierId,
+    supplierName: supplierName,
     rawCustomer: selections.customer
   })
 
@@ -118,6 +141,13 @@ export async function createSalesInvoice({
     const now = new Date()
     const timeString = now.toTimeString().split(' ')[0] // HH:MM:SS format
 
+    // Prepare notes with supplier info if selling to supplier
+    let finalNotes = notes || null
+    if (partyType === 'supplier' && supplierName) {
+      const supplierNote = `بيع لمورد: ${supplierName}`
+      finalNotes = notes ? `${supplierNote} | ${notes}` : supplierNote
+    }
+
     console.log('Creating sales invoice with data:', {
       invoice_number: invoiceNumber,
       total_amount: totalAmount,
@@ -127,11 +157,13 @@ export async function createSalesInvoice({
       payment_method: paymentMethod,
       branch_id: selections.branch.id,
       customer_id: customerId,
+      supplier_id: effectiveSupplierId,
       record_id: hasNoSafe ? null : selections.record.id,
-      notes: notes || null,
+      notes: finalNotes,
       time: timeString,
       invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice'),
-      no_safe_selected: hasNoSafe
+      no_safe_selected: hasNoSafe,
+      partyType: partyType
     })
 
     // Start transaction
@@ -146,8 +178,9 @@ export async function createSalesInvoice({
         payment_method: paymentMethod,
         branch_id: selections.branch.id,
         customer_id: customerId,
+        supplier_id: effectiveSupplierId,
         record_id: hasNoSafe ? null : selections.record.id,
-        notes: notes || null,
+        notes: finalNotes,
         time: timeString,
         invoice_type: (isReturn ? 'Sale Return' : 'Sale Invoice') as any
       })

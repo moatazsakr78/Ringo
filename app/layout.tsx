@@ -9,25 +9,26 @@ import { UserProfileProvider } from '@/lib/contexts/UserProfileContext'
 import { ThemeProvider } from '@/lib/contexts/ThemeContext'
 import { PermissionsProvider } from '@/lib/contexts/PermissionsContext'
 import { Providers } from './providers'
+import { CLIENT_CONFIG } from '@/client.config'
 
 export const metadata: Metadata = {
-  title: 'El Farouk Group Store',
-  description: 'El Farouk Group Store - أفضل المنتجات بأسعار مميزة',
-  applicationName: 'elfaroukgroup',
+  title: CLIENT_CONFIG.appName,
+  description: CLIENT_CONFIG.description,
+  applicationName: CLIENT_CONFIG.shortName,
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'elfaroukgroup',
+    title: CLIENT_CONFIG.shortName,
   },
   manifest: '/manifest.json',
   icons: {
-    icon: '/assets/logo/El Farouk Group2.png',
-    apple: '/assets/logo/El Farouk Group2.png',
+    icon: CLIENT_CONFIG.logoPath,
+    apple: CLIENT_CONFIG.logoPath,
   },
   other: {
-    'theme-color': '#DC2626',
-    'msapplication-navbutton-color': '#DC2626',
-    'msapplication-TileColor': '#DC2626',
+    'theme-color': CLIENT_CONFIG.themeColor,
+    'msapplication-navbutton-color': CLIENT_CONFIG.themeColor,
+    'msapplication-TileColor': CLIENT_CONFIG.themeColor,
     'mobile-web-app-capable': 'yes',
   },
 }

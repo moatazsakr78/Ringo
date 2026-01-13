@@ -273,23 +273,8 @@ export default function MergeSuppliersModal({
           .in("id", merge.moved_payments_ids);
       }
 
-      // 4. Restore balance on primary supplier
-      const { data: primarySupplierData } = await supabase
-        .from("suppliers")
-        .select("account_balance")
-        .eq("id", merge.primary_supplier_id)
-        .single();
-
-      if (primarySupplierData) {
-        const newBalance = (primarySupplierData.account_balance || 0) - merge.merged_account_balance;
-
-        await supabase
-          .from("suppliers")
-          .update({
-            account_balance: newBalance,
-          })
-          .eq("id", merge.primary_supplier_id);
-      }
+      // 4. الرصيد سيُحسب تلقائياً من المعاملات المرتجعة
+      // لا حاجة لتحديث account_balance يدوياً
 
       // 5. Delete merge record
       await (supabase as any)
@@ -460,15 +445,8 @@ export default function MergeSuppliersModal({
         );
       }
 
-      // 5. Update primary supplier's balance
-      updatePromises.push(
-        supabase
-          .from("suppliers")
-          .update({
-            account_balance: newAccountBalance,
-          })
-          .eq("id", primarySupplier.id)
-      );
+      // 5. الرصيد سيُحسب تلقائياً من المعاملات المنقولة
+      // لا حاجة لتحديث account_balance يدوياً
 
       // 6. Deactivate merged supplier
       updatePromises.push(

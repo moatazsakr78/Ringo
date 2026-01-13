@@ -481,6 +481,8 @@ export type Database = {
           city: string | null
           company_name: string | null
           contact_person: string | null
+          converted_to_supplier_id: string | null
+          conversion_date: string | null
           country: string | null
           created_at: string | null
           credit_limit: number | null
@@ -505,6 +507,8 @@ export type Database = {
           city?: string | null
           company_name?: string | null
           contact_person?: string | null
+          converted_to_supplier_id?: string | null
+          conversion_date?: string | null
           country?: string | null
           created_at?: string | null
           credit_limit?: number | null
@@ -529,6 +533,8 @@ export type Database = {
           city?: string | null
           company_name?: string | null
           contact_person?: string | null
+          converted_to_supplier_id?: string | null
+          conversion_date?: string | null
           country?: string | null
           created_at?: string | null
           credit_limit?: number | null
@@ -1368,6 +1374,7 @@ export type Database = {
           branch_id: string | null
           created_at: string | null
           created_by: string | null
+          customer_id: string | null
           discount_amount: number | null
           id: string
           invoice_date: string
@@ -1391,6 +1398,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          customer_id?: string | null
           discount_amount?: number | null
           id?: string
           invoice_date?: string
@@ -1414,6 +1422,7 @@ export type Database = {
           branch_id?: string | null
           created_at?: string | null
           created_by?: string | null
+          customer_id?: string | null
           discount_amount?: number | null
           id?: string
           invoice_date?: string
@@ -1570,6 +1579,7 @@ export type Database = {
           payment_method: string
           profit: number | null
           record_id: string | null
+          supplier_id: string | null
           tax_amount: number | null
           time: string | null
           total_amount: number
@@ -1591,6 +1601,7 @@ export type Database = {
           payment_method?: string
           profit?: number | null
           record_id?: string | null
+          supplier_id?: string | null
           tax_amount?: number | null
           time?: string | null
           total_amount?: number
@@ -1612,6 +1623,7 @@ export type Database = {
           payment_method?: string
           profit?: number | null
           record_id?: string | null
+          supplier_id?: string | null
           tax_amount?: number | null
           time?: string | null
           total_amount?: number
@@ -1935,6 +1947,8 @@ export type Database = {
           city: string | null
           company_name: string | null
           contact_person: string | null
+          converted_to_customer_id: string | null
+          conversion_date: string | null
           country: string | null
           created_at: string | null
           credit_limit: number | null
@@ -1958,6 +1972,8 @@ export type Database = {
           city?: string | null
           company_name?: string | null
           contact_person?: string | null
+          converted_to_customer_id?: string | null
+          conversion_date?: string | null
           country?: string | null
           created_at?: string | null
           credit_limit?: number | null
@@ -1981,6 +1997,8 @@ export type Database = {
           city?: string | null
           company_name?: string | null
           contact_person?: string | null
+          converted_to_customer_id?: string | null
+          conversion_date?: string | null
           country?: string | null
           created_at?: string | null
           credit_limit?: number | null

@@ -97,6 +97,7 @@ import Sidebar from "../../components/layout/Sidebar";
 import TopHeader from "../../components/layout/TopHeader";
 import RecordsSelectionModal from "../../components/RecordsSelectionModal";
 import CustomerSelectionModal from "../../components/CustomerSelectionModal";
+import PartySelectionModal, { SelectedParty, PartyType } from "../../components/PartySelectionModal";
 import BranchSelectionModal from "../../components/BranchSelectionModal";
 import PriceTypeSelectionModal, { PriceType, getPriceTypeName } from "../../components/PriceTypeSelectionModal";
 import HistoryModal from "../../components/HistoryModal";
@@ -150,6 +151,7 @@ import {
   ChevronRightIcon,
   ExclamationTriangleIcon,
   PencilIcon,
+  TruckIcon,
 } from "@heroicons/react/24/outline";
 
 function POSPageContent() {
@@ -209,6 +211,9 @@ function POSPageContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRecordsModalOpen, setIsRecordsModalOpen] = useState(false);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
+  const [selectedPartyType, setSelectedPartyType] = useState<PartyType>('customer');
+  const [selectedSupplierForSale, setSelectedSupplierForSale] = useState<any>(null);
   const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -289,6 +294,8 @@ function POSPageContent() {
   const [showAddTabModal, setShowAddTabModal] = useState(false);
   const [newTabName, setNewTabName] = useState("");
   const [showNewTabCustomerModal, setShowNewTabCustomerModal] = useState(false);
+  const [isPartyModalForNewTab, setIsPartyModalForNewTab] = useState(false);
+  const [isPartyModalForPurchase, setIsPartyModalForPurchase] = useState(false);
 
   // Payment Split States
   const [paymentSplitData, setPaymentSplitData] = useState<any[]>([]);
@@ -385,8 +392,13 @@ function POSPageContent() {
   }, [selections.branch]);
 
   const hasRequiredForSale = useCallback(() => {
+    // عند البيع لمورد، نتحقق من وجود المورد بدلاً من العميل
+    if (selectedPartyType === 'supplier') {
+      return selections.record && selectedSupplierForSale && selections.branch;
+    }
+    // البيع العادي لعميل
     return selections.record && selections.customer && selections.branch;
-  }, [selections.record, selections.customer, selections.branch]);
+  }, [selections.record, selections.customer, selections.branch, selectedPartyType, selectedSupplierForSale]);
 
   // Current branch for cart items - الفرع الحالي لإضافته للمنتجات في السلة
   const currentBranch = useMemo(() => {
@@ -1170,7 +1182,8 @@ function POSPageContent() {
   };
 
   const toggleCustomerModal = () => {
-    setIsCustomerModalOpen(!isCustomerModalOpen);
+    // Open unified party selection modal with tabs
+    setIsPartyModalOpen(!isPartyModalOpen);
   };
 
   const toggleBranchModal = () => {
@@ -1296,6 +1309,129 @@ function POSPageContent() {
     setBranch(branch);
     setIsBranchModalOpen(false);
     console.log("Selected branch:", branch);
+  };
+
+  // Handler for party selection (unified customer/supplier modal)
+  const handlePartySelect = (party: SelectedParty) => {
+    if (party.type === 'customer') {
+      // Handle as customer selection
+      const customer = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        calculated_balance: party.balance,
+        default_record_id: party.default_record_id,
+        default_price_type: party.default_price_type,
+      };
+      handleCustomerSelect(customer);
+      setSelectedPartyType('customer');
+      setSelectedSupplierForSale(null);
+    } else {
+      // Handle as supplier selection for sale
+      const supplier = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        account_balance: party.balance,
+      };
+      setSelectedSupplierForSale(supplier);
+      setSelectedPartyType('supplier');
+      // Keep current customer selection for record purposes
+      console.log("Selected supplier for sale:", supplier);
+    }
+    setIsPartyModalOpen(false);
+  };
+
+  // Handler for party selection when creating new tab (from + button)
+  const handleNewTabPartySelect = (party: SelectedParty) => {
+    if (party.type === 'customer') {
+      // Create new tab with customer
+      const customer = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        calculated_balance: party.balance,
+        default_record_id: party.default_record_id,
+        default_price_type: party.default_price_type,
+      };
+      addTabWithCustomer(customer, {
+        branch: globalSelections.branch,
+        record: globalSelections.record,
+        priceType: selectedPriceType,
+      });
+    } else {
+      // Create new tab for supplier (sale to supplier)
+      const supplier = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        account_balance: party.balance,
+      };
+      // Create tab with default customer but set supplier for sale
+      addTabWithCustomer(defaultCustomer, {
+        branch: globalSelections.branch,
+        record: globalSelections.record,
+        priceType: selectedPriceType,
+      });
+      // Set the supplier for this new tab
+      setSelectedSupplierForSale(supplier);
+      setSelectedPartyType('supplier');
+    }
+    setIsPartyModalOpen(false);
+    setIsPartyModalForNewTab(false);
+  };
+
+  // Handler for party selection when entering purchase mode (from شراء button)
+  const handlePartySelectForPurchase = (party: SelectedParty) => {
+    if (party.type === 'supplier') {
+      // الشراء من مورد (الحالة العادية)
+      const supplier = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        account_balance: party.balance,
+      };
+      // تفعيل وضع الشراء
+      setIsPurchaseMode(true);
+      setSelectedSupplier(supplier);
+
+      // إنشاء tab جديد باسم المورد
+      const tabName = supplier.name;
+      addTab(tabName, {
+        customer: null,
+        branch: globalSelections.branch,
+        record: globalSelections.record,
+        priceType: 'cost_price',
+        isPurchaseMode: true,
+        selectedSupplier: supplier,
+      });
+    } else {
+      // الشراء من عميل (حالة خاصة - مثلاً شراء مرتجعات من العميل)
+      const customer = {
+        id: party.id,
+        name: party.name,
+        phone: party.phone,
+        calculated_balance: party.balance,
+        default_record_id: party.default_record_id,
+        default_price_type: party.default_price_type,
+      };
+      // تفعيل وضع الشراء مع العميل
+      setIsPurchaseMode(true);
+      setSelectedSupplier(null); // لا يوجد مورد
+
+      // إنشاء tab جديد باسم العميل
+      const tabName = `شراء - ${customer.name}`;
+      addTab(tabName, {
+        customer: customer,
+        branch: globalSelections.branch,
+        record: globalSelections.record,
+        priceType: 'cost_price',
+        isPurchaseMode: true,
+        selectedSupplier: null,
+      });
+    }
+    setIsPartyModalOpen(false);
+    setIsPartyModalForPurchase(false);
   };
 
   // Handler for tab close with confirmation
@@ -2128,39 +2264,48 @@ function POSPageContent() {
       }
     } else {
       if (!hasRequiredForSale()) {
-        alert("يجب تحديد الخزنة والعميل والفرع قبل تأكيد الطلب");
+        if (selectedPartyType === 'supplier') {
+          alert("يجب تحديد الخزنة والمورد والفرع قبل تأكيد الطلب");
+        } else {
+          alert("يجب تحديد الخزنة والعميل والفرع قبل تأكيد الطلب");
+        }
         return;
       }
 
       // حساب إجمالي المبلغ المدفوع من بيانات تقسيم الدفع
       const totalPaid = paymentSplitData.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const isDefaultCustomer = selections.customer?.id === '00000000-0000-0000-0000-000000000001';
 
       // استخدام الإجمالي بعد الخصم للتحقق من صحة الدفع
       const discountedTotal = calculateTotalWithDiscounts();
 
-      // التحقق من صحة المدفوعات للعميل الافتراضي
-      if (isDefaultCustomer) {
-        // العميل الافتراضي: المبلغ المدفوع يجب أن يساوي قيمة الفاتورة بالضبط
-        if (totalPaid < discountedTotal) {
-          alert('العميل الافتراضي لا يقبل البيع بالآجل - يجب دفع قيمة الفاتورة كاملة');
-          return;
-        }
-        if (totalPaid > discountedTotal) {
-          alert('المبلغ المدفوع أعلى من قيمة الفاتورة - العميل الافتراضي يقبل الدفع بقيمة الفاتورة فقط');
-          return;
-        }
-      } else {
-        // العملاء العاديين: يمكنهم الدفع أكثر من الفاتورة بشرط أن لا يتجاوز رصيدهم
-        const customerBalance = selections.customer?.credit_balance || selections.customer?.calculatedBalance || 0;
-        // الحد الأقصى للدفع = قيمة الفاتورة + رصيد العميل (ما عليه)
-        const maxPaymentAllowed = discountedTotal + customerBalance;
+      // عند البيع لمورد - لا نطبق قواعد العميل الافتراضي
+      if (selectedPartyType !== 'supplier') {
+        const isDefaultCustomer = selections.customer?.id === '00000000-0000-0000-0000-000000000001';
 
-        if (totalPaid > maxPaymentAllowed) {
-          alert(`المبلغ المدفوع (${totalPaid.toFixed(0)}) أعلى من رصيد العميل (${customerBalance.toFixed(0)}) + قيمة الفاتورة (${discountedTotal.toFixed(0)})`);
-          return;
+        // التحقق من صحة المدفوعات للعميل الافتراضي
+        if (isDefaultCustomer) {
+          // العميل الافتراضي: المبلغ المدفوع يجب أن يساوي قيمة الفاتورة بالضبط
+          if (totalPaid < discountedTotal) {
+            alert('العميل الافتراضي لا يقبل البيع بالآجل - يجب دفع قيمة الفاتورة كاملة');
+            return;
+          }
+          if (totalPaid > discountedTotal) {
+            alert('المبلغ المدفوع أعلى من قيمة الفاتورة - العميل الافتراضي يقبل الدفع بقيمة الفاتورة فقط');
+            return;
+          }
+        } else {
+          // العملاء العاديين: يمكنهم الدفع أكثر من الفاتورة بشرط أن لا يتجاوز رصيدهم
+          const customerBalance = selections.customer?.credit_balance || selections.customer?.calculatedBalance || 0;
+          // الحد الأقصى للدفع = قيمة الفاتورة + رصيد العميل (ما عليه)
+          const maxPaymentAllowed = discountedTotal + customerBalance;
+
+          if (totalPaid > maxPaymentAllowed) {
+            alert(`المبلغ المدفوع (${totalPaid.toFixed(0)}) أعلى من رصيد العميل (${customerBalance.toFixed(0)}) + قيمة الفاتورة (${discountedTotal.toFixed(0)})`);
+            return;
+          }
         }
       }
+      // عند البيع لمورد - يمكن البيع بأي مبلغ (سداد مديونية)
     }
 
     // In edit mode, allow empty cart (user might want to delete all items)
@@ -2246,24 +2391,9 @@ function POSPageContent() {
           throw new Error(`خطأ في تحديث الفاتورة: ${updateError.message}`);
         }
 
-        // Calculate the difference and update customer balance
+        // رصيد العميل سيُحسب تلقائياً من دالة calculate_customer_balances()
+        // لا حاجة لتحديث account_balance يدوياً - الدالة تجمع المبيعات تلقائياً
         const totalDifference = newTotal - originalTotal;
-        if (originalSale?.customer_id && totalDifference !== 0) {
-          // Get current customer balance
-          const { data: customerData } = await supabase
-            .from('customers')
-            .select('account_balance')
-            .eq('id', originalSale.customer_id)
-            .single();
-
-          if (customerData) {
-            const newBalance = (customerData.account_balance || 0) + totalDifference;
-            await supabase
-              .from('customers')
-              .update({ account_balance: newBalance })
-              .eq('id', originalSale.customer_id);
-          }
-        }
 
         // تحديث رصيد الخزنة عند تعديل الفاتورة
         if (totalDifference !== 0) {
@@ -2450,12 +2580,18 @@ function POSPageContent() {
           paymentMethod: "cash",
           notes: isReturnMode
             ? `مرتجع بيع - ${cartItems.length} منتج`
-            : `فاتورة بيع - ${cartItems.length} منتج`,
+            : selectedPartyType === 'supplier'
+              ? `بيع لمورد - ${cartItems.length} منتج`
+              : `فاتورة بيع - ${cartItems.length} منتج`,
           isReturn: isReturnMode, // Pass return mode flag
           paymentSplitData: paymentSplitData, // Pass payment split data
           creditAmount: creditAmount, // Pass credit amount
           userId: user?.id || null, // Pass current user ID for tracking
           userName: user?.name || null, // Pass current user name for performed_by
+          // Party type support (customer or supplier)
+          partyType: selectedPartyType,
+          supplierId: selectedPartyType === 'supplier' ? selectedSupplierForSale?.id : null,
+          supplierName: selectedPartyType === 'supplier' ? selectedSupplierForSale?.name : null,
         });
 
         // Fetch customer's updated data and calculate balance after invoice creation
@@ -2594,10 +2730,10 @@ function POSPageContent() {
 
   // Purchase Mode Functions
   const handlePurchaseModeToggle = () => {
-    // دائماً افتح نافذة اختيار المورد لإضافة نافذة شراء جديدة
-    // حتى لو كان وضع الشراء مفعل بالفعل، يمكن فتح نوافذ شراء متعددة
-    setIsSupplierModalForNewPurchase(true);
-    setIsSupplierModalOpen(true);
+    // افتح نافذة اختيار الطرف (عميل/مورد) مع تحديد المورد كافتراضي
+    // يمكن للمستخدم التبديل للعميل إذا أراد (مثلاً للشراء من عميل)
+    setIsPartyModalForPurchase(true);
+    setIsPartyModalOpen(true);
   };
 
   const confirmPurchaseMode = () => {
@@ -4413,6 +4549,39 @@ function POSPageContent() {
                   </div>
                 )}
 
+                {/* Party Selection Button (Customer/Supplier) */}
+                <button
+                  onClick={() => setIsPartyModalOpen(true)}
+                  className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all relative ${
+                    selectedPartyType === 'supplier'
+                      ? "text-amber-400 hover:text-amber-300"
+                      : "text-gray-300 hover:text-white"
+                  }`}
+                  title={selectedPartyType === 'customer'
+                    ? `العميل: ${selections.customer?.name || 'غير محدد'}`
+                    : `المورد: ${selectedSupplierForSale?.name || 'غير محدد'}`}
+                >
+                  {selectedPartyType === 'customer' ? (
+                    <>
+                      <UserIcon className="h-5 w-5 mb-1" />
+                      <span className="text-sm truncate max-w-[70px]">
+                        {selections.customer?.name || 'اختر عميل'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <TruckIcon className="h-5 w-5 mb-1" />
+                      <span className="text-sm truncate max-w-[70px]">
+                        {selectedSupplierForSale?.name || 'اختر مورد'}
+                      </span>
+                    </>
+                  )}
+                  {(selectedPartyType === 'customer' && !selections.customer) ||
+                   (selectedPartyType === 'supplier' && !selectedSupplierForSale) ? (
+                    <div className="w-1 h-1 bg-red-400 rounded-full mt-1"></div>
+                  ) : null}
+                </button>
+
                 {/* Price Type Button */}
                 {!isPurchaseMode && !isTransferMode && (
                   <button
@@ -4956,11 +5125,14 @@ function POSPageContent() {
                 </div>
               ))}
 
-              {/* Add New Tab Button - Opens customer selection to create new tab */}
+              {/* Add New Tab Button - Opens party selection (customer/supplier) to create new tab */}
               <button
-                onClick={() => setShowNewTabCustomerModal(true)}
+                onClick={() => {
+                  setIsPartyModalForNewTab(true);
+                  setIsPartyModalOpen(true);
+                }}
                 className="px-3 py-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1 border-l border-gray-600"
-                title="إضافة نافذة بيع جديدة"
+                title="إضافة نافذة بيع جديدة (عميل أو مورد)"
               >
                 <PlusIcon className="w-4 h-4" />
               </button>
@@ -5270,13 +5442,35 @@ function POSPageContent() {
                 </button>
               </div>
 
-              {/* 4. Customer Info */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-gray-400">العميل:</span>
-                <span className="text-xs text-white bg-[#2B3544] px-2 py-1 rounded border border-gray-600">
-                  {selections.customer?.name || "غير محدد"}
-                </span>
-              </div>
+              {/* 4. Party Selection (Customer/Supplier) */}
+              <button
+                onClick={() => setIsPartyModalOpen(true)}
+                className="flex items-center gap-2 flex-shrink-0 px-3 py-1.5 bg-[#2B3544] rounded-lg border border-gray-600 hover:bg-[#374151] transition-colors group"
+                title={selectedPartyType === 'customer' ? 'اختيار عميل أو مورد' : 'اختيار مورد أو عميل'}
+              >
+                {selectedPartyType === 'customer' ? (
+                  <>
+                    <UserIcon className="h-4 w-4 text-blue-400" />
+                    <span className="text-xs text-white">
+                      {selections.customer?.name || "اختر عميل"}
+                    </span>
+                    <span className="text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">
+                      عميل
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <TruckIcon className="h-4 w-4 text-amber-400" />
+                    <span className="text-xs text-white">
+                      {selectedSupplierForSale?.name || "اختر مورد"}
+                    </span>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded">
+                      مورد
+                    </span>
+                  </>
+                )}
+                <ArrowsRightLeftIcon className="h-3 w-3 text-gray-500 group-hover:text-gray-300 transition-colors" />
+              </button>
 
               {/* 5. Branch Info */}
               <div className="flex items-center gap-2 flex-shrink-0">
@@ -6218,6 +6412,33 @@ function POSPageContent() {
         isOpen={isCustomerModalOpen}
         onClose={() => setIsCustomerModalOpen(false)}
         onSelectCustomer={handleCustomerSelect}
+      />
+
+      {/* Party Selection Modal (Unified Customer/Supplier) */}
+      <PartySelectionModal
+        isOpen={isPartyModalOpen}
+        onClose={() => {
+          setIsPartyModalOpen(false);
+          setIsPartyModalForNewTab(false);
+          setIsPartyModalForPurchase(false);
+        }}
+        onSelect={
+          isPartyModalForPurchase
+            ? handlePartySelectForPurchase
+            : isPartyModalForNewTab
+              ? handleNewTabPartySelect
+              : handlePartySelect
+        }
+        defaultTab={isPartyModalForPurchase || isPurchaseMode ? 'supplier' : 'customer'}
+        currentSelection={
+          isPartyModalForNewTab || isPartyModalForPurchase
+            ? null // لا يوجد اختيار مسبق عند إنشاء تبويب جديد أو الشراء
+            : selectedSupplierForSale
+              ? { id: selectedSupplierForSale.id, type: 'supplier' as PartyType }
+              : globalSelections.customer
+                ? { id: globalSelections.customer.id, type: 'customer' as PartyType }
+                : null
+        }
       />
 
       {/* Customer Selection Modal for New Tab (from + button) */}

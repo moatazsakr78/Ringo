@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from './database.types'
+import { CLIENT_CONFIG } from '@/client.config'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -9,14 +10,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Singleton instance for main client
-let supabaseInstance: SupabaseClient<Database, 'elfaroukgroup'> | null = null
+let supabaseInstance: SupabaseClient<Database, string> | null = null
 
 // Get singleton client instance
-export const getSupabase = (): SupabaseClient<Database, 'elfaroukgroup'> => {
+export const getSupabase = (): SupabaseClient<Database, string> => {
   if (!supabaseInstance) {
-    supabaseInstance = createClient<Database, 'elfaroukgroup'>(supabaseUrl, supabaseAnonKey, {
+    supabaseInstance = createClient<Database, string>(supabaseUrl, supabaseAnonKey, {
       db: {
-        schema: 'elfaroukgroup' // Use elfaroukgroup schema for multi-tenant architecture
+        schema: CLIENT_CONFIG.schema
       },
       auth: {
         autoRefreshToken: true,
