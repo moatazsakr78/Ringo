@@ -382,7 +382,8 @@ export async function createSalesInvoice({
           notes: `دفعة من فاتورة رقم ${invoiceNumber}`,
           payment_date: new Date().toISOString().split('T')[0],
           created_by: userId || null,
-          safe_id: hasNoSafe ? null : selections.record.id
+          safe_id: hasNoSafe ? null : selections.record.id,
+          sale_id: salesData.id
         }))
 
         const { error: paymentError } = await supabase

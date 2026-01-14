@@ -2035,6 +2035,9 @@ function POSPageContent() {
 
   // Auto-fill paid amount based on customer type and cart total
   useEffect(() => {
+    // لا تفعل شيء في وضع الشراء - المستخدم يدخل المبلغ يدوياً
+    if (isPurchaseMode) return;
+
     const currentCustomer = selections.customer;
     const isDefaultCustomer = currentCustomer?.id === defaultCustomer?.id;
 
@@ -2046,7 +2049,7 @@ function POSPageContent() {
       // Non-default customers (credit) - leave empty for manual entry
       setPaidAmount("");
     }
-  }, [selections.customer?.id, defaultCustomer?.id, cartItems, cartDiscount, cartDiscountType, calculateTotalWithDiscounts]);
+  }, [isPurchaseMode, selections.customer?.id, defaultCustomer?.id, cartItems, cartDiscount, cartDiscountType, calculateTotalWithDiscounts]);
 
   // Auto-scroll السلة لآخر منتج عند الإضافة
   useEffect(() => {
@@ -2554,6 +2557,10 @@ function POSPageContent() {
           total: item.price * item.quantity,
         }));
 
+        // حساب المبلغ المدفوع من PaymentSplit أو من حقل paidAmount
+        const paidFromSplit = paymentSplitData.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const actualPaidAmount = paidFromSplit > 0 ? paidFromSplit : (parseFloat(paidAmount) || 0);
+
         const result = await createPurchaseInvoice({
           cartItems: purchaseCartItems,
           selections: {
@@ -2565,8 +2572,15 @@ function POSPageContent() {
           notes: isReturnMode
             ? `مرتجع شراء - ${cartItems.length} منتج`
             : `فاتورة شراء - ${cartItems.length} منتج`,
-          isReturn: isReturnMode, // Pass return mode flag
+          isReturn: isReturnMode,
+          paidAmount: actualPaidAmount,
         });
+
+        // Check if payment failed
+        if (actualPaidAmount > 0 && !result.paymentCreated) {
+          console.error('❌ Payment failed:', result.paymentError)
+          alert(`تم إنشاء الفاتورة لكن فشل تسجيل الدفعة: ${result.paymentError || 'خطأ غير معروف'}`)
+        }
 
         // Store invoice data for printing
         setLastInvoiceData({
@@ -5343,42 +5357,47 @@ function POSPageContent() {
               </div>
 
               {/* Right Side - Change Calculator + Secret Info */}
-              {!isTransferMode && !isPurchaseMode && (
+              {!isTransferMode && (
                 <div className="flex items-start gap-6">
-                  {/* معلومات سرية - ربح الفاتورة ورصيد العميل */}
-                  <div className="flex items-center gap-4 text-xs text-gray-500 font-mono self-center">
-                    {/* PD: الربح - يظهر دائماً مع وجود منتجات (مخفي كباركود) */}
-                    {cartItems.length > 0 && (
-                      <span title="ربح الفاتورة">
-                        PD0{calculateProfit().toFixed(0)}U68
-                      </span>
-                    )}
-                    {/* قبل/بعد: رصيد العميل - يظهر فقط مع عميل غير افتراضي */}
-                    {selections.customer && selections.customer.id !== defaultCustomer?.id && cartItems.length > 0 && (
-                      <>
-                        <span className="text-red-400" title="رصيد العميل قبل">
-                          قبل: {(selections.customer.calculated_balance || 0).toFixed(0)}
+                  {/* معلومات سرية - ربح الفاتورة ورصيد العميل (فقط في وضع البيع) */}
+                  {!isPurchaseMode && (
+                    <div className="flex items-center gap-4 text-xs text-gray-500 font-mono self-center">
+                      {/* PD: الربح - يظهر دائماً مع وجود منتجات (مخفي كباركود) */}
+                      {cartItems.length > 0 && (
+                        <span title="ربح الفاتورة">
+                          PD0{calculateProfit().toFixed(0)}U68
                         </span>
-                        <span className="text-green-400" title="رصيد العميل بعد">
-                          بعد: {((selections.customer.calculated_balance || 0) + calculateTotalWithDiscounts() - parseFloat(paidAmount || '0')).toFixed(0)}
-                        </span>
-                      </>
-                    )}
-                  </div>
+                      )}
+                      {/* قبل/بعد: رصيد العميل - يظهر فقط مع عميل غير افتراضي */}
+                      {selections.customer && selections.customer.id !== defaultCustomer?.id && cartItems.length > 0 && (
+                        <>
+                          <span className="text-red-400" title="رصيد العميل قبل">
+                            قبل: {(selections.customer.calculated_balance || 0).toFixed(0)}
+                          </span>
+                          <span className="text-green-400" title="رصيد العميل بعد">
+                            بعد: {((selections.customer.calculated_balance || 0) + calculateTotalWithDiscounts() - parseFloat(paidAmount || '0')).toFixed(0)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
 
-                  {/* حاسبة الباقي */}
+                  {/* حاسبة الباقي / المدفوع */}
                   <div className="flex flex-col items-end">
                     <input
                       type="number"
                       value={paidAmount}
                       onChange={(e) => setPaidAmount(e.target.value)}
-                      placeholder="المدفوع"
-                      className="w-24 px-2 py-1 bg-[#2B3544] border border-gray-600 rounded text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-left"
+                      placeholder={isPurchaseMode ? "المدفوع للمورد" : "المدفوع"}
+                      className="w-28 px-2 py-1 bg-[#2B3544] border border-gray-600 rounded text-white text-xs placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-left"
                       dir="ltr"
                     />
                     {paidAmount && parseFloat(paidAmount) > 0 && (
-                      <span className="text-orange-400 text-xs font-medium mt-1">
-                        الباقي: {(parseFloat(paidAmount) - calculateTotalWithDiscounts()).toFixed(0)}
+                      <span className={`text-xs font-medium mt-1 ${isPurchaseMode ? 'text-green-400' : 'text-orange-400'}`}>
+                        {isPurchaseMode
+                          ? `المتبقي: ${(calculateTotalWithDiscounts() - parseFloat(paidAmount)).toFixed(0)}`
+                          : `الباقي: ${(parseFloat(paidAmount) - calculateTotalWithDiscounts()).toFixed(0)}`
+                        }
                       </span>
                     )}
                   </div>

@@ -798,11 +798,11 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
 
       console.log('purchase invoices:', invoices)
 
-      // Get all payments for this supplier
+      // Get all payments for this supplier (including purchase_invoice_id for linking)
       const { data: payments, error: paymentsError } = await supabase
         .from('supplier_payments')
         .select(`
-          id, amount, payment_method, notes, created_at, safe_id,
+          id, amount, payment_method, notes, created_at, safe_id, purchase_invoice_id,
           creator:user_profiles(full_name)
         `)
         .eq('supplier_id', supplier.id)
@@ -868,61 +868,102 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       // Build statements array
       const statements: any[] = []
 
-      // Add invoices
+      // Create a map of payments linked to invoices
+      const paymentsByInvoice = new Map<string, any>()
+      const standalonePayments: any[] = []
+
+      payments?.forEach((payment) => {
+        if (payment.created_at) {
+          const linkedInvoiceId = (payment as any).purchase_invoice_id
+          if (linkedInvoiceId) {
+            // Payment is linked to an invoice
+            paymentsByInvoice.set(linkedInvoiceId, payment)
+          } else {
+            // Standalone payment (not linked to any invoice)
+            standalonePayments.push(payment)
+          }
+        }
+      })
+
+      // Add invoices (merged with linked payments if any)
       invoices?.forEach((invoice) => {
-        if (invoice.created_at) {  // Add null check
-          const amount = invoice.invoice_type === 'Purchase Invoice'
-            ? invoice.total_amount
-            : -invoice.total_amount
+        if (invoice.created_at) {
+          const isReturn = invoice.invoice_type !== 'Purchase Invoice'
+          const invoiceAmount = Math.abs(invoice.total_amount)
+
+          // Check if there's a linked payment for this invoice
+          const linkedPayment = paymentsByInvoice.get(invoice.id)
+          const hasPaidAmount = linkedPayment && linkedPayment.amount > 0
+          const paidAmount = hasPaidAmount ? Math.abs(linkedPayment.amount) : 0
+
+          // Determine operation type based on whether there's a linked payment
+          let operationType: string
+          if (isReturn) {
+            operationType = hasPaidAmount ? 'مرتجع شراء - دفعة' : 'مرتجع شراء'
+          } else {
+            operationType = hasPaidAmount ? 'فاتورة شراء - دفعة' : 'فاتورة شراء'
+          }
+
+          // For balance calculation: invoice adds to balance, payment subtracts
+          // Net effect = invoiceAmount - paidAmount
+          const netAmount = isReturn
+            ? -invoiceAmount + paidAmount  // Return: -invoice + payment
+            : invoiceAmount - paidAmount   // Purchase: +invoice - payment
 
           statements.push({
             id: statements.length + 1,
             date: new Date(invoice.created_at),
             description: `فاتورة ${invoice.invoice_number}`,
-            type: invoice.invoice_type === 'Purchase Invoice' ? 'فاتورة شراء' : 'مرتجع شراء',
-            amount: amount,
+            type: operationType,
+            amount: netAmount,
+            invoiceValue: invoiceAmount,
+            paidAmount: paidAmount,
             invoiceId: invoice.id,
+            paymentId: linkedPayment?.id || null,
             safe_name: (invoice as any).record?.name || null,
             employee_name: (invoice as any).creator?.full_name || null
           })
         }
       })
 
-      // Add payments
-      payments?.forEach((payment) => {
-        if (payment.created_at) {  // Add null check
-          // التحقق إذا كانت سلفة من خلال الملاحظات
-          const isLoan = payment.notes?.startsWith('سلفة')
+      // Add standalone payments (not linked to any invoice)
+      standalonePayments.forEach((payment) => {
+        // التحقق إذا كانت سلفة من خلال الملاحظات
+        const isLoan = payment.notes?.startsWith('سلفة')
 
-          // Get safe name from map and employee name from joined data
-          const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
-          const employeeName = (payment as any).creator?.full_name || null
+        // Get safe name from map and employee name from joined data
+        const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
+        const employeeName = (payment as any).creator?.full_name || null
+        const paymentAmount = Math.abs(payment.amount)
 
-          if (isLoan) {
-            // السلفة من المورد تزيد الرصيد المستحق له
-            statements.push({
-              id: statements.length + 1,
-              date: new Date(payment.created_at),
-              description: payment.notes,
-              type: 'سلفة',
-              amount: payment.amount, // Positive because it increases the balance
-              paymentId: payment.id,
-              safe_name: safeName,
-              employee_name: employeeName
-            })
-          } else {
-            // الدفعة للمورد تنقص الرصيد المستحق له
-            statements.push({
-              id: statements.length + 1,
-              date: new Date(payment.created_at),
-              description: payment.notes || 'دفعة',
-              type: 'دفعة',
-              amount: -payment.amount, // Negative because it reduces the balance
-              paymentId: payment.id,
-              safe_name: safeName,
-              employee_name: employeeName
-            })
-          }
+        if (isLoan) {
+          // السلفة من المورد تزيد الرصيد المستحق له
+          statements.push({
+            id: statements.length + 1,
+            date: new Date(payment.created_at),
+            description: payment.notes,
+            type: 'سلفة',
+            amount: paymentAmount, // Positive because it increases the balance
+            invoiceValue: 0,
+            paidAmount: paymentAmount,
+            paymentId: payment.id,
+            safe_name: safeName,
+            employee_name: employeeName
+          })
+        } else {
+          // الدفعة للمورد تنقص الرصيد المستحق له
+          statements.push({
+            id: statements.length + 1,
+            date: new Date(payment.created_at),
+            description: payment.notes || 'دفعة',
+            type: 'دفعة',
+            amount: -paymentAmount, // Negative because it reduces the balance
+            invoiceValue: 0,
+            paidAmount: paymentAmount,
+            paymentId: payment.id,
+            safe_name: safeName,
+            employee_name: employeeName
+          })
         }
       })
 
@@ -932,6 +973,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           const saleDate = new Date(sale.created_at)
           const isReturn = sale.invoice_type === 'Sale Return'
           const typeName = isReturn ? 'مرتجع بيع (عميل مرتبط)' : 'فاتورة بيع (عميل مرتبط)'
+          const saleAmount = Math.abs(sale.total_amount)
 
           statements.push({
             id: statements.length + 1,
@@ -939,7 +981,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             description: `${typeName} - ${sale.invoice_number}`,
             type: typeName,
             // Sale to linked customer reduces supplier balance, return increases it
-            amount: isReturn ? Math.abs(sale.total_amount) : -Math.abs(sale.total_amount),
+            amount: isReturn ? saleAmount : -saleAmount,
+            invoiceValue: saleAmount,
+            paidAmount: 0,
             saleId: sale.id,
             isFromLinkedCustomer: true,
             linkedCustomerName: (sale as any).customer?.name || null,
@@ -955,6 +999,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           const isLoan = payment.notes?.startsWith('سلفة')
           const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
           const employeeName = (payment as any).creator?.full_name || null
+          const paymentAmount = Math.abs(payment.amount)
 
           if (isLoan) {
             // Customer loan (سلفة) - we gave them money, increases what they owe us
@@ -964,7 +1009,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               date: new Date(payment.created_at),
               description: `${payment.notes} (عميل مرتبط)`,
               type: 'سلفة (عميل مرتبط)',
-              amount: -Math.abs(payment.amount), // Negative - decreases supplier balance
+              amount: -paymentAmount, // Negative - decreases supplier balance
+              invoiceValue: 0,
+              paidAmount: paymentAmount,
               customerPaymentId: payment.id,
               isFromLinkedCustomer: true,
               safe_name: safeName,
@@ -978,7 +1025,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               date: new Date(payment.created_at),
               description: `${payment.notes || 'دفعة'} (عميل مرتبط)`,
               type: 'دفعة (عميل مرتبط)',
-              amount: Math.abs(payment.amount), // Positive - increases supplier balance
+              amount: paymentAmount, // Positive - increases supplier balance
+              invoiceValue: 0,
+              paidAmount: paymentAmount,
               customerPaymentId: payment.id,
               isFromLinkedCustomer: true,
               safe_name: safeName,
@@ -1002,6 +1051,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           description: 'رصيد افتتاحي',
           type: 'رصيد أولي',
           amount: openingBalance,
+          invoiceValue: Math.abs(openingBalance),
+          paidAmount: 0,
           safe_name: null,
           employee_name: null
         })
@@ -1889,21 +1940,31 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       )
     },
     {
-      id: 'amount',
-      header: 'المبلغ',
-      accessor: 'amount',
-      width: 140,
+      id: 'invoiceValue',
+      header: 'قيمة الفاتورة',
+      accessor: 'invoiceValue',
+      width: 130,
+      render: (value: number, item: any) => (
+        <span className="text-gray-300 font-medium">
+          {value > 0 ? formatPrice(value) : '-'}
+        </span>
+      )
+    },
+    {
+      id: 'paidAmount',
+      header: 'المبلغ المدفوع',
+      accessor: 'paidAmount',
+      width: 130,
       render: (value: number, item: any) => {
         // Determine color based on whether it increases or decreases balance
         const isDebit = item.type === 'فاتورة شراء' || item.type === 'سلفة' || item.type === 'رصيد أولي' || item.type.includes('مرتجع بيع')
         const isCredit = item.type === 'دفعة' || item.type === 'مرتجع شراء' || item.type.includes('فاتورة بيع')
-        const isPositive = value > 0
 
         return (
           <span className={`font-medium ${
             isDebit ? 'text-amber-400' : isCredit ? 'text-gray-400' : 'text-gray-300'
           }`}>
-            {isPositive ? '+' : '-'}{formatPrice(Math.abs(value))}
+            {isDebit ? '+' : '-'}{formatPrice(Math.abs(value))}
           </span>
         )
       }

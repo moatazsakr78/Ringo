@@ -790,11 +790,11 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         return
       }
 
-      // Get all payments for this customer
+      // Get all payments for this customer (including sale_id for linking)
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('customer_payments')
         .select(`
-          id, amount, notes, created_at, payment_date, safe_id,
+          id, amount, notes, created_at, payment_date, safe_id, sale_id,
           creator:user_profiles(full_name)
         `)
         .eq('customer_id', customer.id)
@@ -865,28 +865,75 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       // Build statement array
       const statements: any[] = []
 
-      // Add sales
+      // Create a map of payments linked to sales
+      const paymentsBySale = new Map<string, any>()
+      const standalonePayments: any[] = []
+
+      paymentsData?.forEach((payment) => {
+        if (payment.created_at) {
+          const linkedSaleId = (payment as any).sale_id
+          if (linkedSaleId) {
+            // Payment is linked to a sale - accumulate if multiple payments
+            const existing = paymentsBySale.get(linkedSaleId)
+            if (existing) {
+              // Add to existing payment amount
+              paymentsBySale.set(linkedSaleId, {
+                ...existing,
+                amount: existing.amount + payment.amount
+              })
+            } else {
+              paymentsBySale.set(linkedSaleId, payment)
+            }
+          } else {
+            // Standalone payment (not linked to any sale)
+            standalonePayments.push(payment)
+          }
+        }
+      })
+
+      // Add sales (merged with linked payments if any)
       // Note: Sale Returns are already stored as negative values in the database
       salesData?.forEach(sale => {
         if (sale.created_at) {
           const saleDate = new Date(sale.created_at)
           const isReturn = sale.invoice_type === 'Sale Return'
-          const typeName = isReturn ? 'مرتجع بيع' : 'فاتورة بيع'
+          const invoiceAmount = Math.abs(sale.total_amount)
 
-          // Get actual paid amount from cash drawer transactions
-          // If no transaction found, paid amount is 0 (credit sale)
-          const actualPaidAmount = paidAmountsMap.get(sale.id) || 0
+          // Check if there's a linked payment for this sale
+          const linkedPayment = paymentsBySale.get(sale.id)
+          // Also check cash drawer transactions for legacy data
+          const drawerPaidAmount = paidAmountsMap.get(sale.id) || 0
           const saleTx = saleTransactionsMap.get(sale.id)
+
+          // Use linked payment amount if available, otherwise use drawer transaction
+          const hasPaidAmount = (linkedPayment && linkedPayment.amount > 0) || drawerPaidAmount > 0
+          const paidAmount = linkedPayment ? Math.abs(linkedPayment.amount) : Math.abs(drawerPaidAmount)
+
+          // Determine operation type based on whether there's a linked payment
+          let operationType: string
+          if (isReturn) {
+            operationType = hasPaidAmount ? 'مرتجع بيع - دفعة' : 'مرتجع بيع'
+          } else {
+            operationType = hasPaidAmount ? 'فاتورة بيع - دفعة' : 'فاتورة بيع'
+          }
+
+          // For balance calculation: sale adds to customer balance, payment subtracts
+          // Net effect = invoiceAmount - paidAmount (for normal sales)
+          // For returns: -invoiceAmount + paidAmount
+          const netAmount = isReturn
+            ? -invoiceAmount + paidAmount  // Return: -invoice + refund
+            : invoiceAmount - paidAmount   // Sale: +invoice - payment
 
           statements.push({
             id: `sale-${sale.id}`,
             saleId: sale.id,
             date: saleDate,
-            description: `${typeName} - ${sale.invoice_number}`,
-            type: typeName,
-            amount: sale.total_amount, // Already negative for returns
-            invoiceValue: Math.abs(sale.total_amount),
-            paidAmount: Math.abs(actualPaidAmount), // Use actual paid amount from transactions
+            description: `فاتورة ${sale.invoice_number}`,
+            type: operationType,
+            amount: netAmount,
+            invoiceValue: invoiceAmount,
+            paidAmount: paidAmount,
+            paymentId: linkedPayment?.id || null,
             balance: 0, // Will be calculated
             isNegative: isReturn,
             safe_name: (sale as any).record?.name || saleTx?.record?.name || null,
@@ -895,48 +942,46 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         }
       })
 
-      // Add payments
-      paymentsData?.forEach(payment => {
-        if (payment.created_at) {
-          const paymentDate = new Date(payment.created_at)
-          // التحقق إذا كانت سلفة من خلال الملاحظات
-          const isLoan = payment.notes?.startsWith('سلفة')
+      // Add standalone payments (not linked to any sale)
+      standalonePayments.forEach(payment => {
+        const paymentDate = new Date(payment.created_at)
+        // التحقق إذا كانت سلفة من خلال الملاحظات
+        const isLoan = payment.notes?.startsWith('سلفة')
 
-          // Get safe name from map and employee name from joined data
-          const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
-          const employeeName = (payment as any).creator?.full_name || null
+        // Get safe name from map and employee name from joined data
+        const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
+        const employeeName = (payment as any).creator?.full_name || null
 
-          if (isLoan) {
-            // السلفة تزيد الرصيد المستحق على العميل
-            statements.push({
-              id: `payment-${payment.id}`,
-              date: paymentDate,
-              description: payment.notes,
-              type: 'سلفة',
-              amount: payment.amount, // Positive because it increases balance
-              invoiceValue: payment.amount,
-              paidAmount: 0,
-              balance: 0,
-              isNegative: false,
-              safe_name: safeName,
-              employee_name: employeeName
-            })
-          } else {
-            // الدفعة العادية تنقص الرصيد المستحق على العميل
-            statements.push({
-              id: `payment-${payment.id}`,
-              date: paymentDate,
-              description: payment.notes ? `دفعة - ${payment.notes}` : 'دفعة',
-              type: 'دفعة',
-              amount: -payment.amount, // Negative because it reduces balance
-              invoiceValue: 0,
-              paidAmount: payment.amount,
-              balance: 0,
-              isNegative: false,
-              safe_name: safeName,
-              employee_name: employeeName
-            })
-          }
+        if (isLoan) {
+          // السلفة تزيد الرصيد المستحق على العميل
+          statements.push({
+            id: `payment-${payment.id}`,
+            date: paymentDate,
+            description: payment.notes,
+            type: 'سلفة',
+            amount: payment.amount, // Positive because it increases balance
+            invoiceValue: payment.amount,
+            paidAmount: 0,
+            balance: 0,
+            isNegative: false,
+            safe_name: safeName,
+            employee_name: employeeName
+          })
+        } else {
+          // الدفعة العادية تنقص الرصيد المستحق على العميل
+          statements.push({
+            id: `payment-${payment.id}`,
+            date: paymentDate,
+            description: payment.notes || 'دفعة',
+            type: 'دفعة',
+            amount: -payment.amount, // Negative because it reduces balance
+            invoiceValue: 0,
+            paidAmount: payment.amount,
+            balance: 0,
+            isNegative: false,
+            safe_name: safeName,
+            employee_name: employeeName
+          })
         }
       })
 

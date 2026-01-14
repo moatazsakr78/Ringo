@@ -16,6 +16,8 @@ export interface CreatePurchaseInvoiceParams {
   paymentMethod?: string
   notes?: string
   isReturn?: boolean
+  paidAmount?: number
+  userId?: string
 }
 
 // Helper function to create new products in database
@@ -53,7 +55,9 @@ export async function createPurchaseInvoice({
   selections,
   paymentMethod = 'cash',
   notes,
-  isReturn = false
+  isReturn = false,
+  paidAmount = 0,
+  userId
 }: CreatePurchaseInvoiceParams) {
   if (!selections.supplier || !selections.warehouse) {
     throw new Error('يجب تحديد المورد والمخزن قبل إنشاء فاتورة الشراء')
@@ -107,8 +111,14 @@ export async function createPurchaseInvoice({
     const discountAmount = 0 // You can add discount calculation here if needed
     const netAmount = totalAmount - discountAmount + taxAmount
 
-    // Generate invoice number
-    const invoiceNumber = `PINV-${Date.now()}-${Math.floor(Math.random() * 1000)}`
+    // Generate unique invoice number using database sequence (atomic operation)
+    // @ts-ignore - function exists in database but not in generated types
+    const { data: seqData, error: seqError } = await supabase.rpc('get_next_purchase_invoice_number' as any)
+    if (seqError) {
+      console.error('Error generating purchase invoice number:', seqError)
+      throw new Error('فشل في توليد رقم فاتورة الشراء')
+    }
+    const invoiceNumber = seqData as string
 
     // Get current time
     const now = new Date()
@@ -316,7 +326,7 @@ export async function createPurchaseInvoice({
           item.quantity,
           item.price
         )
-        
+
         if (costUpdate) {
           console.log(`💰 Updated cost for product ${item.product.id}:`, {
             oldCost: 'calculated from previous data',
@@ -333,11 +343,82 @@ export async function createPurchaseInvoice({
       }
     }
 
+    // Track payment status
+    let paymentCreated = false
+    let paymentErrorMsg: string | null = null
+
+    // Handle payment if paidAmount > 0
+    if (paidAmount > 0 && !isReturn) {
+      console.log('💳 Processing supplier payment:', paidAmount)
+
+      // Log payment data for debugging
+      console.log('📦 Payment data to insert:', {
+        supplier_id: selections.supplier.id,
+        amount: paidAmount,
+        payment_method: paymentMethod,
+        safe_id: hasNoSafe ? null : selections.record?.id,
+        hasNoSafe,
+        recordExists: !!selections.record
+      })
+
+      // Create supplier payment record
+      const { error: paymentError } = await supabase
+        .from('supplier_payments')
+        .insert({
+          supplier_id: selections.supplier.id,
+          amount: paidAmount,
+          payment_method: paymentMethod,
+          notes: `دفعة من فاتورة رقم ${invoiceNumber}`,
+          payment_date: now.toISOString().split('T')[0],
+          created_by: userId || null,
+          safe_id: hasNoSafe ? null : selections.record?.id,
+          purchase_invoice_id: purchaseData.id
+        })
+
+      if (paymentError) {
+        console.error('❌ Error creating supplier payment:', paymentError)
+        paymentErrorMsg = paymentError.message
+        // Don't fail the entire invoice, just log the error
+      } else {
+        paymentCreated = true
+        console.log('✅ Supplier payment created successfully')
+
+        // Update safe balance (deduct payment amount)
+        if (!hasNoSafe && selections.record?.id) {
+          // Get current balance
+          const { data: safeData, error: safeGetError } = await supabase
+            .from('records')
+            .select('balance')
+            .eq('id', selections.record.id)
+            .single()
+
+          if (!safeGetError && safeData) {
+            const currentBalance = safeData.balance || 0
+            const newBalance = currentBalance - paidAmount
+
+            const { error: safeUpdateError } = await supabase
+              .from('records')
+              .update({ balance: newBalance })
+              .eq('id', selections.record.id)
+
+            if (safeUpdateError) {
+              console.error('Error updating safe balance:', safeUpdateError)
+            } else {
+              console.log(`✅ Safe balance updated: ${currentBalance} → ${newBalance}`)
+            }
+          }
+        }
+      }
+    }
+
     return {
       success: true,
       invoiceId: purchaseData.id,
       invoiceNumber: invoiceNumber,
       totalAmount: totalAmount,
+      paidAmount: paidAmount,
+      paymentCreated: paymentCreated,
+      paymentError: paymentErrorMsg,
       message: 'تم إنشاء فاتورة الشراء وتحديث تكاليف المنتجات بنجاح'
     }
 
