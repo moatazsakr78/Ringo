@@ -2455,8 +2455,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       header: '#',
       accessor: 'index',
       width: 50,
-      render: (value: number) => (
-        <span className="text-gray-400">{value}</span>
+      render: (value: number, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
       )
     },
     {
@@ -2464,43 +2464,37 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       header: 'التاريخ',
       accessor: 'displayDate',
       width: 120,
-      render: (value: string) => <span className="text-white">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'time',
       header: '⏰ الساعة',
       accessor: 'displayTime',
       width: 80,
-      render: (value: string) => <span className="text-blue-400">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'description',
       header: 'البيان',
       accessor: 'description',
       width: 250,
-      render: (value: string) => <span className="text-white">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'type',
       header: 'نوع العملية',
       accessor: 'type',
       width: 120,
-      render: (value: string) => (
+      render: (value: string, item: any) => (
         <span className={`px-2 py-1 rounded text-xs font-medium ${
-          value === 'فاتورة بيع'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value === 'دفعة'
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance
-            : value === 'مرتجع بيع'
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance
-            : value === 'سلفة'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value === 'رصيد افتتاحي'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value.includes('فاتورة شراء')
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance (linked supplier purchase)
-            : value.includes('مرتجع شراء')
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance (linked supplier return)
+          item.amount >= 0
+            ? 'bg-amber-600/20 text-amber-400 border border-amber-600'
             : 'bg-gray-600/20 text-gray-400 border border-gray-600'
         }`}>
           {value}
@@ -2513,7 +2507,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'invoiceValue',
       width: 130,
       render: (value: number, item: any) => (
-        <span className="text-gray-300 font-medium">
+        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>
           {value > 0 ? formatPrice(value, 'system') : '-'}
         </span>
       )
@@ -2525,12 +2519,11 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       width: 130,
       render: (value: number, item: any) => {
         // Determine color and sign based on whether it increases or decreases balance
-        const isDebit = item.type === 'فاتورة بيع' || item.type === 'سلفة' || item.type === 'رصيد افتتاحي' || item.type.includes('مرتجع شراء')
-        const isCredit = item.type === 'دفعة' || item.type === 'مرتجع بيع' || item.type.includes('فاتورة شراء')
+        const isDebit = item.amount >= 0
 
         return (
           <span className={`font-medium ${
-            isDebit ? 'text-amber-400' : isCredit ? 'text-gray-400' : 'text-gray-300'
+            isDebit ? 'text-amber-400' : 'text-gray-400'
           }`}>
             {isDebit ? '+' : '-'}{formatPrice(value, 'system')}
           </span>
@@ -2542,21 +2535,27 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       header: 'الرصيد',
       accessor: 'balance',
       width: 140,
-      render: (value: number) => <span className="text-white font-medium">{formatPrice(value, 'system')}</span>
+      render: (value: number, item: any) => (
+        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>{formatPrice(value, 'system')}</span>
+      )
     },
     {
       id: 'safe_name',
       header: 'الخزنة',
       accessor: 'safe_name',
       width: 120,
-      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
+      )
     },
     {
       id: 'employee_name',
       header: 'الموظف',
       accessor: 'employee_name',
       width: 120,
-      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
+      )
     }
   ]
 

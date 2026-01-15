@@ -1888,7 +1888,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'id',
       width: 50,
       render: (value: any, item: any, index: number) => (
-        <span className="text-gray-400">{item.id}</span>
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{item.id}</span>
       )
     },
     {
@@ -1896,43 +1896,37 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       header: 'التاريخ',
       accessor: 'displayDate',
       width: 120,
-      render: (value: string) => <span className="text-white">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'time',
       header: '⏰ الساعة',
       accessor: 'displayTime',
       width: 80,
-      render: (value: string) => <span className="text-blue-400">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'description',
       header: 'البيان',
       accessor: 'description',
       width: 300,
-      render: (value: string) => <span className="text-white">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
+      )
     },
     {
       id: 'type',
       header: 'نوع العملية',
       accessor: 'type',
       width: 150,
-      render: (value: string) => (
+      render: (value: string, item: any) => (
         <span className={`px-2 py-1 rounded text-xs font-medium ${
-          value === 'فاتورة شراء'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value === 'دفعة'
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance
-            : value === 'مرتجع شراء'
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance
-            : value === 'سلفة'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value === 'رصيد أولي'
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance
-            : value.includes('فاتورة بيع')
-            ? 'bg-gray-600/20 text-gray-400 border border-gray-600' // Gray - decreases balance (linked customer sale)
-            : value.includes('مرتجع بيع')
-            ? 'bg-amber-600/20 text-amber-400 border border-amber-600' // Yellow - increases balance (linked customer return)
+          item.amount >= 0
+            ? 'bg-amber-600/20 text-amber-400 border border-amber-600'
             : 'bg-gray-600/20 text-gray-400 border border-gray-600'
         }`}>
           {value}
@@ -1945,8 +1939,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'invoiceValue',
       width: 130,
       render: (value: number, item: any) => (
-        <span className="text-gray-300 font-medium">
-          {value > 0 ? formatPrice(value) : '-'}
+        <span className="font-medium text-green-500">
+          {value > 0 ? `↑ ${formatPrice(value)}` : '-'}
         </span>
       )
     },
@@ -1956,15 +1950,39 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'paidAmount',
       width: 130,
       render: (value: number, item: any) => {
-        // Determine color based on whether it increases or decreases balance
-        const isDebit = item.type === 'فاتورة شراء' || item.type === 'سلفة' || item.type === 'رصيد أولي' || item.type.includes('مرتجع بيع')
-        const isCredit = item.type === 'دفعة' || item.type === 'مرتجع شراء' || item.type.includes('فاتورة بيع')
-
+        // Show "-" when payment is 0, otherwise show with down arrow in red
+        if (value === 0) {
+          return <span className="font-medium text-gray-500">-</span>
+        }
         return (
-          <span className={`font-medium ${
-            isDebit ? 'text-amber-400' : isCredit ? 'text-gray-400' : 'text-gray-300'
-          }`}>
-            {isDebit ? '+' : '-'}{formatPrice(Math.abs(value))}
+          <span className="font-medium text-red-500">
+            ↓ {formatPrice(Math.abs(value))}
+          </span>
+        )
+      }
+    },
+    {
+      id: 'netAmount',
+      header: 'الصافي',
+      accessor: 'netAmount',
+      width: 130,
+      render: (value: number, item: any) => {
+        const netAmount = (item.invoiceValue || 0) - (item.paidAmount || 0);
+
+        if (netAmount === 0) {
+          return <span className="font-medium text-gray-500">-</span>
+        }
+
+        const isPositive = netAmount > 0;
+        return (
+          <span className="font-medium">
+            <span className={isPositive ? 'text-green-500' : 'text-red-500'}>
+              {isPositive ? '↑' : '↓'}
+            </span>
+            {' '}
+            <span className="text-blue-500">
+              {formatPrice(Math.abs(netAmount))}
+            </span>
           </span>
         )
       }
@@ -1974,21 +1992,27 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       header: 'الرصيد',
       accessor: 'displayBalance',
       width: 140,
-      render: (value: string) => <span className="text-white font-medium">{value}</span>
+      render: (value: string, item: any) => (
+        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>{value}</span>
+      )
     },
     {
       id: 'safe_name',
       header: 'الخزنة',
       accessor: 'safe_name',
       width: 120,
-      render: (value: string) => <span className="text-cyan-400">{value || '-'}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
+      )
     },
     {
       id: 'employee_name',
       header: 'الموظف',
       accessor: 'employee_name',
       width: 120,
-      render: (value: string) => <span className="text-yellow-400">{value || '-'}</span>
+      render: (value: string, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
+      )
     }
   ]
 
