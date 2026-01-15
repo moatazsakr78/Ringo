@@ -18,13 +18,24 @@ interface SupplierDetailsModalProps {
 
 type ViewMode = 'split' | 'invoices-only' | 'details-only'
 
+// localStorage keys for UI state persistence
+const DIVIDER_POSITION_KEY = 'supplier-details-divider-position'
+const INVOICE_COLUMNS_VISIBILITY_KEY = 'supplier-details-invoice-columns-visibility'
+const DETAILS_COLUMNS_VISIBILITY_KEY = 'supplier-details-details-columns-visibility'
+
 export default function SupplierDetailsModal({ isOpen, onClose, supplier }: SupplierDetailsModalProps) {
   const formatPrice = useFormatPrice();
   const [selectedTransaction, setSelectedTransaction] = useState(0) // First row selected (index 0)
   const [showSupplierDetails, setShowSupplierDetails] = useState(true)
   const [activeTab, setActiveTab] = useState('invoices') // 'invoices', 'payments', 'statement'
   const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const [dividerPosition, setDividerPosition] = useState(50) // Percentage
+  const [dividerPosition, setDividerPosition] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(DIVIDER_POSITION_KEY)
+      return saved ? parseFloat(saved) : 50
+    }
+    return 50
+  })
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -93,16 +104,32 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
   const [showColumnManager, setShowColumnManager] = useState(false)
   const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print'>('invoices')
 
-  // Visible columns state - default all visible
-  const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>([
-    'index', 'invoice_number', 'created_at', 'time', 'invoice_type',
-    'supplier_name', 'supplier_phone', 'total_amount', 'notes',
-    'safe_name', 'employee_name'
-  ])
-  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>([
-    'index', 'category', 'productName', 'quantity', 'barcode',
-    'unit_purchase_price', 'discount_amount', 'total', 'notes'
-  ])
+  // Visible columns state - load from localStorage or use defaults
+  const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(INVOICE_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'invoice_number', 'created_at', 'time', 'invoice_type',
+      'supplier_name', 'supplier_phone', 'total_amount', 'notes',
+      'safe_name', 'employee_name']
+  })
+  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(DETAILS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'category', 'productName', 'quantity', 'barcode',
+      'unit_purchase_price', 'discount_amount', 'total', 'notes']
+  })
   const [visiblePrintColumns, setVisiblePrintColumns] = useState<string[]>([
     'index', 'productName', 'category', 'quantity', 'unit_purchase_price', 'discount_amount', 'total'
   ])
@@ -121,6 +148,19 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Save column visibility to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(INVOICE_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleInvoiceColumns))
+    }
+  }, [visibleInvoiceColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DETAILS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleDetailsColumns))
+    }
+  }, [visibleDetailsColumns])
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (viewMode !== 'split' || activeTab !== 'invoices') return
     setIsDragging(true)
@@ -138,7 +178,11 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
-  }, [])
+    // Save divider position to localStorage only when drag ends (smooth performance)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(DIVIDER_POSITION_KEY, dividerPosition.toString())
+    }
+  }, [dividerPosition])
 
   // Add global mouse event listeners
   useEffect(() => {
@@ -3073,6 +3117,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                             columns={statementColumns}
                             data={accountStatements}
                             onRowDoubleClick={handleStatementRowDoubleClick}
+                            reportType="SUPPLIER_STATEMENT_REPORT"
                           />
                         )}
                       </>
@@ -3163,6 +3208,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                             data={purchaseInvoices}
                             selectedRowId={purchaseInvoices[selectedTransaction]?.id?.toString() || null}
                             onRowClick={(invoice: any, index: number) => setSelectedTransaction(index)}
+                            reportType="SUPPLIER_INVOICES_REPORT"
                           />
                         )}
                       </div>
@@ -3265,6 +3311,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                                 ? 'bg-yellow-500/30 hover:bg-yellow-500/40'
                                 : ''
                             }
+                            reportType="SUPPLIER_INVOICE_DETAILS_REPORT"
                           />
                         )}
                       </div>
@@ -3309,6 +3356,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                           className="h-full w-full"
                           columns={paymentsColumns}
                           data={supplierPayments}
+                          reportType="SUPPLIER_PAYMENTS_REPORT"
                         />
                       )}
                     </div>
