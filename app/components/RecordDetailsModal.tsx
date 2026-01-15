@@ -8,6 +8,13 @@ import ConfirmDeleteModal from './ConfirmDeleteModal'
 import SimpleDateFilterModal, { DateFilter } from './SimpleDateFilterModal'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
 
+// localStorage keys for UI state persistence
+const RECORD_DIVIDER_POSITION_KEY = 'record-details-divider-position'
+const RECORD_STATEMENT_COLUMNS_VISIBILITY_KEY = 'record-details-statement-columns-visibility'
+const RECORD_TRANSACTIONS_COLUMNS_VISIBILITY_KEY = 'record-details-transactions-columns-visibility'
+const RECORD_PAYMENTS_COLUMNS_VISIBILITY_KEY = 'record-details-payments-columns-visibility'
+const RECORD_DETAILS_COLUMNS_VISIBILITY_KEY = 'record-details-details-columns-visibility'
+
 interface RecordDetailsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -22,7 +29,13 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
   const [showRecordDetails, setShowRecordDetails] = useState(true)
   const [activeTab, setActiveTab] = useState('transactions') // 'transactions', 'payments', 'statement'
   const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const [dividerPosition, setDividerPosition] = useState(50) // Percentage
+  const [dividerPosition, setDividerPosition] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(RECORD_DIVIDER_POSITION_KEY)
+      return saved ? parseFloat(saved) : 50
+    }
+    return 50
+  })
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -52,6 +65,59 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
   const [showDateFilter, setShowDateFilter] = useState(false)
   const [dateFilter, setDateFilter] = useState<DateFilter>({ type: 'today' })
   const [isLoadingPreferences, setIsLoadingPreferences] = useState(true)
+
+  // Column manager state
+  const [showColumnManager, setShowColumnManager] = useState(false)
+  const [columnManagerTab, setColumnManagerTab] = useState<'transactions' | 'details' | 'statement' | 'payments'>('transactions')
+
+  // Visible columns states - load from localStorage or use defaults
+  const [visibleStatementColumns, setVisibleStatementColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(RECORD_STATEMENT_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'date', 'time', 'description', 'type', 'amount', 'balance']
+  })
+
+  const [visibleTransactionColumns, setVisibleTransactionColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(RECORD_TRANSACTIONS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'invoice_number', 'created_at', 'time', 'client_name', 'client_phone', 'total_amount', 'payment_method', 'invoice_type', 'notes']
+  })
+
+  const [visiblePaymentsColumns, setVisiblePaymentsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(RECORD_PAYMENTS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'date', 'time', 'amount', 'notes']
+  })
+
+  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(RECORD_DETAILS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'category', 'productName', 'quantity', 'barcode', 'unit_price', 'discount_amount', 'total', 'notes']
+  })
 
   // Calculate real record balance based on filtered transactions
   const recordBalance = useMemo(() => {
@@ -121,6 +187,31 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
     }
   }, [isOpen, record?.id])
 
+  // Save column visibility to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECORD_STATEMENT_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleStatementColumns))
+    }
+  }, [visibleStatementColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECORD_TRANSACTIONS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleTransactionColumns))
+    }
+  }, [visibleTransactionColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECORD_PAYMENTS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visiblePaymentsColumns))
+    }
+  }, [visiblePaymentsColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECORD_DETAILS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleDetailsColumns))
+    }
+  }, [visibleDetailsColumns])
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (viewMode !== 'split' || activeTab !== 'transactions') return
     setIsDragging(true)
@@ -138,7 +229,11 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
-  }, [])
+    // Save divider position to localStorage only when drag ends (smooth performance)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(RECORD_DIVIDER_POSITION_KEY, dividerPosition.toString())
+    }
+  }, [dividerPosition])
 
   // Add global mouse event listeners
   useEffect(() => {
@@ -1272,6 +1367,87 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
     }
   ];
 
+  // Column definitions for column manager
+  const allStatementColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'date', label: 'التاريخ', required: true },
+    { id: 'time', label: 'الساعة', required: false },
+    { id: 'description', label: 'البيان', required: false },
+    { id: 'type', label: 'نوع العملية', required: false },
+    { id: 'amount', label: 'المبلغ', required: true },
+    { id: 'balance', label: 'الرصيد', required: true }
+  ]
+
+  const allTransactionColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'invoice_number', label: 'رقم الفاتورة', required: true },
+    { id: 'created_at', label: 'التاريخ', required: true },
+    { id: 'time', label: 'الوقت', required: false },
+    { id: 'client_name', label: 'العميل/المورد', required: false },
+    { id: 'client_phone', label: 'الهاتف', required: false },
+    { id: 'total_amount', label: 'المبلغ الإجمالي', required: true },
+    { id: 'payment_method', label: 'طريقة الدفع', required: false },
+    { id: 'invoice_type', label: 'نوع الفاتورة', required: false },
+    { id: 'notes', label: 'البيان', required: false }
+  ]
+
+  const allPaymentsColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'date', label: 'التاريخ', required: true },
+    { id: 'time', label: 'الساعة', required: false },
+    { id: 'amount', label: 'المبلغ', required: true },
+    { id: 'notes', label: 'البيان', required: false }
+  ]
+
+  const allDetailsColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'category', label: 'المجموعة', required: false },
+    { id: 'productName', label: 'اسم المنتج', required: true },
+    { id: 'quantity', label: 'الكمية', required: true },
+    { id: 'barcode', label: 'الباركود', required: false },
+    { id: 'unit_price', label: 'السعر', required: true },
+    { id: 'discount_amount', label: 'خصم', required: false },
+    { id: 'total', label: 'الإجمالي', required: true },
+    { id: 'notes', label: 'ملاحظات', required: false }
+  ]
+
+  // Toggle column visibility
+  const toggleColumn = (columnId: string, type: 'statement' | 'transactions' | 'payments' | 'details') => {
+    if (type === 'statement') {
+      const colDef = allStatementColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleStatementColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'transactions') {
+      const colDef = allTransactionColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleTransactionColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'payments') {
+      const colDef = allPaymentsColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisiblePaymentsColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'details') {
+      const colDef = allDetailsColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleDetailsColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    }
+  }
+
   // Define columns for each table - exactly like Products page structure
   const statementColumns = [
     { 
@@ -1338,14 +1514,14 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
         </span>
       )
     },
-    { 
-      id: 'balance', 
-      header: 'الرصيد', 
-      accessor: 'balance', 
+    {
+      id: 'balance',
+      header: 'الرصيد',
+      accessor: 'balance',
       width: 140,
       render: (value: string) => <span className="text-blue-400 font-medium">{value}</span>
     }
-  ]
+  ].filter(col => visibleStatementColumns.includes(col.id))
 
   const transactionColumns = [
     { 
@@ -1489,7 +1665,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
         return <span className="text-gray-400">{cleanNotes || '-'}</span>
       }
     }
-  ]
+  ].filter(col => visibleTransactionColumns.includes(col.id))
 
   const paymentsColumns = [
     { 
@@ -1529,7 +1705,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
       width: 200,
       render: (value: string) => <span className="text-gray-400">{value}</span>
     }
-  ]
+  ].filter(col => visiblePaymentsColumns.includes(col.id))
 
   const transactionDetailsColumns = [
     {
@@ -1625,14 +1801,14 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
         return <span className="text-green-400 font-bold">{total.toFixed(2)}</span>
       }
     },
-    { 
-      id: 'notes', 
-      header: 'ملاحظات', 
-      accessor: 'notes', 
+    {
+      id: 'notes',
+      header: 'ملاحظات',
+      accessor: 'notes',
       width: 150,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
     }
-  ]
+  ].filter(col => visibleDetailsColumns.includes(col.id))
 
   return (
     <>
@@ -1674,7 +1850,10 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
                     <span className="text-sm">حذف الفاتورة</span>
                   </button>
 
-                  <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
+                  <button
+                    onClick={() => setShowColumnManager(true)}
+                    className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors"
+                  >
                     <TableCellsIcon className="h-5 w-5 mb-1" />
                     <span className="text-sm">إدارة الأعمدة</span>
                   </button>
@@ -1999,6 +2178,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
                         className="h-full w-full"
                         columns={statementColumns}
                         data={accountStatements}
+                        reportType="RECORD_STATEMENT_REPORT"
                       />
                     </div>
                   </div>
@@ -2036,6 +2216,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
                           data={allTransactions}
                           selectedRowId={allTransactions[selectedTransaction]?.id?.toString() || null}
                           onRowClick={(transaction: any, index: number) => setSelectedTransaction(index)}
+                          reportType="RECORD_TRANSACTIONS_REPORT"
                         />
                       )}
                     </div>
@@ -2091,6 +2272,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
                             className="h-full w-full"
                             columns={transactionDetailsColumns}
                             data={allTransactionItems}
+                            reportType="RECORD_TRANSACTION_DETAILS_REPORT"
                           />
                         )}
                       </div>
@@ -2122,6 +2304,7 @@ export default function RecordDetailsModal({ isOpen, onClose, record }: RecordDe
                         className="h-full w-full"
                         columns={paymentsColumns}
                         data={payments}
+                        reportType="RECORD_PAYMENTS_REPORT"
                       />
                     </div>
                   </div>

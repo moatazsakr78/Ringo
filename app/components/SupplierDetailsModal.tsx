@@ -22,6 +22,8 @@ type ViewMode = 'split' | 'invoices-only' | 'details-only'
 const DIVIDER_POSITION_KEY = 'supplier-details-divider-position'
 const INVOICE_COLUMNS_VISIBILITY_KEY = 'supplier-details-invoice-columns-visibility'
 const DETAILS_COLUMNS_VISIBILITY_KEY = 'supplier-details-details-columns-visibility'
+const STATEMENT_COLUMNS_VISIBILITY_KEY = 'supplier-details-statement-columns-visibility'
+const PAYMENTS_COLUMNS_VISIBILITY_KEY = 'supplier-details-payments-columns-visibility'
 
 export default function SupplierDetailsModal({ isOpen, onClose, supplier }: SupplierDetailsModalProps) {
   const formatPrice = useFormatPrice();
@@ -102,7 +104,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
 
   // Column manager state
   const [showColumnManager, setShowColumnManager] = useState(false)
-  const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print'>('invoices')
+  const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print' | 'statement' | 'payments'>('invoices')
 
   // Visible columns state - load from localStorage or use defaults
   const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>(() => {
@@ -134,6 +136,32 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     'index', 'productName', 'category', 'quantity', 'unit_purchase_price', 'discount_amount', 'total'
   ])
 
+  // Statement columns visibility state
+  const [visibleStatementColumns, setVisibleStatementColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(STATEMENT_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'date', 'time', 'description', 'type', 'invoiceValue', 'paidAmount', 'netAmount', 'balance', 'safe_name', 'employee_name', 'details', 'userNotes']
+  })
+
+  // Payments columns visibility state
+  const [visiblePaymentsColumns, setVisiblePaymentsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(PAYMENTS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'payment_date', 'created_at', 'amount', 'payment_method', 'notes', 'safe_name', 'employee_name']
+  })
+
   // Close save dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -160,6 +188,18 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       localStorage.setItem(DETAILS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleDetailsColumns))
     }
   }, [visibleDetailsColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(STATEMENT_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleStatementColumns))
+    }
+  }, [visibleStatementColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(PAYMENTS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visiblePaymentsColumns))
+    }
+  }, [visiblePaymentsColumns])
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (viewMode !== 'split' || activeTab !== 'invoices') return
@@ -662,10 +702,11 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
   // Handle double click on statement row
   const handleStatementRowDoubleClick = async (statement: any) => {
     // Only handle invoices (both purchase and linked sales), not payments or opening balance
-    const isInvoice = statement.type === 'فاتورة شراء' ||
-                      statement.type === 'مرتجع شراء' ||
-                      statement.type === 'فاتورة بيع (عميل مرتبط)' ||
-                      statement.type === 'مرتجع بيع (عميل مرتبط)'
+    // Using includes to match merged types like "فاتورة شراء - دفعة" and "فاتورة بيع - دفعة"
+    const isInvoice = statement.type.includes('فاتورة شراء') ||
+                      statement.type.includes('مرتجع شراء') ||
+                      statement.type.includes('فاتورة بيع') ||
+                      statement.type.includes('مرتجع بيع')
     if (!isInvoice) {
       return
     }
@@ -956,11 +997,11 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           linkedSalesData = salesData
         }
 
-        // Fetch customer payments from linked customer
+        // Fetch customer payments from linked customer (including sale_id for linking)
         const { data: customerPaymentsData, error: customerPaymentsError } = await supabase
           .from('customer_payments')
           .select(`
-            id, amount, payment_method, notes, user_notes, created_at, safe_id,
+            id, amount, payment_method, notes, user_notes, created_at, safe_id, sale_id,
             creator:user_profiles(full_name)
           `)
           .eq('customer_id', linkedCustomerId)
@@ -990,6 +1031,23 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           } else {
             // Standalone payment (not linked to any invoice)
             standalonePayments.push(payment)
+          }
+        }
+      })
+
+      // Create a map of customer payments linked to sales
+      const paymentsBySale = new Map<string, any>()
+      const standaloneCustomerPayments: any[] = []
+
+      linkedCustomerPaymentsData?.forEach((payment) => {
+        if (payment.created_at) {
+          const linkedSaleId = (payment as any).sale_id
+          if (linkedSaleId) {
+            // Payment is linked to a sale
+            paymentsBySale.set(linkedSaleId, payment)
+          } else {
+            // Standalone payment (not linked to any sale)
+            standaloneCustomerPayments.push(payment)
           }
         }
       })
@@ -1080,35 +1138,58 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         }
       })
 
-      // Add linked customer sales (reduces supplier balance - like a payment)
+      // Add linked customer sales (merged with linked payments if any)
       linkedSalesData?.forEach(sale => {
         if (sale.created_at) {
           const saleDate = new Date(sale.created_at)
           const isReturn = sale.invoice_type === 'Sale Return'
-          const typeName = isReturn ? 'مرتجع بيع (عميل مرتبط)' : 'فاتورة بيع (عميل مرتبط)'
           const saleAmount = Math.abs(sale.total_amount)
+
+          // Check if there's a linked payment for this sale
+          const linkedPayment = paymentsBySale.get(sale.id)
+          const hasPaidAmount = linkedPayment && linkedPayment.amount > 0
+          const paidAmount = hasPaidAmount ? Math.abs(linkedPayment.amount) : 0
+
+          // Determine operation type based on whether there's a linked payment
+          let typeName: string
+          if (isReturn) {
+            typeName = hasPaidAmount ? 'مرتجع بيع - دفعة' : 'مرتجع بيع'
+          } else {
+            typeName = hasPaidAmount ? 'فاتورة بيع - دفعة' : 'فاتورة بيع'
+          }
+
+          // For balance calculation:
+          // Sale reduces supplier balance, payment increases it
+          // Net effect = -saleAmount + paidAmount
+          const netAmount = isReturn
+            ? saleAmount - paidAmount   // Return: +sale - payment
+            : -saleAmount + paidAmount  // Sale: -sale + payment
+
+          // Get safe name for linked payment
+          const safeName = linkedPayment?.safe_id ? paymentSafesMap.get(linkedPayment.safe_id) || null : null
+          const employeeName = linkedPayment?.creator?.full_name || null
 
           statements.push({
             id: statements.length + 1,
             date: saleDate,
             description: `${typeName} - ${sale.invoice_number}`,
             type: typeName,
-            // Sale to linked customer reduces supplier balance, return increases it
-            amount: isReturn ? saleAmount : -saleAmount,
+            amount: netAmount,
             invoiceValue: saleAmount,
-            paidAmount: 0,
+            paidAmount: paidAmount,
             saleId: sale.id,
+            customerPaymentId: linkedPayment?.id || null,
             isFromLinkedCustomer: true,
             linkedCustomerName: (sale as any).customer?.name || null,
-            safe_name: null,
-            employee_name: null,
+            safe_name: safeName,
+            employee_name: employeeName,
             notes: null
           })
         }
       })
 
-      // Add linked customer payments (payments reduce what customer owes, so increase supplier balance)
-      linkedCustomerPaymentsData?.forEach(payment => {
+      // Add standalone linked customer payments (not linked to any sale)
+      standaloneCustomerPayments.forEach(payment => {
         if (payment.created_at) {
           const isLoan = payment.notes?.startsWith('سلفة')
           const safeName = payment.safe_id ? paymentSafesMap.get(payment.safe_id) || null : null
@@ -1121,8 +1202,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             statements.push({
               id: statements.length + 1,
               date: new Date(payment.created_at),
-              description: `${payment.notes} (عميل مرتبط)`,
-              type: 'سلفة (عميل مرتبط)',
+              description: payment.notes,
+              type: 'سلفة',
               amount: -paymentAmount, // Negative - decreases supplier balance
               invoiceValue: 0,
               paidAmount: paymentAmount,
@@ -1138,8 +1219,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             statements.push({
               id: statements.length + 1,
               date: new Date(payment.created_at),
-              description: `${payment.notes || 'دفعة'} (عميل مرتبط)`,
-              type: 'دفعة (عميل مرتبط)',
+              description: payment.notes || 'دفعة',
+              type: 'دفعة',
               amount: paymentAmount, // Positive - increases supplier balance
               invoiceValue: 0,
               paidAmount: paymentAmount,
@@ -2039,8 +2120,35 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     { id: 'total', label: 'الإجمالي', required: true }
   ]
 
+  const allStatementColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'date', label: 'التاريخ', required: true },
+    { id: 'time', label: 'الساعة', required: false },
+    { id: 'description', label: 'البيان', required: false },
+    { id: 'type', label: 'نوع العملية', required: false },
+    { id: 'invoiceValue', label: 'قيمة الفاتورة', required: false },
+    { id: 'paidAmount', label: 'المبلغ المدفوع', required: false },
+    { id: 'netAmount', label: 'الصافي', required: false },
+    { id: 'balance', label: 'الرصيد', required: true },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false },
+    { id: 'details', label: 'تفاصيل', required: false },
+    { id: 'userNotes', label: 'ملاحظات', required: false }
+  ]
+
+  const allPaymentsColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'payment_date', label: 'التاريخ', required: true },
+    { id: 'created_at', label: 'الساعة', required: false },
+    { id: 'amount', label: 'المبلغ', required: true },
+    { id: 'payment_method', label: 'طريقة الدفع', required: false },
+    { id: 'notes', label: 'البيان', required: false },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false }
+  ]
+
   // Toggle column visibility
-  const toggleColumn = (columnId: string, type: 'invoices' | 'details' | 'print') => {
+  const toggleColumn = (columnId: string, type: 'invoices' | 'details' | 'print' | 'statement' | 'payments') => {
     if (type === 'invoices') {
       const colDef = allInvoiceColumnDefs.find(c => c.id === columnId)
       if (colDef?.required) return
@@ -2057,10 +2165,26 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           ? prev.filter(id => id !== columnId)
           : [...prev, columnId]
       )
-    } else {
+    } else if (type === 'print') {
       const colDef = allPrintColumnDefs.find(c => c.id === columnId)
       if (colDef?.required) return
       setVisiblePrintColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'statement') {
+      const colDef = allStatementColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleStatementColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'payments') {
+      const colDef = allPaymentsColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisiblePaymentsColumns(prev =>
         prev.includes(columnId)
           ? prev.filter(id => id !== columnId)
           : [...prev, columnId]
@@ -2281,7 +2405,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         )
       }
     }
-  ]
+  ].filter(col => visibleStatementColumns.includes(col.id))
 
   const invoiceColumns = [
     { 
@@ -2482,7 +2606,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       width: 120,
       render: (value: string, item: any) => <span className="text-yellow-400">{item.employee_name || item.creator?.full_name || '-'}</span>
     }
-  ]
+  ].filter(col => visiblePaymentsColumns.includes(col.id))
 
   const invoiceDetailsColumns = [
     { 
@@ -2926,7 +3050,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                           <div className="flex items-center gap-3 bg-[#2B3544] px-6 py-2 rounded-lg border border-gray-600">
                             <span className="text-gray-400 text-sm">فاتورة رقم</span>
                             <span className="text-white font-bold text-xl">
-                              {selectedStatementInvoice?.invoice_number?.replace('PUR-', '').split('-')[0] || '---'}
+                              {selectedStatementInvoice?.invoice_number?.replace('PUR-', '') || '---'}
                             </span>
                             <span className="text-gray-500 text-xs">
                               ({currentInvoiceIndex + 1} من {invoiceStatements.length})
@@ -3014,10 +3138,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                                         {Math.abs(item.quantity)}
                                       </td>
                                       <td className="px-4 py-3 text-center text-white text-sm">
-                                        {formatPrice(item.unit_price)}
+                                        {formatPrice(item.unit_purchase_price || item.unit_price)}
                                       </td>
                                       <td className="px-4 py-3 text-center text-white text-sm">
-                                        {formatPrice(Math.abs(item.quantity) * item.unit_price)}
+                                        {formatPrice(Math.abs(item.quantity) * (item.unit_purchase_price || item.unit_price))}
                                       </td>
                                     </tr>
                                   )})}
@@ -3461,6 +3585,26 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               >
                 طباعة A4
               </button>
+              <button
+                onClick={() => setColumnManagerTab('statement')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'statement'
+                    ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                كشف الحساب
+              </button>
+              <button
+                onClick={() => setColumnManagerTab('payments')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'payments'
+                    ? 'text-green-400 border-b-2 border-green-400 bg-green-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                الدفعات
+              </button>
             </div>
 
             {/* Content */}
@@ -3566,6 +3710,74 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                   </div>
                 </div>
               )}
+
+              {columnManagerTab === 'statement' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول كشف الحساب
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allStatementColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visibleStatementColumns.includes(col.id)
+                            ? 'bg-amber-600/20 border-amber-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleStatementColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'statement')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visibleStatementColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {columnManagerTab === 'payments' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول الدفعات
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allPaymentsColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visiblePaymentsColumns.includes(col.id)
+                            ? 'bg-green-600/20 border-green-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visiblePaymentsColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'payments')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visiblePaymentsColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -3574,6 +3786,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                 {columnManagerTab === 'invoices' && `${visibleInvoiceColumns.length} من ${allInvoiceColumnDefs.length} أعمدة مفعلة`}
                 {columnManagerTab === 'details' && `${visibleDetailsColumns.length} من ${allDetailsColumnDefs.length} أعمدة مفعلة`}
                 {columnManagerTab === 'print' && `${visiblePrintColumns.length} من ${allPrintColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'statement' && `${visibleStatementColumns.length} من ${allStatementColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'payments' && `${visiblePaymentsColumns.length} من ${allPaymentsColumnDefs.length} أعمدة مفعلة`}
               </div>
               <button
                 onClick={() => setShowColumnManager(false)}

@@ -31,13 +31,20 @@ const REPORT_TYPE_MAP = {
   'CATEGORIES_REPORT': 'categories',
   'CUSTOMERS_REPORT': 'customers',
   'CUSTOMER_INVOICES_REPORT': 'customer_invoices',
+  'CUSTOMER_STATEMENT_REPORT': 'customer_statement',
+  'CUSTOMER_INVOICE_DETAILS_REPORT': 'customer_invoice_details',
+  'CUSTOMER_PAYMENTS_REPORT': 'customer_payments',
   'DAILY_SALES_REPORT': 'daily_sales',
   'HOURLY_SALES_REPORT': 'hourly_sales',
   'PROFIT_MARGIN_REPORT': 'profit_margin',
   'SUPPLIER_STATEMENT_REPORT': 'supplier_statement',
   'SUPPLIER_INVOICES_REPORT': 'supplier_invoices',
   'SUPPLIER_INVOICE_DETAILS_REPORT': 'supplier_invoice_details',
-  'SUPPLIER_PAYMENTS_REPORT': 'supplier_payments'
+  'SUPPLIER_PAYMENTS_REPORT': 'supplier_payments',
+  'RECORD_STATEMENT_REPORT': 'record_statement',
+  'RECORD_TRANSACTIONS_REPORT': 'record_transactions',
+  'RECORD_TRANSACTION_DETAILS_REPORT': 'record_transaction_details',
+  'RECORD_PAYMENTS_REPORT': 'record_payments'
 } as const;
 
 type ReportType = keyof typeof REPORT_TYPE_MAP;
@@ -52,13 +59,20 @@ class HybridTableStorage {
     CATEGORIES_REPORT: 'pos-reports-categories-table-config',
     CUSTOMERS_REPORT: 'pos-reports-customers-table-config',
     CUSTOMER_INVOICES_REPORT: 'pos-reports-customer-invoices-table-config',
+    CUSTOMER_STATEMENT_REPORT: 'pos-reports-customer-statement-table-config',
+    CUSTOMER_INVOICE_DETAILS_REPORT: 'pos-reports-customer-invoice-details-table-config',
+    CUSTOMER_PAYMENTS_REPORT: 'pos-reports-customer-payments-table-config',
     DAILY_SALES_REPORT: 'pos-reports-daily-sales-table-config',
     HOURLY_SALES_REPORT: 'pos-reports-hourly-sales-table-config',
     PROFIT_MARGIN_REPORT: 'pos-reports-profit-margin-table-config',
     SUPPLIER_STATEMENT_REPORT: 'pos-reports-supplier-statement-table-config',
     SUPPLIER_INVOICES_REPORT: 'pos-reports-supplier-invoices-table-config',
     SUPPLIER_INVOICE_DETAILS_REPORT: 'pos-reports-supplier-invoice-details-table-config',
-    SUPPLIER_PAYMENTS_REPORT: 'pos-reports-supplier-payments-table-config'
+    SUPPLIER_PAYMENTS_REPORT: 'pos-reports-supplier-payments-table-config',
+    RECORD_STATEMENT_REPORT: 'pos-reports-record-statement-table-config',
+    RECORD_TRANSACTIONS_REPORT: 'pos-reports-record-transactions-table-config',
+    RECORD_TRANSACTION_DETAILS_REPORT: 'pos-reports-record-transaction-details-table-config',
+    RECORD_PAYMENTS_REPORT: 'pos-reports-record-payments-table-config'
   } as const;
 
   private readonly CONFIG_VERSION = '2.1.0';

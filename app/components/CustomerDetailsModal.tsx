@@ -10,6 +10,13 @@ import AddPaymentModal from './AddPaymentModal'
 import { useSystemCurrency, useFormatPrice } from '@/lib/hooks/useCurrency'
 import { calculateCustomerBalanceWithLinked } from '@/app/lib/services/partyLinkingService'
 
+// localStorage keys for UI state persistence
+const CUSTOMER_DIVIDER_POSITION_KEY = 'customer-details-divider-position'
+const CUSTOMER_INVOICE_COLUMNS_VISIBILITY_KEY = 'customer-details-invoice-columns-visibility'
+const CUSTOMER_DETAILS_COLUMNS_VISIBILITY_KEY = 'customer-details-details-columns-visibility'
+const CUSTOMER_STATEMENT_COLUMNS_VISIBILITY_KEY = 'customer-details-statement-columns-visibility'
+const CUSTOMER_PAYMENTS_COLUMNS_VISIBILITY_KEY = 'customer-details-payments-columns-visibility'
+
 interface CustomerDetailsModalProps {
   isOpen: boolean
   onClose: () => void
@@ -25,7 +32,13 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   const [showCustomerDetails, setShowCustomerDetails] = useState(true)
   const [activeTab, setActiveTab] = useState('invoices') // 'invoices', 'payments', 'statement'
   const [viewMode, setViewMode] = useState<ViewMode>('split')
-  const [dividerPosition, setDividerPosition] = useState(50) // Percentage
+  const [dividerPosition, setDividerPosition] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CUSTOMER_DIVIDER_POSITION_KEY)
+      return saved ? parseFloat(saved) : 50
+    }
+    return 50
+  })
   const [isDragging, setIsDragging] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -115,21 +128,55 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
   // Column manager state
   const [showColumnManager, setShowColumnManager] = useState(false)
-  const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print'>('invoices')
+  const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print' | 'statement' | 'payments'>('invoices')
 
-  // Visible columns state - default all visible
-  const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>([
-    'index', 'invoice_number', 'created_at', 'time', 'invoice_type',
-    'customer_name', 'customer_phone', 'total_amount', 'payment_method', 'notes',
-    'safe_name', 'employee_name'
-  ])
-  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>([
-    'index', 'category', 'productName', 'quantity', 'barcode',
-    'unit_price', 'discount', 'total', 'notes'
-  ])
+  // Visible columns state - load from localStorage or use defaults
+  const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CUSTOMER_INVOICE_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'invoice_number', 'created_at', 'time', 'invoice_type',
+      'customer_name', 'customer_phone', 'total_amount', 'payment_method', 'notes',
+      'safe_name', 'employee_name']
+  })
+  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CUSTOMER_DETAILS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try {
+          return JSON.parse(saved)
+        } catch {}
+      }
+    }
+    return ['index', 'category', 'productName', 'quantity', 'barcode',
+      'unit_price', 'discount', 'total', 'notes']
+  })
   const [visiblePrintColumns, setVisiblePrintColumns] = useState<string[]>([
     'index', 'productName', 'category', 'quantity', 'unit_price', 'discount', 'total'
   ])
+  const [visibleStatementColumns, setVisibleStatementColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CUSTOMER_STATEMENT_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try { return JSON.parse(saved) } catch {}
+      }
+    }
+    return ['index', 'date', 'time', 'description', 'type', 'invoiceValue', 'paidAmount', 'balance', 'safe_name', 'employee_name']
+  })
+  const [visiblePaymentsColumns, setVisiblePaymentsColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(CUSTOMER_PAYMENTS_COLUMNS_VISIBILITY_KEY)
+      if (saved) {
+        try { return JSON.parse(saved) } catch {}
+      }
+    }
+    return ['index', 'payment_date', 'created_at', 'amount', 'payment_method', 'notes', 'safe_name', 'employee_name']
+  })
 
   // Column definitions for the manager
   const allInvoiceColumnDefs = [
@@ -170,8 +217,32 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     { id: 'total', label: 'الإجمالي', required: true }
   ]
 
+  const allStatementColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'date', label: 'التاريخ', required: true },
+    { id: 'time', label: 'الساعة', required: false },
+    { id: 'description', label: 'البيان', required: false },
+    { id: 'type', label: 'نوع العملية', required: false },
+    { id: 'invoiceValue', label: 'قيمة الفاتورة', required: false },
+    { id: 'paidAmount', label: 'المبلغ المدفوع', required: false },
+    { id: 'balance', label: 'الرصيد', required: true },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false }
+  ]
+
+  const allPaymentsColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'payment_date', label: 'التاريخ', required: true },
+    { id: 'created_at', label: 'الساعة', required: false },
+    { id: 'amount', label: 'المبلغ', required: true },
+    { id: 'payment_method', label: 'طريقة الدفع', required: false },
+    { id: 'notes', label: 'البيان', required: false },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false }
+  ]
+
   // Toggle column visibility
-  const toggleColumn = (columnId: string, type: 'invoices' | 'details' | 'print') => {
+  const toggleColumn = (columnId: string, type: 'invoices' | 'details' | 'print' | 'statement' | 'payments') => {
     if (type === 'invoices') {
       const colDef = allInvoiceColumnDefs.find(c => c.id === columnId)
       if (colDef?.required) return // Can't toggle required columns
@@ -190,11 +261,29 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           ? prev.filter(id => id !== columnId)
           : [...prev, columnId]
       )
-    } else {
+    } else if (type === 'print') {
       const colDef = allPrintColumnDefs.find(c => c.id === columnId)
       if (colDef?.required) return
 
       setVisiblePrintColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'statement') {
+      const colDef = allStatementColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+
+      setVisibleStatementColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'payments') {
+      const colDef = allPaymentsColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+
+      setVisiblePaymentsColumns(prev =>
         prev.includes(columnId)
           ? prev.filter(id => id !== columnId)
           : [...prev, columnId]
@@ -233,7 +322,11 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false)
-  }, [])
+    // Save divider position to localStorage only when drag ends (smooth performance)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOMER_DIVIDER_POSITION_KEY, dividerPosition.toString())
+    }
+  }, [dividerPosition])
 
   // Add global mouse event listeners
   useEffect(() => {
@@ -246,6 +339,31 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       }
     }
   }, [isDragging, handleMouseMove, handleMouseUp])
+
+  // Save column visibility to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOMER_INVOICE_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleInvoiceColumns))
+    }
+  }, [visibleInvoiceColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOMER_DETAILS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleDetailsColumns))
+    }
+  }, [visibleDetailsColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOMER_STATEMENT_COLUMNS_VISIBILITY_KEY, JSON.stringify(visibleStatementColumns))
+    }
+  }, [visibleStatementColumns])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CUSTOMER_PAYMENTS_COLUMNS_VISIBILITY_KEY, JSON.stringify(visiblePaymentsColumns))
+    }
+  }, [visiblePaymentsColumns])
 
   // Helper function to get week start (Saturday) and end (Friday)
   const getWeekRange = (date: Date, isLastWeek: boolean = false) => {
@@ -2563,7 +2681,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
       )
     }
-  ]
+  ].filter(col => visibleStatementColumns.includes(col.id))
 
   const invoiceColumns = [
     { 
@@ -2771,7 +2889,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       width: 120,
       render: (value: string, item: any) => <span className="text-yellow-400">{item.employee_name || item.creator?.full_name || '-'}</span>
     }
-  ]
+  ].filter(col => visiblePaymentsColumns.includes(col.id))
 
   const invoiceDetailsColumns = [
     { 
@@ -3643,6 +3761,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                             columns={statementColumns}
                             data={accountStatements}
                             onRowDoubleClick={handleStatementRowDoubleClick}
+                            reportType="CUSTOMER_STATEMENT_REPORT"
                           />
                         )}
                       </>
@@ -3733,6 +3852,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                             data={sales}
                             selectedRowId={sales[selectedTransaction]?.id?.toString() || null}
                             onRowClick={(sale: any, index: number) => setSelectedTransaction(index)}
+                            reportType="CUSTOMER_INVOICES_REPORT"
                           />
                         )}
                       </div>
@@ -3835,6 +3955,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                                 ? 'bg-yellow-500/30 hover:bg-yellow-500/40'
                                 : ''
                             }
+                            reportType="CUSTOMER_INVOICE_DETAILS_REPORT"
                           />
                         )}
                       </div>
@@ -3885,6 +4006,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                           selectedRowId={selectedPayment?.id}
                           onRowClick={(payment: any) => setSelectedPayment(payment)}
                           onRowContextMenu={(e: React.MouseEvent, payment: any) => handlePaymentContextMenu(e, payment)}
+                          reportType="CUSTOMER_PAYMENTS_REPORT"
                         />
                       )}
 
@@ -4024,6 +4146,26 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
               >
                 🖨️ طباعة A4
               </button>
+              <button
+                onClick={() => setColumnManagerTab('statement')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'statement'
+                    ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                📊 كشف الحساب
+              </button>
+              <button
+                onClick={() => setColumnManagerTab('payments')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'payments'
+                    ? 'text-green-400 border-b-2 border-green-400 bg-green-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                💰 الدفعات
+              </button>
             </div>
 
             {/* Content */}
@@ -4129,6 +4271,74 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                   </div>
                 </div>
               )}
+
+              {columnManagerTab === 'statement' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول كشف الحساب
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allStatementColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visibleStatementColumns.includes(col.id)
+                            ? 'bg-amber-600/20 border-amber-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleStatementColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'statement')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-amber-500 focus:ring-amber-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visibleStatementColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {columnManagerTab === 'payments' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول الدفعات
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allPaymentsColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visiblePaymentsColumns.includes(col.id)
+                            ? 'bg-green-600/20 border-green-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visiblePaymentsColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'payments')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visiblePaymentsColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -4137,6 +4347,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                 {columnManagerTab === 'invoices' && `${visibleInvoiceColumns.length} من ${allInvoiceColumnDefs.length} أعمدة مفعلة`}
                 {columnManagerTab === 'details' && `${visibleDetailsColumns.length} من ${allDetailsColumnDefs.length} أعمدة مفعلة`}
                 {columnManagerTab === 'print' && `${visiblePrintColumns.length} من ${allPrintColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'statement' && `${visibleStatementColumns.length} من ${allStatementColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'payments' && `${visiblePaymentsColumns.length} من ${allPaymentsColumnDefs.length} أعمدة مفعلة`}
               </div>
               <button
                 onClick={() => setShowColumnManager(false)}
