@@ -66,6 +66,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
   const [isLoadingStatementInvoiceItems, setIsLoadingStatementInvoiceItems] = useState(false)
   const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState<number>(0)
 
+  // Editable notes state
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+  const [editingNoteValue, setEditingNoteValue] = useState<string>('')
+
   // Get list of invoice statements for navigation (includes linked customer sales)
   const invoiceStatements = accountStatements.filter(s =>
     s.type === 'فاتورة شراء' ||
@@ -84,6 +88,24 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
   const [showSaveDropdownStatement, setShowSaveDropdownStatement] = useState(false)
   const saveDropdownRef = useRef<HTMLDivElement>(null)
   const saveDropdownStatementRef = useRef<HTMLDivElement>(null)
+
+  // Column manager state
+  const [showColumnManager, setShowColumnManager] = useState(false)
+  const [columnManagerTab, setColumnManagerTab] = useState<'invoices' | 'details' | 'print'>('invoices')
+
+  // Visible columns state - default all visible
+  const [visibleInvoiceColumns, setVisibleInvoiceColumns] = useState<string[]>([
+    'index', 'invoice_number', 'created_at', 'time', 'invoice_type',
+    'supplier_name', 'supplier_phone', 'total_amount', 'notes',
+    'safe_name', 'employee_name'
+  ])
+  const [visibleDetailsColumns, setVisibleDetailsColumns] = useState<string[]>([
+    'index', 'category', 'productName', 'quantity', 'barcode',
+    'unit_purchase_price', 'discount_amount', 'total', 'notes'
+  ])
+  const [visiblePrintColumns, setVisiblePrintColumns] = useState<string[]>([
+    'index', 'productName', 'category', 'quantity', 'unit_purchase_price', 'discount_amount', 'total'
+  ])
 
   // Close save dropdown when clicking outside
   useEffect(() => {
@@ -752,6 +774,49 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     }
   }
 
+  // Save user note for a statement
+  const saveStatementNote = async (statement: any, newNote: string) => {
+    try {
+      // Determine which table to update based on statement type
+      if (statement.invoiceId) {
+        // Update purchase invoice notes
+        const { error } = await supabase
+          .from('purchase_invoices')
+          .update({ notes: newNote })
+          .eq('id', statement.invoiceId)
+
+        if (error) throw error
+      } else if (statement.paymentId) {
+        // Update supplier payment notes
+        const { error } = await supabase
+          .from('supplier_payments')
+          .update({ notes: newNote })
+          .eq('id', statement.paymentId)
+
+        if (error) throw error
+      } else if (statement.customerPaymentId) {
+        // Update customer payment notes (linked customer)
+        const { error } = await supabase
+          .from('customer_payments')
+          .update({ notes: newNote })
+          .eq('id', statement.customerPaymentId)
+
+        if (error) throw error
+      }
+
+      // Update local state
+      setAccountStatements(prev => prev.map(s =>
+        s.id === statement.id ? { ...s, notes: newNote } : s
+      ))
+
+      // Reset editing state
+      setEditingNoteId(null)
+      setEditingNoteValue('')
+    } catch (error) {
+      console.error('Error saving note:', error)
+    }
+  }
+
   // Fetch account statement
   const fetchAccountStatement = async () => {
     console.log('=== fetchAccountStatement DEBUG ===')
@@ -784,7 +849,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const { data: invoices, error: invoicesError } = await supabase
         .from('purchase_invoices')
         .select(`
-          id, invoice_number, total_amount, invoice_type, created_at,
+          id, invoice_number, total_amount, invoice_type, created_at, notes, user_notes,
           record:records(name),
           creator:user_profiles(full_name)
         `)
@@ -802,7 +867,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const { data: payments, error: paymentsError } = await supabase
         .from('supplier_payments')
         .select(`
-          id, amount, payment_method, notes, created_at, safe_id, purchase_invoice_id,
+          id, amount, payment_method, notes, user_notes, created_at, safe_id, purchase_invoice_id,
           creator:user_profiles(full_name)
         `)
         .eq('supplier_id', supplier.id)
@@ -837,7 +902,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         const { data: salesData, error: salesError } = await supabase
           .from('sales')
           .select(`
-            id, invoice_number, total_amount, invoice_type, created_at,
+            id, invoice_number, total_amount, invoice_type, created_at, user_notes,
             customer:customers(name)
           `)
           .eq('customer_id', linkedCustomerId)
@@ -851,7 +916,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         const { data: customerPaymentsData, error: customerPaymentsError } = await supabase
           .from('customer_payments')
           .select(`
-            id, amount, payment_method, notes, created_at, safe_id,
+            id, amount, payment_method, notes, user_notes, created_at, safe_id,
             creator:user_profiles(full_name)
           `)
           .eq('customer_id', linkedCustomerId)
@@ -921,7 +986,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             invoiceId: invoice.id,
             paymentId: linkedPayment?.id || null,
             safe_name: (invoice as any).record?.name || null,
-            employee_name: (invoice as any).creator?.full_name || null
+            employee_name: (invoice as any).creator?.full_name || null,
+            notes: (invoice as any).notes || null,
+            user_notes: (invoice as any).user_notes || null
           })
         }
       })
@@ -948,7 +1015,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             paidAmount: paymentAmount,
             paymentId: payment.id,
             safe_name: safeName,
-            employee_name: employeeName
+            employee_name: employeeName,
+            notes: payment.notes || null
           })
         } else {
           // الدفعة للمورد تنقص الرصيد المستحق له
@@ -962,7 +1030,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             paidAmount: paymentAmount,
             paymentId: payment.id,
             safe_name: safeName,
-            employee_name: employeeName
+            employee_name: employeeName,
+            notes: payment.notes || null
           })
         }
       })
@@ -988,7 +1057,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             isFromLinkedCustomer: true,
             linkedCustomerName: (sale as any).customer?.name || null,
             safe_name: null,
-            employee_name: null
+            employee_name: null,
+            notes: null
           })
         }
       })
@@ -1015,7 +1085,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               customerPaymentId: payment.id,
               isFromLinkedCustomer: true,
               safe_name: safeName,
-              employee_name: employeeName
+              employee_name: employeeName,
+              notes: payment.notes || null
             })
           } else {
             // Customer payment (دفعة) - they paid us, reduces what they owe us
@@ -1031,7 +1102,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
               customerPaymentId: payment.id,
               isFromLinkedCustomer: true,
               safe_name: safeName,
-              employee_name: employeeName
+              employee_name: employeeName,
+              notes: payment.notes || null
             })
           }
         }
@@ -1084,7 +1156,12 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       console.log('statementsWithBalance count:', statementsWithBalance.length)
       console.log('=== END fetchAccountStatement DEBUG ===')
 
-      setAccountStatements(statementsWithBalance)
+      // Reverse for display (newest first), keeping correct balance
+      const reversedStatements = [...statementsWithBalance].reverse().map((stmt, index) => ({
+        ...stmt,
+        id: index + 1
+      }))
+      setAccountStatements(reversedStatements)
 
     } catch (error) {
       console.error('Error fetching account statement:', error)
@@ -1880,6 +1957,73 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     ? totalInvoicesAmount / purchaseInvoices.length
     : 0
 
+  // Column definitions for the manager
+  const allInvoiceColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'invoice_number', label: 'رقم الفاتورة', required: true },
+    { id: 'created_at', label: 'التاريخ', required: false },
+    { id: 'time', label: 'الوقت', required: false },
+    { id: 'invoice_type', label: 'نوع الفاتورة', required: false },
+    { id: 'supplier_name', label: 'المورد', required: false },
+    { id: 'supplier_phone', label: 'الهاتف', required: false },
+    { id: 'total_amount', label: 'المبلغ الإجمالي', required: true },
+    { id: 'notes', label: 'البيان', required: false },
+    { id: 'safe_name', label: 'الخزنة', required: false },
+    { id: 'employee_name', label: 'الموظف', required: false }
+  ]
+
+  const allDetailsColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'category', label: 'المجموعة', required: false },
+    { id: 'productName', label: 'اسم المنتج', required: true },
+    { id: 'quantity', label: 'الكمية', required: true },
+    { id: 'barcode', label: 'الباركود', required: false },
+    { id: 'unit_purchase_price', label: 'السعر', required: true },
+    { id: 'discount_amount', label: 'خصم', required: false },
+    { id: 'total', label: 'الإجمالي', required: true },
+    { id: 'notes', label: 'ملاحظات', required: false }
+  ]
+
+  const allPrintColumnDefs = [
+    { id: 'index', label: '#', required: true },
+    { id: 'productName', label: 'اسم المنتج', required: true },
+    { id: 'category', label: 'المجموعة', required: false },
+    { id: 'quantity', label: 'الكمية', required: true },
+    { id: 'barcode', label: 'الباركود', required: false },
+    { id: 'unit_purchase_price', label: 'السعر', required: true },
+    { id: 'discount_amount', label: 'الخصم', required: false },
+    { id: 'total', label: 'الإجمالي', required: true }
+  ]
+
+  // Toggle column visibility
+  const toggleColumn = (columnId: string, type: 'invoices' | 'details' | 'print') => {
+    if (type === 'invoices') {
+      const colDef = allInvoiceColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleInvoiceColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else if (type === 'details') {
+      const colDef = allDetailsColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisibleDetailsColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    } else {
+      const colDef = allPrintColumnDefs.find(c => c.id === columnId)
+      if (colDef?.required) return
+      setVisiblePrintColumns(prev =>
+        prev.includes(columnId)
+          ? prev.filter(id => id !== columnId)
+          : [...prev, columnId]
+      )
+    }
+  }
+
   // Define columns for each table - exactly like RecordDetailsModal structure
   const statementColumns = [
     {
@@ -2013,6 +2157,85 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       render: (value: string, item: any) => (
         <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
       )
+    },
+    {
+      id: 'details',
+      header: 'تفاصيل',
+      accessor: 'notes',
+      width: 150,
+      render: (value: string, item: any) => (
+        <span className="text-gray-400 text-sm truncate max-w-[150px]" title={value || ''}>
+          {value || '-'}
+        </span>
+      )
+    },
+    {
+      id: 'userNotes',
+      header: (
+        <span className="flex items-center gap-1">
+          <PencilSquareIcon className="w-4 h-4" />
+          ملاحظات
+        </span>
+      ),
+      accessor: 'notes',
+      width: 180,
+      render: (value: string, item: any) => {
+        const isEditing = editingNoteId === item.id
+
+        if (isEditing) {
+          return (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={editingNoteValue}
+                onChange={(e) => setEditingNoteValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveStatementNote(item, editingNoteValue)
+                  } else if (e.key === 'Escape') {
+                    setEditingNoteId(null)
+                    setEditingNoteValue('')
+                  }
+                }}
+                className="flex-1 bg-gray-700 text-white text-sm px-2 py-1 rounded border border-blue-500 focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={() => saveStatementNote(item, editingNoteValue)}
+                className="text-green-500 hover:text-green-400 p-1"
+                title="حفظ"
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => {
+                  setEditingNoteId(null)
+                  setEditingNoteValue('')
+                }}
+                className="text-red-500 hover:text-red-400 p-1"
+                title="إلغاء"
+              >
+                ✕
+              </button>
+            </div>
+          )
+        }
+
+        return (
+          <div
+            className="flex items-center gap-1 cursor-pointer hover:bg-gray-700/50 px-2 py-1 rounded group"
+            onClick={() => {
+              setEditingNoteId(item.id)
+              setEditingNoteValue(value || '')
+            }}
+          >
+            <span className="text-gray-400 text-sm truncate flex-1" title={value || ''}>
+              {value || '-'}
+            </span>
+            <PencilSquareIcon className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )
+      }
     }
   ]
 
@@ -2139,7 +2362,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       width: 120,
       render: (value: string, item: any) => <span className="text-yellow-400">{item.creator?.full_name || '-'}</span>
     }
-  ]
+  ].filter(col => visibleInvoiceColumns.includes(col.id))
 
   const paymentsColumns = [
     {
@@ -2293,14 +2516,14 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         return <span className="text-green-400 font-bold">{formatPrice(total)}</span>
       }
     },
-    { 
-      id: 'notes', 
-      header: 'ملاحظات', 
-      accessor: 'notes', 
+    {
+      id: 'notes',
+      header: 'ملاحظات',
+      accessor: 'notes',
       width: 150,
       render: (value: string) => <span className="text-gray-400">{value || '-'}</span>
     }
-  ]
+  ].filter(col => visibleDetailsColumns.includes(col.id))
 
   return (
     <>
@@ -2342,7 +2565,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                     <span className="text-sm">حذف الفاتورة</span>
                   </button>
 
-                  <button className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors">
+                  <button
+                    onClick={() => setShowColumnManager(true)}
+                    className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-colors"
+                  >
                     <TableCellsIcon className="h-5 w-5 mb-1" />
                     <span className="text-sm">إدارة الأعمدة</span>
                   </button>
@@ -2464,28 +2690,32 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                 
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-white">{supplier.name || 'شركة المعدات التقنية'}</span>
+                    <span className="text-white">{supplier.name || '-'}</span>
                     <span className="text-gray-400 text-sm">اسم المورد</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
-                    <span className="text-white">{supplier.address || '23626125215'}</span>
+                    <span className="text-white" dir="ltr">{supplier.phone || '-'}</span>
                     <span className="text-gray-400 text-sm">رقم الهاتف</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
-                    <span className="text-white">المنطقة الوسطى</span>
+                    <span className="text-white">{supplier.city || '-'}</span>
                     <span className="text-gray-400 text-sm">المنطقة</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
-                    <span className="text-white">6/24/2025</span>
+                    <span className="text-white">
+                      {supplier.created_at
+                        ? new Date(supplier.created_at).toLocaleDateString('en-GB')
+                        : '-'}
+                    </span>
                     <span className="text-gray-400 text-sm">تاريخ التسجيل</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <span className="text-yellow-400 flex items-center gap-1">
-                      <span>Premium</span>
+                      <span>{supplier.rank || 'عادي'}</span>
                       <span>⭐</span>
                     </span>
                     <span className="text-gray-400 text-sm">الرتبة</span>
@@ -3125,6 +3355,188 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           fetchSupplierBalance()
         }}
       />
+
+      {/* Column Manager Modal */}
+      {showColumnManager && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black bg-opacity-60"
+            onClick={() => setShowColumnManager(false)}
+          />
+
+          {/* Modal Content */}
+          <div className="relative bg-[#2B3544] rounded-xl shadow-2xl w-[600px] max-h-[80vh] overflow-hidden border border-gray-600">
+            {/* Header */}
+            <div className="bg-[#374151] px-6 py-4 border-b border-gray-600 flex items-center justify-between">
+              <h3 className="text-white text-lg font-semibold flex items-center gap-2">
+                <TableCellsIcon className="h-5 w-5 text-blue-400" />
+                إدارة الأعمدة
+              </h3>
+              <button
+                onClick={() => setShowColumnManager(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="flex border-b border-gray-600 bg-[#374151]/50">
+              <button
+                onClick={() => setColumnManagerTab('invoices')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'invoices'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                فواتير المورد
+              </button>
+              <button
+                onClick={() => setColumnManagerTab('details')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'details'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                تفاصيل الفاتورة
+              </button>
+              <button
+                onClick={() => setColumnManagerTab('print')}
+                className={`flex-1 px-4 py-3 text-sm font-medium transition-all ${
+                  columnManagerTab === 'print'
+                    ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-600/10'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-600/30'
+                }`}
+              >
+                طباعة A4
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 max-h-[50vh] overflow-y-auto">
+              {columnManagerTab === 'invoices' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول فواتير المورد
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allInvoiceColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visibleInvoiceColumns.includes(col.id)
+                            ? 'bg-blue-600/20 border-blue-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleInvoiceColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'invoices')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visibleInvoiceColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {columnManagerTab === 'details' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد عرضها في جدول تفاصيل الفاتورة
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allDetailsColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visibleDetailsColumns.includes(col.id)
+                            ? 'bg-blue-600/20 border-blue-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleDetailsColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'details')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visibleDetailsColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {columnManagerTab === 'print' && (
+                <div className="space-y-3">
+                  <p className="text-gray-400 text-sm mb-4">
+                    اختر الأعمدة التي تريد طباعتها في فاتورة A4
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {allPrintColumnDefs.map((col) => (
+                      <label
+                        key={col.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                          visiblePrintColumns.includes(col.id)
+                            ? 'bg-green-600/20 border-green-500'
+                            : 'bg-gray-700/30 border-gray-600 hover:border-gray-500'
+                        } ${col.required ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visiblePrintColumns.includes(col.id)}
+                          onChange={() => toggleColumn(col.id, 'print')}
+                          disabled={col.required}
+                          className="w-4 h-4 rounded border-gray-500 bg-gray-700 text-green-500 focus:ring-green-500 focus:ring-offset-0"
+                        />
+                        <span className={`text-sm ${visiblePrintColumns.includes(col.id) ? 'text-white' : 'text-gray-400'}`}>
+                          {col.label}
+                        </span>
+                        {col.required && (
+                          <span className="text-xs text-yellow-500 mr-auto">مطلوب</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="bg-[#374151]/50 px-6 py-4 border-t border-gray-600 flex justify-between items-center">
+              <div className="text-sm text-gray-400">
+                {columnManagerTab === 'invoices' && `${visibleInvoiceColumns.length} من ${allInvoiceColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'details' && `${visibleDetailsColumns.length} من ${allDetailsColumnDefs.length} أعمدة مفعلة`}
+                {columnManagerTab === 'print' && `${visiblePrintColumns.length} من ${allPrintColumnDefs.length} أعمدة مفعلة`}
+              </div>
+              <button
+                onClick={() => setShowColumnManager(false)}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                تم
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

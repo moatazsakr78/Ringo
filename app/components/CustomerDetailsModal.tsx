@@ -1048,7 +1048,13 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         }
       })
 
-      setAccountStatements([...finalStatements, ...statementsWithBalance])
+      // Reverse for display (newest first), keeping correct balance
+      const allStatements = [...finalStatements, ...statementsWithBalance]
+      const reversedStatements = [...allStatements].reverse().map((stmt, index) => ({
+        ...stmt,
+        index: index + 1
+      }))
+      setAccountStatements(reversedStatements)
 
     } catch (error) {
       console.error('Error building account statement:', error)
@@ -3239,8 +3245,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className={`text-white ${isTabletDevice ? 'text-sm' : ''}`}>
-                        {customer.address || '23626125215'}
+                      <span className={`text-white ${isTabletDevice ? 'text-sm' : ''}`} dir="ltr">
+                        {customer.phone || '-'}
                       </span>
                       <span className="text-gray-400 text-xs">رقم الهاتف</span>
                     </div>
@@ -3248,12 +3254,16 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                     {!isTabletDevice && (
                       <>
                         <div className="flex justify-between items-center">
-                          <span className="text-white">عمر الثامن</span>
-                          <span className="text-gray-400 text-sm">الجيل</span>
+                          <span className="text-white">{customer.governorate || '-'}</span>
+                          <span className="text-gray-400 text-sm">المحافظة</span>
                         </div>
 
                         <div className="flex justify-between items-center">
-                          <span className="text-white">6/24/2025</span>
+                          <span className="text-white">
+                            {customer.created_at
+                              ? new Date(customer.created_at).toLocaleDateString('en-GB')
+                              : '-'}
+                          </span>
                           <span className="text-gray-400 text-sm">تاريخ التسجيل</span>
                         </div>
                       </>
@@ -3261,7 +3271,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
 
                     <div className="flex justify-between items-center">
                       <span className="text-yellow-400 flex items-center gap-1">
-                        <span className={isTabletDevice ? 'text-sm' : ''}>Immortal</span>
+                        <span className={isTabletDevice ? 'text-sm' : ''}>{customer.rank || 'عادي'}</span>
                         <span>⭐</span>
                       </span>
                       <span className="text-gray-400 text-xs">الرتبة</span>
@@ -3274,7 +3284,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                       isTabletDevice ? 'text-sm mb-2' : 'mb-3'
                     }`}>
                       <span>📊</span>
-                      <span>إحصائيات</span>
+                      <span>إحصائيات العميل</span>
                     </h4>
                     <div className={isTabletDevice ? 'space-y-2' : 'space-y-3'}>
                       <div className="flex justify-between items-center">
