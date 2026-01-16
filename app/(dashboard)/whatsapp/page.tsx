@@ -492,12 +492,12 @@ export default function WhatsAppPage() {
     fetchConversations()
     checkConnectionStatus()
 
-    // Smart fallback polling كل 30 ثانية
+    // Smart fallback polling كل 10 ثواني
     // هذا يضمن تحديث القائمة حتى لو فشل الـ Realtime
     const conversationPollInterval = setInterval(() => {
       console.log('🔄 Fallback: Refreshing conversations list...')
       fetchConversations()
-    }, 30000) // كل 30 ثانية
+    }, 10000) // كل 10 ثواني بدلاً من 30
 
     // Check connection status every 30 seconds
     const statusInterval = setInterval(checkConnectionStatus, 30000)
@@ -559,6 +559,7 @@ export default function WhatsAppPage() {
               const updated = [...prev]
               const convIndex = updated.findIndex(c => cleanPhoneNumber(c.phoneNumber) === cleanedFromNumber)
               if (convIndex >= 0) {
+                // محادثة موجودة - تحديثها
                 const isConversationOpen = cleanedSelectedNumber === cleanedFromNumber
                 updated[convIndex] = {
                   ...updated[convIndex],
@@ -572,6 +573,21 @@ export default function WhatsAppPage() {
                 // Move to top
                 const [conv] = updated.splice(convIndex, 1)
                 updated.unshift(conv)
+              } else {
+                // ✨ محادثة جديدة - إضافتها فوراً
+                // البحث عن صورة البروفايل من الـ contacts
+                const contact = contactsRef.current.find(
+                  c => cleanPhoneNumber(c.phone_number) === cleanedFromNumber
+                )
+                updated.unshift({
+                  phoneNumber: cleanedFromNumber,
+                  customerName: newMsg.customer_name || cleanedFromNumber,
+                  lastMessage: newMsg.message_text,
+                  lastMessageTime: newMsg.created_at,
+                  lastSender: 'customer',
+                  unreadCount: 1,
+                  profilePictureUrl: contact?.profile_picture_url || undefined
+                })
               }
               return updated
             })

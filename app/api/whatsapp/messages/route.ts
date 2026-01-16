@@ -33,7 +33,60 @@ export async function GET(request: NextRequest) {
 
     console.log(`📱 WhatsApp API: phone=${phoneNumber}, conversationsOnly=${conversationsOnly}`);
 
-    // Try to fetch from database first
+    // ============================================
+    // OPTIMIZED: Use SQL function for conversations list
+    // This avoids the Supabase 1000 row default limit
+    // ============================================
+    if (conversationsOnly && !phoneNumber) {
+      const { data: conversations, error } = await supabase
+        .schema('elfaroukgroup')
+        .rpc('get_whatsapp_conversations');
+
+      if (error) {
+        console.log('SQL function error:', error.message);
+        return NextResponse.json({ messages: [], conversations: [] }, {
+          headers: {
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+          }
+        });
+      }
+
+      // Map to expected format
+      const sortedConversations = (conversations || []).map((conv: {
+        phone_number: string;
+        customer_name: string;
+        last_message: string;
+        last_message_time: string;
+        last_sender: string;
+        unread_count: number;
+      }) => ({
+        phoneNumber: conv.phone_number,
+        customerName: conv.customer_name,
+        lastMessage: conv.last_message,
+        lastMessageTime: conv.last_message_time,
+        lastSender: conv.last_sender as 'customer' | 'me',
+        unreadCount: Number(conv.unread_count),
+      }));
+
+      console.log(`💬 SQL function returned ${sortedConversations.length} conversations`);
+
+      return NextResponse.json({
+        messages: [],
+        conversations: sortedConversations,
+      }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        }
+      });
+    }
+
+    // ============================================
+    // SPECIFIC PHONE: Fetch messages for one conversation
+    // ============================================
     let query = supabase
       .schema('elfaroukgroup')
       .from('whatsapp_messages')
@@ -47,6 +100,9 @@ export async function GET(request: NextRequest) {
         cleanedPhone = '20' + cleanedPhone.substring(1);
       }
       query = query.eq('from_number', cleanedPhone);
+    } else {
+      // Legacy: fetch all messages - add range to avoid 1000 limit
+      query = query.range(0, 9999);
     }
 
     const { data: rawData, error } = await query;
@@ -131,7 +187,7 @@ export async function GET(request: NextRequest) {
       reactions: reactionsMap[msg.message_id] || []
     }));
 
-    // Group messages by phone number for conversations view
+    // Group messages by phone number for conversations view (legacy mode)
     const conversations = new Map<string, {
       phoneNumber: string;
       customerName: string;
@@ -183,11 +239,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`💬 Built ${sortedConversations.length} conversations`);
 
-    // If conversationsOnly mode, don't return all messages (saves bandwidth)
-    const returnMessages = conversationsOnly ? [] : messagesWithReactions;
-
     return NextResponse.json({
-      messages: returnMessages,
+      messages: messagesWithReactions,
       conversations: sortedConversations,
     }, {
       headers: {
