@@ -7,10 +7,16 @@ import {
   syncContactWithProfilePicture
 } from '@/app/lib/whatsapp';
 
-// Supabase client for storing messages
+// Supabase client for storing messages (Service Role)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Supabase client for broadcasting (Anon Key - required for Realtime)
+const supabaseForBroadcast = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 // GET - Webhook verification
@@ -135,6 +141,41 @@ export async function POST(request: NextRequest) {
             console.error('❌ Database error:', dbError.message);
           } else {
             console.log('✅ Message stored successfully');
+
+            // ============================================
+            // BROADCAST: إرسال إشعار للـ clients المتصلين
+            // ============================================
+            const messageData = {
+              id: message.messageId,
+              message_id: message.messageId,
+              msg_id: message.msgId || null,
+              from_number: message.from,
+              customer_name: message.customerName,
+              message_text: message.text,
+              message_type: 'incoming',
+              media_type: message.mediaType || 'text',
+              media_url: mediaUrl || null,
+              is_read: false,
+              created_at: message.timestamp.toISOString(),
+              quoted_message_id: message.quotedMessageId || null,
+              quoted_message_text: message.quotedMessageText || null,
+              quoted_message_sender: message.quotedMessageSender || null,
+            };
+
+            // إرسال broadcast لجميع الـ clients المتصلين
+            supabaseForBroadcast
+              .channel('whatsapp_global')
+              .send({
+                type: 'broadcast',
+                event: 'incoming_message',
+                payload: messageData
+              })
+              .then(() => {
+                console.log('📡 Broadcast sent for incoming message');
+              })
+              .catch((err) => {
+                console.error('❌ Broadcast failed:', err);
+              });
 
             // Sync contact and fetch profile picture for incoming messages
             syncContactWithProfilePicture(message.from, message.customerName)

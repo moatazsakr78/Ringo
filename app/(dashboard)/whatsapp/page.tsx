@@ -29,6 +29,9 @@ import {
 import { EmojiPicker } from '../../components/EmojiPicker'
 import { getSupabase } from '@/app/lib/supabase/client'
 
+// Message Status Types
+type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
+
 interface Message {
   id: string
   message_id: string
@@ -51,6 +54,9 @@ interface Message {
     from_number: string
     is_from_me: boolean
   }[]
+  // حالة الرسالة للـ optimistic updates
+  status?: MessageStatus
+  tempId?: string // ID مؤقت للرسائل قبل الإرسال
 }
 
 interface Conversation {
@@ -73,16 +79,58 @@ interface WhatsAppContact {
 
 type AttachmentType = 'image' | 'video' | 'document' | 'location' | null
 
+// MessageStatusIcon Component - عرض حالة الرسالة
+function MessageStatusIcon({ status }: { status?: MessageStatus }) {
+  if (!status) {
+    // للرسائل القديمة بدون status
+    return <CheckCircleIcon className="h-3 w-3 opacity-70" />
+  }
+
+  switch (status) {
+    case 'sending':
+      return (
+        <ClockIcon className="h-3 w-3 opacity-70 animate-pulse" />
+      )
+    case 'sent':
+      return (
+        <svg className="h-3 w-3 opacity-70" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M13.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L2.22 9.28a.75.75 0 011.06-1.06L6 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+        </svg>
+      )
+    case 'delivered':
+      return (
+        <svg className="h-3.5 w-3.5 opacity-70" viewBox="0 0 20 16" fill="currentColor">
+          <path d="M8.78 4.22a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06-1.06L7.19 4.75l.03-.03a.75.75 0 011.06 0l.5.5z"/>
+          <path d="M14.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L4.22 10.28a.75.75 0 111.06-1.06L7 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+        </svg>
+      )
+    case 'read':
+      return (
+        <svg className="h-3.5 w-3.5 text-blue-400" viewBox="0 0 20 16" fill="currentColor">
+          <path d="M8.78 4.22a.75.75 0 010 1.06l-5.25 5.25a.75.75 0 01-1.06-1.06L7.19 4.75l.03-.03a.75.75 0 011.06 0l.5.5z"/>
+          <path d="M14.78 4.22a.75.75 0 010 1.06l-7.25 7.25a.75.75 0 01-1.06 0L4.22 10.28a.75.75 0 111.06-1.06L7 10.94l6.72-6.72a.75.75 0 011.06 0z"/>
+        </svg>
+      )
+    case 'failed':
+      return (
+        <ExclamationCircleIcon className="h-3.5 w-3.5 text-red-400" />
+      )
+    default:
+      return <CheckCircleIcon className="h-3 w-3 opacity-70" />
+  }
+}
+
 // MessageBubble Component with swipe and context menu support
 interface MessageBubbleProps {
   msg: Message
   onReply: (msg: Message) => void
+  onRetry?: (msg: Message) => void
   onContextMenu: (e: React.MouseEvent, msg: Message) => void
   renderMessageContent: (msg: Message) => React.ReactNode
   formatTime: (timestamp: string) => string
 }
 
-function MessageBubble({ msg, onReply, onContextMenu, renderMessageContent, formatTime }: MessageBubbleProps) {
+function MessageBubble({ msg, onReply, onRetry, onContextMenu, renderMessageContent, formatTime }: MessageBubbleProps) {
   const [touchStart, setTouchStart] = useState(0)
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [isSwiping, setIsSwiping] = useState(false)
@@ -189,9 +237,23 @@ function MessageBubble({ msg, onReply, onContextMenu, renderMessageContent, form
             {formatTime(msg.created_at)}
           </span>
           {msg.message_type === 'outgoing' && (
-            <CheckCircleIcon className="h-3 w-3 opacity-70" />
+            <MessageStatusIcon status={msg.status} />
           )}
         </div>
+
+        {/* زر إعادة المحاولة للرسائل الفاشلة */}
+        {msg.status === 'failed' && onRetry && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRetry(msg)
+            }}
+            className="flex items-center gap-1 mt-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+          >
+            <ArrowPathIcon className="h-3 w-3" />
+            <span>إعادة المحاولة</span>
+          </button>
+        )}
       </div>
 
       {/* Hover reply button for desktop */}
@@ -466,8 +528,8 @@ export default function WhatsAppPage() {
         }
       )
       .on('broadcast', { event: 'new_message' }, (payload) => {
-        // Handle cross-device sync
-        console.log('📡 Broadcast: New message received', payload)
+        // Handle cross-device sync for outgoing messages
+        console.log('📡 Broadcast: Outgoing message sync', payload)
         const newMsg = payload.payload as Message
         if (selectedConversationRef.current === newMsg.from_number) {
           setMessages(prev => {
@@ -476,6 +538,87 @@ export default function WhatsAppPage() {
             return [...prev, newMsg]
           })
         }
+      })
+      .on('broadcast', { event: 'incoming_message' }, (payload) => {
+        // ============================================
+        // Handle incoming messages from webhook
+        // ============================================
+        console.log('📩 Broadcast: Incoming message received!', payload)
+        const newMsg = payload.payload as Message
+
+        // ============================================
+        // تنظيف رقم الهاتف للمقارنة الصحيحة
+        // المشكلة: الـ Webhook يبعث الرقم بتنسيق مختلف عن الـ Frontend
+        // مثال: "+201234567890" vs "201234567890"
+        // ============================================
+        const cleanPhoneNumber = (phone: string): string => {
+          if (!phone) return ''
+          // إزالة كل شيء ما عدا الأرقام
+          let cleaned = phone.replace(/[^\d]/g, '')
+          // تحويل 0 في البداية لـ 20 (كود مصر)
+          if (cleaned.startsWith('0')) {
+            cleaned = '20' + cleaned.substring(1)
+          }
+          return cleaned
+        }
+
+        const incomingNumber = cleanPhoneNumber(newMsg.from_number)
+        const selectedNumber = selectedConversationRef.current
+          ? cleanPhoneNumber(selectedConversationRef.current)
+          : null
+
+        console.log('📩 Phone comparison:', {
+          incoming: newMsg.from_number,
+          incomingCleaned: incomingNumber,
+          selected: selectedConversationRef.current,
+          selectedCleaned: selectedNumber,
+          match: selectedNumber === incomingNumber
+        })
+
+        // إضافة الرسالة للـ state إذا كانت للمحادثة المفتوحة (باستخدام الرقم المنظف)
+        if (selectedNumber && selectedNumber === incomingNumber) {
+          setMessages(prev => {
+            const exists = prev.some(m => m.message_id === newMsg.message_id)
+            if (exists) return prev
+            console.log('📩 Adding incoming message to conversation')
+            return [...prev, newMsg]
+          })
+        }
+
+        // تحديث قائمة المحادثات دائماً (باستخدام الرقم المنظف للمقارنة)
+        setConversations(prev => {
+          const updated = [...prev]
+          const convIndex = updated.findIndex(c => cleanPhoneNumber(c.phoneNumber) === incomingNumber)
+          if (convIndex >= 0) {
+            // محادثة موجودة - تحديثها
+            const isConversationOpen = selectedNumber === incomingNumber
+            updated[convIndex] = {
+              ...updated[convIndex],
+              lastMessage: newMsg.message_text,
+              lastMessageTime: newMsg.created_at,
+              lastSender: 'customer',
+              // زيادة عداد الرسائل غير المقروءة إذا لم تكن المحادثة مفتوحة
+              unreadCount: !isConversationOpen
+                ? updated[convIndex].unreadCount + 1
+                : updated[convIndex].unreadCount
+            }
+            // نقل المحادثة للأعلى
+            const [conv] = updated.splice(convIndex, 1)
+            updated.unshift(conv)
+          } else {
+            // محادثة جديدة - إضافتها
+            updated.unshift({
+              phoneNumber: newMsg.from_number,
+              customerName: newMsg.customer_name,
+              lastMessage: newMsg.message_text,
+              lastMessageTime: newMsg.created_at,
+              lastSender: 'customer',
+              unreadCount: 1,
+              profilePictureUrl: undefined
+            })
+          }
+          return updated
+        })
       })
       .subscribe((status) => {
         console.log('📡 Global Realtime subscription status:', status)
@@ -486,6 +629,24 @@ export default function WhatsAppPage() {
       supabase.removeChannel(channel)
     }
   }, []) // Empty deps - channel created ONCE on mount
+
+  // ============================================
+  // Fallback Polling: تحديث الرسائل كل 5 ثواني
+  // كشبكة أمان في حالة فشل الـ broadcast
+  // ============================================
+  useEffect(() => {
+    if (!selectedConversation) return
+
+    // Polling كل 5 ثواني للمحادثة المفتوحة
+    const pollInterval = setInterval(() => {
+      console.log('🔄 Fallback polling for messages...')
+      fetchConversationMessages(selectedConversation)
+    }, 5000)
+
+    return () => {
+      clearInterval(pollInterval)
+    }
+  }, [selectedConversation, fetchConversationMessages])
 
   // Scroll to bottom only when needed (new messages or conversation change)
   useEffect(() => {
@@ -748,7 +909,7 @@ export default function WhatsAppPage() {
     }
   }
 
-  // Send message
+  // Send message - True Optimistic Update
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -760,24 +921,94 @@ export default function WhatsAppPage() {
 
     if (!hasTextMessage && !hasAttachment) return
 
-    setIsSending(true)
+    // ========================
+    // 1. إنشاء tempId وتخزين القيم قبل المسح
+    // ========================
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const messageText = attachmentType === 'location'
+      ? (locationName || 'موقع')
+      : (newMessage || caption || `[${attachmentType === 'image' ? 'صورة' : attachmentType === 'video' ? 'فيديو' : attachmentType === 'document' ? 'مستند' : 'رسالة'}]`)
+    const currentMediaUrl = mediaUrl || undefined
+    const currentMediaType = attachmentType || 'text'
+    const currentReplyingTo = replyingTo
 
+    // ========================
+    // 2. إنشاء الرسالة المؤقتة مع status: 'sending'
+    // ========================
+    const optimisticMessage: Message = {
+      id: tempId,
+      message_id: tempId,
+      tempId: tempId,
+      from_number: selectedConversation,
+      customer_name: 'أنت',
+      message_text: messageText,
+      message_type: 'outgoing',
+      media_type: currentMediaType,
+      media_url: currentMediaUrl,
+      created_at: new Date().toISOString(),
+      quoted_message_id: currentReplyingTo?.message_id,
+      quoted_message_text: currentReplyingTo?.message_text,
+      quoted_message_sender: currentReplyingTo ? (currentReplyingTo.message_type === 'outgoing' ? 'أنت' : currentReplyingTo.customer_name) : undefined,
+      status: 'sending', // ← حالة الإرسال
+    }
+
+    // ========================
+    // 3. إضافة الرسالة للـ state فوراً (قبل API call)
+    // ========================
+    setMessages(prev => [...prev, optimisticMessage])
+
+    // ========================
+    // 4. تحديث قائمة المحادثات ونقلها للأعلى فوراً
+    // ========================
+    setConversations(prev => {
+      const updated = [...prev]
+      const convIndex = updated.findIndex(c => c.phoneNumber === selectedConversation)
+      if (convIndex >= 0) {
+        updated[convIndex] = {
+          ...updated[convIndex],
+          lastMessage: messageText,
+          lastMessageTime: optimisticMessage.created_at,
+          lastSender: 'me' as const
+        }
+        // نقل للأعلى
+        const [conv] = updated.splice(convIndex, 1)
+        updated.unshift(conv)
+      }
+      return updated
+    })
+
+    // ========================
+    // 5. مسح الـ input فوراً (تجربة مستخدم أفضل)
+    // ========================
+    setNewMessage('')
+    resetAttachment()
+    setReplyingTo(null)
+
+    // ========================
+    // 6. Force scroll to bottom
+    // ========================
+    setShouldScrollToBottom(true)
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 50)
+
+    // ========================
+    // 7. API call في الخلفية
+    // ========================
     try {
       let requestBody: any = {
         to: selectedConversation,
       }
 
       // Add reply info if replying to a message
-      if (replyingTo) {
-        // Use msg_id for WasenderAPI replyTo, fallback to message_id for incoming messages
-        const replyId = replyingTo.msg_id || replyingTo.message_id
+      if (currentReplyingTo) {
+        const replyId = currentReplyingTo.msg_id || currentReplyingTo.message_id
         if (replyId) {
-          requestBody.quotedMsgId = replyId // Can be integer (outgoing) or string (incoming)
+          requestBody.quotedMsgId = replyId
         }
-        // Keep these for storing in our database
-        requestBody.quotedMessageId = replyingTo.message_id
-        requestBody.quotedMessageText = replyingTo.message_text
-        requestBody.quotedMessageSender = replyingTo.message_type === 'outgoing' ? 'أنت' : replyingTo.customer_name
+        requestBody.quotedMessageId = currentReplyingTo.message_id
+        requestBody.quotedMessageText = currentReplyingTo.message_text
+        requestBody.quotedMessageSender = currentReplyingTo.message_type === 'outgoing' ? 'أنت' : currentReplyingTo.customer_name
       }
 
       if (attachmentType) {
@@ -787,7 +1018,7 @@ export default function WhatsAppPage() {
           case 'image':
           case 'video':
           case 'document':
-            requestBody.mediaUrl = mediaUrl
+            requestBody.mediaUrl = currentMediaUrl
             requestBody.caption = caption || newMessage
             if (attachmentType === 'document') {
               requestBody.filename = filename
@@ -801,7 +1032,7 @@ export default function WhatsAppPage() {
         }
       } else {
         requestBody.messageType = 'text'
-        requestBody.message = newMessage
+        requestBody.message = messageText
       }
 
       const response = await fetch('/api/whatsapp/send', {
@@ -815,44 +1046,20 @@ export default function WhatsAppPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Optimistic Update - إضافة الرسالة فوراً للـ state
-        const sentMessage: Message = {
-          id: data.messageId || `temp-${Date.now()}`,
-          message_id: data.messageId || `temp-${Date.now()}`,
-          msg_id: data.msgId, // WasenderAPI integer ID
-          from_number: selectedConversation,
-          customer_name: 'أنت',
-          message_text: attachmentType === 'location'
-            ? (locationName || 'موقع')
-            : (newMessage || caption || `[${attachmentType === 'image' ? 'صورة' : attachmentType === 'video' ? 'فيديو' : attachmentType === 'document' ? 'مستند' : 'رسالة'}]`),
-          message_type: 'outgoing',
-          media_type: attachmentType || 'text',
-          media_url: mediaUrl || undefined,
-          created_at: new Date().toISOString(),
-          quoted_message_id: replyingTo?.message_id,
-          quoted_message_text: replyingTo?.message_text,
-          quoted_message_sender: replyingTo ? (replyingTo.message_type === 'outgoing' ? 'أنت' : replyingTo.customer_name) : undefined,
-        }
-
-        setMessages(prev => [...prev, sentMessage])
-
-        // تحديث قائمة المحادثات ونقل المحادثة للأعلى
-        setConversations(prev => {
-          const updated = [...prev]
-          const convIndex = updated.findIndex(c => c.phoneNumber === selectedConversation)
-          if (convIndex >= 0) {
-            updated[convIndex] = {
-              ...updated[convIndex],
-              lastMessage: sentMessage.message_text,
-              lastMessageTime: sentMessage.created_at,
-              lastSender: 'me' as const
-            }
-            // نقل للأعلى
-            const [conv] = updated.splice(convIndex, 1)
-            updated.unshift(conv)
-          }
-          return updated
-        })
+        // ========================
+        // 8. نجاح: تحديث الرسالة من 'sending' إلى 'sent'
+        // ========================
+        setMessages(prev => prev.map(msg =>
+          msg.tempId === tempId
+            ? {
+                ...msg,
+                id: data.messageId || msg.id,
+                message_id: data.messageId || msg.message_id,
+                msg_id: data.msgId,
+                status: 'sent' as MessageStatus,
+              }
+            : msg
+        ))
 
         // Broadcast to other devices for cross-device sync
         const supabase = getSupabase()
@@ -861,7 +1068,7 @@ export default function WhatsAppPage() {
           .send({
             type: 'broadcast',
             event: 'new_message',
-            payload: sentMessage
+            payload: { ...optimisticMessage, status: 'sent', id: data.messageId, message_id: data.messageId }
           })
           .then(() => {
             console.log('📡 Broadcast sent successfully')
@@ -869,21 +1076,102 @@ export default function WhatsAppPage() {
           .catch((err) => {
             console.error('📡 Broadcast failed:', err)
           })
-
-        // مسح الـ input
-        setNewMessage('')
-        resetAttachment()
-        setReplyingTo(null)
       } else {
+        // ========================
+        // 9. فشل: تحديث الرسالة من 'sending' إلى 'failed'
+        // ========================
+        setMessages(prev => prev.map(msg =>
+          msg.tempId === tempId
+            ? { ...msg, status: 'failed' as MessageStatus }
+            : msg
+        ))
         setError(data.error || 'فشل في إرسال الرسالة')
       }
     } catch (err) {
+      // ========================
+      // 10. خطأ: تحديث الرسالة إلى 'failed'
+      // ========================
       console.error('Error sending message:', err)
+      setMessages(prev => prev.map(msg =>
+        msg.tempId === tempId
+          ? { ...msg, status: 'failed' as MessageStatus }
+          : msg
+      ))
       setError('فشل في إرسال الرسالة')
-    } finally {
-      setIsSending(false)
     }
   }
+
+  // Retry failed message
+  const handleRetryMessage = useCallback(async (failedMsg: Message) => {
+    if (!failedMsg.tempId || failedMsg.status !== 'failed') return
+
+    // تحديث الحالة إلى 'sending' مرة أخرى
+    setMessages(prev => prev.map(msg =>
+      msg.tempId === failedMsg.tempId
+        ? { ...msg, status: 'sending' as MessageStatus }
+        : msg
+    ))
+
+    try {
+      let requestBody: any = {
+        to: failedMsg.from_number,
+        messageType: failedMsg.media_type || 'text',
+      }
+
+      if (failedMsg.media_type === 'text' || !failedMsg.media_type) {
+        requestBody.message = failedMsg.message_text
+      } else if (failedMsg.media_url) {
+        requestBody.mediaUrl = failedMsg.media_url
+        requestBody.caption = failedMsg.message_text
+      }
+
+      // Add reply info if exists
+      if (failedMsg.quoted_message_id) {
+        requestBody.quotedMessageId = failedMsg.quoted_message_id
+        requestBody.quotedMessageText = failedMsg.quoted_message_text
+        requestBody.quotedMessageSender = failedMsg.quoted_message_sender
+      }
+
+      const response = await fetch('/api/whatsapp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // نجاح: تحديث الرسالة
+        setMessages(prev => prev.map(msg =>
+          msg.tempId === failedMsg.tempId
+            ? {
+                ...msg,
+                id: data.messageId || msg.id,
+                message_id: data.messageId || msg.message_id,
+                msg_id: data.msgId,
+                status: 'sent' as MessageStatus,
+              }
+            : msg
+        ))
+      } else {
+        // فشل مرة أخرى
+        setMessages(prev => prev.map(msg =>
+          msg.tempId === failedMsg.tempId
+            ? { ...msg, status: 'failed' as MessageStatus }
+            : msg
+        ))
+        setError(data.error || 'فشل في إعادة إرسال الرسالة')
+      }
+    } catch (err) {
+      console.error('Error retrying message:', err)
+      setMessages(prev => prev.map(msg =>
+        msg.tempId === failedMsg.tempId
+          ? { ...msg, status: 'failed' as MessageStatus }
+          : msg
+      ))
+      setError('فشل في إعادة إرسال الرسالة')
+    }
+  }, [])
 
   // Format timestamp
   const formatTime = (timestamp: string) => {
@@ -1251,6 +1539,7 @@ export default function WhatsAppPage() {
                             <MessageBubble
                               msg={msg}
                               onReply={(message) => setReplyingTo(message)}
+                              onRetry={handleRetryMessage}
                               onContextMenu={(e, message) => {
                                 e.preventDefault()
                                 setContextMenu({ x: e.clientX, y: e.clientY, msg: message })
