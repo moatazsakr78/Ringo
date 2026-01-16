@@ -214,6 +214,7 @@ export default function WhatsAppPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [contacts, setContacts] = useState<WhatsAppContact[]>([])
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
+  const selectedConversationRef = useRef<string | null>(null)
   const [newMessage, setNewMessage] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isSending, setIsSending] = useState(false)
@@ -255,6 +256,11 @@ export default function WhatsAppPage() {
   const imageInputRef = useRef<HTMLInputElement>(null)
   const videoInputRef = useRef<HTMLInputElement>(null)
   const documentInputRef = useRef<HTMLInputElement>(null)
+
+  // Keep selectedConversationRef in sync with selectedConversation
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation
+  }, [selectedConversation])
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
@@ -389,6 +395,10 @@ export default function WhatsAppPage() {
 
   // Initial fetch and polling
   useEffect(() => {
+    // Clear any accumulated channels on page load to prevent ChannelRateLimitReached
+    const supabase = getSupabase()
+    supabase.removeAllChannels()
+
     fetchConversations()
     checkConnectionStatus()
 
@@ -403,78 +413,79 @@ export default function WhatsAppPage() {
     }
   }, [fetchConversations, checkConnectionStatus])
 
-  // Supabase Realtime subscription for incoming messages
+  // Single global Supabase Realtime channel for all WhatsApp messages
+  // This prevents ChannelRateLimitReached by using ONE channel instead of per-conversation
   useEffect(() => {
-    if (!selectedConversation) return
-
     const supabase = getSupabase()
 
-    // Subscribe to new messages for this conversation
+    // Create ONE channel for all WhatsApp messages (postgres_changes + broadcast)
     const channel = supabase
-      .channel(`whatsapp_messages_${selectedConversation}`)
+      .channel('whatsapp_global', {
+        config: { broadcast: { self: false } }
+      })
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'elfaroukgroup',
-          table: 'whatsapp_messages',
-          filter: `from_number=eq.${selectedConversation}`
+          table: 'whatsapp_messages'
         },
         (payload) => {
           console.log('📩 Realtime: New message received', payload)
           const newMsg = payload.new as Message
 
-          // Add message to state (both incoming and outgoing for multi-device sync)
+          // Update messages if it's for the currently selected conversation
+          if (selectedConversationRef.current === newMsg.from_number) {
+            setMessages(prev => {
+              const exists = prev.some(m => m.message_id === newMsg.message_id)
+              if (exists) return prev
+              return [...prev, newMsg]
+            })
+          }
+
+          // Always update conversations list for any new message
+          setConversations(prev => {
+            const updated = [...prev]
+            const convIndex = updated.findIndex(c => c.phoneNumber === newMsg.from_number)
+            if (convIndex >= 0) {
+              updated[convIndex] = {
+                ...updated[convIndex],
+                lastMessage: newMsg.message_text,
+                lastMessageTime: newMsg.created_at,
+                lastSender: newMsg.message_type === 'outgoing' ? 'me' : 'customer',
+                unreadCount: newMsg.message_type === 'incoming' && selectedConversationRef.current !== newMsg.from_number
+                  ? updated[convIndex].unreadCount + 1
+                  : updated[convIndex].unreadCount
+              }
+              // Move to top
+              const [conv] = updated.splice(convIndex, 1)
+              updated.unshift(conv)
+            }
+            return updated
+          })
+        }
+      )
+      .on('broadcast', { event: 'new_message' }, (payload) => {
+        // Handle cross-device sync
+        console.log('📡 Broadcast: New message received', payload)
+        const newMsg = payload.payload as Message
+        if (selectedConversationRef.current === newMsg.from_number) {
           setMessages(prev => {
-            // Avoid duplicates (Optimistic Update may have added it already)
             const exists = prev.some(m => m.message_id === newMsg.message_id)
             if (exists) return prev
             return [...prev, newMsg]
           })
         }
-      )
+      })
       .subscribe((status) => {
-        console.log('📡 Realtime subscription status:', status)
+        console.log('📡 Global Realtime subscription status:', status)
       })
 
     return () => {
-      console.log('📡 Cleaning up Realtime subscription')
+      console.log('📡 Cleaning up global Realtime subscription')
       supabase.removeChannel(channel)
     }
-  }, [selectedConversation])
-
-  // Supabase Broadcast subscription for cross-device sync of outgoing messages
-  useEffect(() => {
-    if (!selectedConversation) return
-
-    const supabase = getSupabase()
-
-    // Channel for broadcast (cross-device sync)
-    // self: false - prevents receiving our own broadcasts (avoids duplicate messages)
-    const broadcastChannel = supabase
-      .channel(`whatsapp_broadcast_${selectedConversation}`, {
-        config: { broadcast: { self: false } }
-      })
-      .on('broadcast', { event: 'new_message' }, (payload) => {
-        console.log('📡 Broadcast: New message received', payload)
-        const newMsg = payload.payload as Message
-
-        setMessages(prev => {
-          // Avoid duplicates (Optimistic Update may have added it already)
-          const exists = prev.some(m => m.message_id === newMsg.message_id)
-          if (exists) return prev
-          return [...prev, newMsg]
-        })
-      })
-      .subscribe((status) => {
-        console.log('📡 Broadcast subscription status:', status)
-      })
-
-    return () => {
-      console.log('📡 Cleaning up Broadcast subscription')
-      supabase.removeChannel(broadcastChannel)
-    }
-  }, [selectedConversation])
+  }, []) // Empty deps - channel created ONCE on mount
 
   // Scroll to bottom only when needed (new messages or conversation change)
   useEffect(() => {
@@ -825,10 +836,28 @@ export default function WhatsAppPage() {
 
         setMessages(prev => [...prev, sentMessage])
 
+        // تحديث قائمة المحادثات ونقل المحادثة للأعلى
+        setConversations(prev => {
+          const updated = [...prev]
+          const convIndex = updated.findIndex(c => c.phoneNumber === selectedConversation)
+          if (convIndex >= 0) {
+            updated[convIndex] = {
+              ...updated[convIndex],
+              lastMessage: sentMessage.message_text,
+              lastMessageTime: sentMessage.created_at,
+              lastSender: 'me' as const
+            }
+            // نقل للأعلى
+            const [conv] = updated.splice(convIndex, 1)
+            updated.unshift(conv)
+          }
+          return updated
+        })
+
         // Broadcast to other devices for cross-device sync
         const supabase = getSupabase()
         supabase
-          .channel(`whatsapp_broadcast_${selectedConversation}`)
+          .channel('whatsapp_global')
           .send({
             type: 'broadcast',
             event: 'new_message',

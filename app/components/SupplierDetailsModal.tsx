@@ -2305,7 +2305,9 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       accessor: 'displayBalance',
       width: 140,
       render: (value: string, item: any) => (
-        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>{value}</span>
+        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'} ${
+          item.isFirstRow ? 'bg-yellow-500/20 px-2 py-1 rounded' : ''
+        }`}>{value}</span>
       )
     },
     {
@@ -3239,7 +3241,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                           <ResizableTable
                             className="h-full w-full"
                             columns={statementColumns}
-                            data={accountStatements}
+                            data={accountStatements.map((item, index, arr) => ({
+                              ...item,
+                              isFirstRow: index === 0
+                            }))}
                             onRowDoubleClick={handleStatementRowDoubleClick}
                             reportType="SUPPLIER_STATEMENT_REPORT"
                           />

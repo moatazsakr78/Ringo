@@ -2727,8 +2727,8 @@ function POSPageContent() {
         setIsReturnMode(false);
       }
 
-      // Refresh products to update inventory
-      handleRefresh();
+      // Real-time subscriptions handle inventory updates automatically
+      // No need for handleRefresh() - it causes products to disappear/flicker
     } catch (error: any) {
       console.error("Invoice creation error:", error);
       console.error("Cart items at time of error:", cartItems);

@@ -166,7 +166,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         try { return JSON.parse(saved) } catch {}
       }
     }
-    return ['index', 'date', 'time', 'description', 'type', 'invoiceValue', 'paidAmount', 'balance', 'safe_name', 'employee_name']
+    return ['index', 'date', 'time', 'description', 'type', 'invoiceValue', 'paidAmount', 'netAmount', 'balance', 'safe_name', 'employee_name', 'details', 'userNotes']
   })
   const [visiblePaymentsColumns, setVisiblePaymentsColumns] = useState<string[]>(() => {
     if (typeof window !== 'undefined') {
@@ -177,6 +177,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     }
     return ['index', 'payment_date', 'created_at', 'amount', 'payment_method', 'notes', 'safe_name', 'employee_name']
   })
+
+  // Editable notes state for statement
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null)
+  const [editingNoteValue, setEditingNoteValue] = useState<string>('')
 
   // Column definitions for the manager
   const allInvoiceColumnDefs = [
@@ -225,9 +229,12 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     { id: 'type', label: 'نوع العملية', required: false },
     { id: 'invoiceValue', label: 'قيمة الفاتورة', required: false },
     { id: 'paidAmount', label: 'المبلغ المدفوع', required: false },
+    { id: 'netAmount', label: 'الصافي', required: false },
     { id: 'balance', label: 'الرصيد', required: true },
     { id: 'safe_name', label: 'الخزنة', required: false },
-    { id: 'employee_name', label: 'الموظف', required: false }
+    { id: 'employee_name', label: 'الموظف', required: false },
+    { id: 'details', label: 'تفاصيل', required: false },
+    { id: 'userNotes', label: 'ملاحظات', required: false }
   ]
 
   const allPaymentsColumnDefs = [
@@ -2572,6 +2579,41 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     ? totalInvoicesAmount / sales.length
     : 0
 
+  // Save user note for a statement
+  const saveStatementNote = async (statement: any, newNote: string) => {
+    try {
+      // Determine which table to update based on statement type
+      if (statement.saleId) {
+        // Update sale notes
+        const { error } = await supabase
+          .from('sales')
+          .update({ notes: newNote })
+          .eq('id', statement.saleId)
+
+        if (error) throw error
+      } else if (statement.paymentId) {
+        // Update customer payment notes
+        const { error } = await supabase
+          .from('customer_payments')
+          .update({ notes: newNote })
+          .eq('id', statement.paymentId)
+
+        if (error) throw error
+      }
+
+      // Update local state
+      setAccountStatements(prev => prev.map(s =>
+        s.id === statement.id ? { ...s, notes: newNote } : s
+      ))
+
+      // Reset editing state
+      setEditingNoteId(null)
+      setEditingNoteValue('')
+    } catch (error) {
+      console.error('Error saving note:', error)
+    }
+  }
+
   // Define columns for account statement table
   const statementColumns = [
     {
@@ -2631,8 +2673,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'invoiceValue',
       width: 130,
       render: (value: number, item: any) => (
-        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>
-          {value > 0 ? formatPrice(value, 'system') : '-'}
+        <span className="font-medium text-green-500">
+          {value > 0 ? `↑ ${formatPrice(value, 'system')}` : '-'}
         </span>
       )
     },
@@ -2642,14 +2684,36 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'paidAmount',
       width: 130,
       render: (value: number, item: any) => {
-        // Determine color and sign based on whether it increases or decreases balance
-        const isDebit = item.amount >= 0
-
+        if (value === 0) {
+          return <span className="font-medium text-gray-500">-</span>
+        }
         return (
-          <span className={`font-medium ${
-            isDebit ? 'text-amber-400' : 'text-gray-400'
-          }`}>
-            {isDebit ? '+' : '-'}{formatPrice(value, 'system')}
+          <span className="font-medium text-red-500">
+            ↓ {formatPrice(Math.abs(value), 'system')}
+          </span>
+        )
+      }
+    },
+    {
+      id: 'netAmount',
+      header: 'الصافي',
+      accessor: 'netAmount',
+      width: 130,
+      render: (value: number, item: any) => {
+        const netAmount = (item.invoiceValue || 0) - (item.paidAmount || 0);
+        if (netAmount === 0) {
+          return <span className="font-medium text-gray-500">-</span>
+        }
+        const isPositive = netAmount > 0;
+        return (
+          <span className="font-medium">
+            <span className={isPositive ? 'text-green-500' : 'text-red-500'}>
+              {isPositive ? '↑' : '↓'}
+            </span>
+            {' '}
+            <span className="text-blue-500">
+              {formatPrice(Math.abs(netAmount), 'system')}
+            </span>
           </span>
         )
       }
@@ -2660,7 +2724,11 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       accessor: 'balance',
       width: 140,
       render: (value: number, item: any) => (
-        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'}`}>{formatPrice(value, 'system')}</span>
+        <span className={`font-medium ${item.amount >= 0 ? 'text-amber-400' : 'text-white'} ${
+          item.isFirstRow ? 'bg-yellow-500/20 px-2 py-1 rounded' : ''
+        }`}>
+          {formatPrice(value, 'system')}
+        </span>
       )
     },
     {
@@ -2680,6 +2748,85 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       render: (value: string, item: any) => (
         <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value || '-'}</span>
       )
+    },
+    {
+      id: 'details',
+      header: 'تفاصيل',
+      accessor: 'notes',
+      width: 150,
+      render: (value: string, item: any) => (
+        <span className="text-gray-400 text-sm truncate max-w-[150px]" title={value || ''}>
+          {value || '-'}
+        </span>
+      )
+    },
+    {
+      id: 'userNotes',
+      header: (
+        <span className="flex items-center gap-1">
+          <PencilSquareIcon className="w-4 h-4" />
+          ملاحظات
+        </span>
+      ),
+      accessor: 'notes',
+      width: 180,
+      render: (value: string, item: any) => {
+        const isEditing = editingNoteId === item.id
+
+        if (isEditing) {
+          return (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={editingNoteValue}
+                onChange={(e) => setEditingNoteValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    saveStatementNote(item, editingNoteValue)
+                  } else if (e.key === 'Escape') {
+                    setEditingNoteId(null)
+                    setEditingNoteValue('')
+                  }
+                }}
+                className="flex-1 bg-gray-700 text-white text-sm px-2 py-1 rounded border border-blue-500 focus:outline-none"
+                autoFocus
+              />
+              <button
+                onClick={() => saveStatementNote(item, editingNoteValue)}
+                className="text-green-500 hover:text-green-400 p-1"
+                title="حفظ"
+              >
+                ✓
+              </button>
+              <button
+                onClick={() => {
+                  setEditingNoteId(null)
+                  setEditingNoteValue('')
+                }}
+                className="text-red-500 hover:text-red-400 p-1"
+                title="إلغاء"
+              >
+                ✕
+              </button>
+            </div>
+          )
+        }
+
+        return (
+          <div
+            className="flex items-center gap-1 cursor-pointer hover:bg-gray-700/50 px-2 py-1 rounded group"
+            onClick={() => {
+              setEditingNoteId(item.id)
+              setEditingNoteValue(value || '')
+            }}
+          >
+            <span className="text-gray-400 text-sm truncate flex-1" title={value || ''}>
+              {value || '-'}
+            </span>
+            <PencilSquareIcon className="w-4 h-4 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+        )
+      }
     }
   ].filter(col => visibleStatementColumns.includes(col.id))
 
@@ -3759,7 +3906,10 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                           <ResizableTable
                             className="h-full w-full"
                             columns={statementColumns}
-                            data={accountStatements}
+                            data={accountStatements.map((item, index, arr) => ({
+                              ...item,
+                              isFirstRow: index === 0
+                            }))}
                             onRowDoubleClick={handleStatementRowDoubleClick}
                             reportType="CUSTOMER_STATEMENT_REPORT"
                           />
