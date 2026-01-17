@@ -18,11 +18,38 @@ self.addEventListener('fetch', (event) => {
               setTimeout(() => reject(new Error('timeout')), 3000)
             )
           ]);
+
+          // تخزين صفحة POS في الـ cache عند نجاح الـ fetch
+          const url = new URL(event.request.url);
+          if (networkResponse.ok && url.pathname === '/pos') {
+            const cache = await caches.open('critical-pages-cache');
+            cache.put(event.request, networkResponse.clone());
+            console.log('Service Worker: Cached POS page');
+          }
+
           return networkResponse;
         } catch (error) {
           console.log('Service Worker: Network failed, trying cache for:', event.request.url);
 
-          // جرب الـ cache
+          const url = new URL(event.request.url);
+
+          // للصفحات الحرجة (POS)، جرب الـ critical-pages-cache أولاً
+          if (url.pathname === '/pos') {
+            const criticalCache = await caches.open('critical-pages-cache');
+            const criticalResponse = await criticalCache.match(event.request);
+            if (criticalResponse) {
+              console.log('Service Worker: Serving POS from critical cache');
+              return criticalResponse;
+            }
+            // جرب بدون query string
+            const criticalClean = await criticalCache.match('/pos');
+            if (criticalClean) {
+              console.log('Service Worker: Serving POS from critical cache (clean URL)');
+              return criticalClean;
+            }
+          }
+
+          // جرب الـ cache العام
           const cachedResponse = await caches.match(event.request);
           if (cachedResponse) {
             console.log('Service Worker: Serving from cache:', event.request.url);
@@ -30,7 +57,6 @@ self.addEventListener('fetch', (event) => {
           }
 
           // جرب الـ cache بدون query string
-          const url = new URL(event.request.url);
           const cleanUrl = url.origin + url.pathname;
           const cachedClean = await caches.match(cleanUrl);
           if (cachedClean) {
@@ -158,6 +184,26 @@ self.addEventListener('message', (event) => {
         });
       });
     }
+  }
+
+  // تخزين الصفحات الحرجة (مثل POS) عند الطلب
+  if (event.data && event.data.type === 'CACHE_CRITICAL_PAGES') {
+    const pages = event.data.pages || [];
+    console.log('Service Worker: Caching critical pages:', pages);
+
+    caches.open('critical-pages-cache').then(async (cache) => {
+      for (const page of pages) {
+        try {
+          const response = await fetch(page, { credentials: 'include' });
+          if (response.ok) {
+            await cache.put(page, response);
+            console.log('Service Worker: Cached critical page:', page);
+          }
+        } catch (err) {
+          console.warn('Service Worker: Failed to cache critical page:', page, err);
+        }
+      }
+    });
   }
 });
 

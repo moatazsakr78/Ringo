@@ -63,6 +63,18 @@ export default function ServiceWorkerRegister() {
           console.log('Service Worker controller changed')
         })
 
+        // إرسال رسالة لتخزين الصفحات الحرجة (مثل POS)
+        // ننتظر قليلاً للتأكد من أن الـ Service Worker جاهز
+        setTimeout(() => {
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: 'CACHE_CRITICAL_PAGES',
+              pages: ['/pos']
+            })
+            console.log('Requested caching of critical pages')
+          }
+        }, 2000)
+
         // Cleanup function
         cleanupRef.current = () => {
           clearInterval(updateInterval)

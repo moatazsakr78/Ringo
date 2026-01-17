@@ -74,6 +74,18 @@ const withPWA = require('next-pwa')({
         networkTimeoutSeconds: 3
       }
     },
+    // Critical POS page - StaleWhileRevalidate (show from cache immediately, update in background)
+    {
+      urlPattern: /^https?:\/\/[^/]+\/pos$/i,
+      handler: 'StaleWhileRevalidate',
+      options: {
+        cacheName: 'critical-pages-cache',
+        expiration: {
+          maxEntries: 5,
+          maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+        }
+      }
+    },
     // Pages - Network First with offline fallback
     {
       urlPattern: /^https?:\/\/[^/]+\/(pos|dashboard|products|inventory|customers|suppliers).*/i,
