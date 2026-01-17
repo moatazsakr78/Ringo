@@ -1,6 +1,114 @@
 // Custom Service Worker Extensions
 // This file is merged with the generated service worker by next-pwa
 
+// ============================================
+// Offline Navigation Handler
+// يعترض طلبات التصفح ويخدمها من الـ cache عند فشل الشبكة
+// ============================================
+self.addEventListener('fetch', (event) => {
+  // فقط للـ navigation requests (فتح صفحة في المتصفح)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          // حاول من الـ network أولاً مع timeout قصير (3 ثواني)
+          const networkResponse = await Promise.race([
+            fetch(event.request),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('timeout')), 3000)
+            )
+          ]);
+          return networkResponse;
+        } catch (error) {
+          console.log('Service Worker: Network failed, trying cache for:', event.request.url);
+
+          // جرب الـ cache
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) {
+            console.log('Service Worker: Serving from cache:', event.request.url);
+            return cachedResponse;
+          }
+
+          // جرب الـ cache بدون query string
+          const url = new URL(event.request.url);
+          const cleanUrl = url.origin + url.pathname;
+          const cachedClean = await caches.match(cleanUrl);
+          if (cachedClean) {
+            console.log('Service Worker: Serving from cache (clean URL):', cleanUrl);
+            return cachedClean;
+          }
+
+          // جرب أي صفحة مشابهة في الـ cache
+          const allCaches = await caches.keys();
+          for (const cacheName of allCaches) {
+            const cache = await caches.open(cacheName);
+            const keys = await cache.keys();
+            for (const key of keys) {
+              if (key.url.includes(url.pathname)) {
+                console.log('Service Worker: Found similar cached URL:', key.url);
+                return cache.match(key);
+              }
+            }
+          }
+
+          // Fallback للـ offline page
+          console.log('Service Worker: No cache found, showing offline page');
+          const offlinePage = await caches.match('/offline.html');
+          if (offlinePage) return offlinePage;
+
+          // آخر حل - رسالة بسيطة
+          return new Response(`
+            <!DOCTYPE html>
+            <html dir="rtl" lang="ar">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>غير متصل بالإنترنت</title>
+              <style>
+                body {
+                  font-family: 'Cairo', sans-serif;
+                  background: #1F2937;
+                  color: white;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  height: 100vh;
+                  margin: 0;
+                  text-align: center;
+                }
+                .container { padding: 20px; }
+                h1 { color: #3B82F6; }
+                button {
+                  background: #3B82F6;
+                  color: white;
+                  border: none;
+                  padding: 12px 24px;
+                  border-radius: 8px;
+                  cursor: pointer;
+                  font-size: 16px;
+                  margin-top: 20px;
+                }
+                button:hover { background: #2563EB; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>📡 أنت غير متصل بالإنترنت</h1>
+                <p>يرجى التحقق من اتصالك بالإنترنت والمحاولة مرة أخرى</p>
+                <button onclick="location.reload()">إعادة المحاولة</button>
+              </div>
+            </body>
+            </html>
+          `, {
+            status: 503,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          });
+        }
+      })()
+    );
+  }
+});
+
 // Background sync for offline sales
 self.addEventListener('sync', (event) => {
   console.log('Service Worker: Background sync', event.tag);

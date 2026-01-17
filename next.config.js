@@ -19,7 +19,7 @@ const withPWA = require('next-pwa')({
           maxEntries: 200,
           maxAgeSeconds: 60 * 60 // 1 hour
         },
-        networkTimeoutSeconds: 10,
+        networkTimeoutSeconds: 3,
         cacheableResponse: {
           statuses: [0, 200]
         }
@@ -71,7 +71,7 @@ const withPWA = require('next-pwa')({
           maxEntries: 100,
           maxAgeSeconds: 60 * 60 // 1 hour
         },
-        networkTimeoutSeconds: 10
+        networkTimeoutSeconds: 3
       }
     },
     // Pages - Network First with offline fallback
@@ -84,7 +84,7 @@ const withPWA = require('next-pwa')({
           maxEntries: 50,
           maxAgeSeconds: 60 * 60 * 24 // 24 hours
         },
-        networkTimeoutSeconds: 10
+        networkTimeoutSeconds: 3
       }
     }
   ]
