@@ -113,6 +113,21 @@ export interface OfflinePaymentMethod {
   is_active: boolean
 }
 
+export interface OfflineCashDrawerTransaction {
+  id: string
+  drawer_id: string | null
+  record_id: string | null
+  record_name?: string
+  transaction_type: string
+  amount: number
+  balance_after: number | null
+  sale_id: string | null
+  notes: string | null
+  performed_by: string | null
+  customer_name?: string
+  created_at: string
+}
+
 // IndexedDB Store Names
 export const STORE_NAMES = {
   PRODUCTS: 'products',
@@ -124,7 +139,8 @@ export const STORE_NAMES = {
   PAYMENT_METHODS: 'payment_methods',
   PENDING_SALES: 'pending_sales',
   SYNC_LOG: 'sync_log',
-  META: 'meta'
+  META: 'meta',
+  CASH_DRAWER_TRANSACTIONS: 'cash_drawer_transactions'
 } as const
 
 // Meta keys for tracking sync state

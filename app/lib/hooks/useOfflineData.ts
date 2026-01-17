@@ -10,6 +10,7 @@ import {
   saveCustomers,
   saveRecords,
   savePaymentMethods,
+  saveCashDrawerTransactions,
   getLastSyncTime,
   setLastSyncTime,
   hasOfflineData,
@@ -19,7 +20,8 @@ import {
   getAllCategories,
   getAllCustomers,
   getAllRecords,
-  getAllPaymentMethods
+  getAllPaymentMethods,
+  getAllCashDrawerTransactions
 } from '../offline/db'
 import type {
   OfflineProduct,
@@ -28,7 +30,8 @@ import type {
   OfflineCategory,
   OfflineCustomer,
   OfflineRecord,
-  OfflinePaymentMethod
+  OfflinePaymentMethod,
+  OfflineCashDrawerTransaction
 } from '../offline/types'
 
 export interface SyncState {
@@ -51,6 +54,7 @@ export interface OfflineDataState {
   customers: OfflineCustomer[]
   records: OfflineRecord[]
   paymentMethods: OfflinePaymentMethod[]
+  cashDrawerTransactions: OfflineCashDrawerTransaction[]
 }
 
 const SYNC_TASKS = [
@@ -60,7 +64,8 @@ const SYNC_TASKS = [
   'inventory',
   'customers',
   'records',
-  'paymentMethods'
+  'paymentMethods',
+  'cashDrawerTransactions'
 ]
 
 export function useOfflineData() {
@@ -79,7 +84,8 @@ export function useOfflineData() {
     categories: [],
     customers: [],
     records: [],
-    paymentMethods: []
+    paymentMethods: [],
+    cashDrawerTransactions: []
   })
 
   const syncInProgress = useRef(false)
@@ -95,6 +101,7 @@ export function useOfflineData() {
         customers,
         records,
         paymentMethods,
+        cashDrawerTransactions,
         lastSync
       ] = await Promise.all([
         getAllProducts(),
@@ -104,6 +111,7 @@ export function useOfflineData() {
         getAllCustomers(),
         getAllRecords(),
         getAllPaymentMethods(),
+        getAllCashDrawerTransactions(),
         getLastSyncTime()
       ])
 
@@ -115,7 +123,8 @@ export function useOfflineData() {
         categories,
         customers,
         records,
-        paymentMethods
+        paymentMethods,
+        cashDrawerTransactions
       })
 
       setSyncState(prev => ({ ...prev, lastSyncTime: lastSync }))
@@ -276,6 +285,68 @@ export function useOfflineData() {
     await savePaymentMethods(offlineMethods)
   }
 
+  // Sync cash drawer transactions from server
+  const syncCashDrawerTransactions = async (): Promise<void> => {
+    // Get transactions from the last 30 days for offline use
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const { data: transactions, error } = await supabase
+      .from('cash_drawer_transactions')
+      .select('id, drawer_id, record_id, transaction_type, amount, balance_after, sale_id, notes, performed_by, created_at')
+      .gte('created_at', thirtyDaysAgo.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1000)
+
+    if (error) throw new Error(`Failed to sync transactions: ${error.message}`)
+
+    // Get records to map names
+    const { data: records } = await supabase
+      .from('records')
+      .select('id, name')
+
+    const recordsMap = new Map((records || []).map(r => [r.id, r.name]))
+
+    // Get sale customer names
+    const saleIds = transactions
+      .filter(t => t.sale_id)
+      .map(t => t.sale_id)
+      .filter((id): id is string => id !== null)
+
+    let customerMap = new Map<string, string>()
+    if (saleIds.length > 0) {
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('id, customers:customer_id(name)')
+        .in('id', saleIds)
+
+      if (salesData) {
+        salesData.forEach((sale: any) => {
+          if (sale.customers?.name) {
+            customerMap.set(sale.id, sale.customers.name)
+          }
+        })
+      }
+    }
+
+    const offlineTransactions: OfflineCashDrawerTransaction[] = transactions.map(t => ({
+      id: t.id,
+      drawer_id: t.drawer_id,
+      record_id: t.record_id,
+      record_name: t.record_id ? recordsMap.get(t.record_id) || 'غير معروف' : 'لا يوجد',
+      transaction_type: t.transaction_type || '',
+      amount: t.amount || 0,
+      balance_after: t.balance_after,
+      sale_id: t.sale_id,
+      notes: t.notes,
+      performed_by: t.performed_by,
+      customer_name: t.sale_id ? customerMap.get(t.sale_id) : undefined,
+      created_at: t.created_at
+    }))
+
+    await saveCashDrawerTransactions(offlineTransactions)
+  }
+
   // Full sync from server to IndexedDB
   const syncFromServer = useCallback(async (force: boolean = false) => {
     if (syncInProgress.current) {
@@ -318,7 +389,8 @@ export function useOfflineData() {
         { name: 'inventory', fn: syncInventory, label: 'المخزون' },
         { name: 'customers', fn: syncCustomers, label: 'العملاء' },
         { name: 'records', fn: syncRecords, label: 'الخزن' },
-        { name: 'paymentMethods', fn: syncPaymentMethods, label: 'طرق الدفع' }
+        { name: 'paymentMethods', fn: syncPaymentMethods, label: 'طرق الدفع' },
+        { name: 'cashDrawerTransactions', fn: syncCashDrawerTransactions, label: 'سجلات الخزنة' }
       ]
 
       for (let i = 0; i < tasks.length; i++) {

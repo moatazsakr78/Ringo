@@ -8,6 +8,7 @@ import {
   OfflineCustomer,
   OfflineRecord,
   OfflinePaymentMethod,
+  OfflineCashDrawerTransaction,
   PendingSale,
   SyncLogEntry,
   STORE_NAMES,
@@ -15,7 +16,7 @@ import {
 } from './types'
 
 const DB_NAME = 'pos-offline-db'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let dbInstance: IDBDatabase | null = null
 
@@ -125,6 +126,14 @@ export function openDatabase(): Promise<IDBDatabase> {
       // Meta store for configuration
       if (!db.objectStoreNames.contains(STORE_NAMES.META)) {
         db.createObjectStore(STORE_NAMES.META, { keyPath: 'key' })
+      }
+
+      // Cash drawer transactions store
+      if (!db.objectStoreNames.contains(STORE_NAMES.CASH_DRAWER_TRANSACTIONS)) {
+        const transactionsStore = db.createObjectStore(STORE_NAMES.CASH_DRAWER_TRANSACTIONS, { keyPath: 'id' })
+        transactionsStore.createIndex('record_id', 'record_id', { unique: false })
+        transactionsStore.createIndex('transaction_type', 'transaction_type', { unique: false })
+        transactionsStore.createIndex('created_at', 'created_at', { unique: false })
       }
     }
   })
@@ -416,4 +425,21 @@ export async function clearAllOfflineData(): Promise<void> {
   for (const store of stores) {
     await clearStore(store)
   }
+}
+
+// Specific operations for Cash Drawer Transactions
+export async function getAllCashDrawerTransactions(): Promise<OfflineCashDrawerTransaction[]> {
+  return getAll<OfflineCashDrawerTransaction>(STORE_NAMES.CASH_DRAWER_TRANSACTIONS)
+}
+
+export async function getCashDrawerTransactionsByRecord(recordId: string): Promise<OfflineCashDrawerTransaction[]> {
+  return getByIndex<OfflineCashDrawerTransaction>(STORE_NAMES.CASH_DRAWER_TRANSACTIONS, 'record_id', recordId)
+}
+
+export async function saveCashDrawerTransactions(transactions: OfflineCashDrawerTransaction[]): Promise<void> {
+  await putAll(STORE_NAMES.CASH_DRAWER_TRANSACTIONS, transactions)
+}
+
+export async function clearCashDrawerTransactions(): Promise<void> {
+  await clearStore(STORE_NAMES.CASH_DRAWER_TRANSACTIONS)
 }

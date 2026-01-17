@@ -8,7 +8,9 @@ import {
   TrashIcon,
   CreditCardIcon,
   DocumentTextIcon,
-  CalendarDaysIcon
+  CalendarDaysIcon,
+  CloudIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../../lib/supabase/client'
@@ -23,6 +25,10 @@ import SimpleDateFilterModal, { DateFilter } from '../../components/SimpleDateFi
 import ContextMenu, { createEditContextMenuItems } from '../../components/ContextMenu'
 import EditInvoiceModal from '../../components/EditInvoiceModal'
 import { useFormatPrice } from '@/lib/hooks/useCurrency'
+import { useOfflineStatus } from '../../lib/hooks/useOfflineStatus'
+import { useOfflineData } from '../../lib/hooks/useOfflineData'
+import { getAllPendingSales } from '../../lib/offline/db'
+import type { PendingSale } from '../../lib/offline/types'
 
 // Types
 interface Safe {
@@ -65,6 +71,12 @@ type TransactionType = 'all' | 'sale' | 'return' | 'withdrawal' | 'deposit' | 'a
 export default function SafesPage() {
   const formatPrice = useFormatPrice()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+
+  // Offline support
+  const { isOnline, isOfflineReady, pendingSalesCount } = useOfflineStatus()
+  const { data: offlineData } = useOfflineData()
+  const [pendingSales, setPendingSales] = useState<PendingSale[]>([])
+  const [isUsingOfflineData, setIsUsingOfflineData] = useState(false)
 
   // Tab Management
   const [activeTab, setActiveTab] = useState<TabType>('safes')
@@ -532,7 +544,8 @@ export default function SafesPage() {
     safe.name.toLowerCase().includes(safesSearchTerm.toLowerCase())
   )
 
-  const filteredTransactions = transactions.filter(tx =>
+  // Use allTransactions for filtering (includes pending sales when offline)
+  const filteredTransactions = allTransactions.filter(tx =>
     (tx.notes?.toLowerCase().includes(transactionSearchTerm.toLowerCase()) || false) ||
     (tx.performed_by?.toLowerCase().includes(transactionSearchTerm.toLowerCase()) || false) ||
     (tx.safe_name?.toLowerCase().includes(transactionSearchTerm.toLowerCase()) || false) ||
@@ -594,6 +607,97 @@ export default function SafesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactionFilters])
 
+  // ==================== Offline Support Effects ====================
+  // Load pending sales from IndexedDB
+  useEffect(() => {
+    const loadPendingSales = async () => {
+      try {
+        const sales = await getAllPendingSales()
+        setPendingSales(sales.filter(s => s.sync_status === 'pending' || s.sync_status === 'failed'))
+      } catch (error) {
+        console.error('Failed to load pending sales:', error)
+      }
+    }
+    loadPendingSales()
+
+    // Refresh periodically
+    const interval = setInterval(loadPendingSales, 5000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Handle offline mode - use cached data when offline
+  useEffect(() => {
+    if (!isOnline && isOfflineReady) {
+      setIsUsingOfflineData(true)
+      // Use offline data for safes
+      if (offlineData.records.length > 0) {
+        const offlineSafes: Safe[] = offlineData.records.map(r => ({
+          id: r.id,
+          name: r.name,
+          is_primary: false,
+          is_active: true,
+          branch_id: r.branch_id,
+          created_at: null,
+          updated_at: null
+        }))
+        setSafes(offlineSafes)
+        setActiveSafesCount(offlineSafes.length)
+      }
+      // Use offline data for payment methods
+      if (offlineData.paymentMethods.length > 0) {
+        const offlineMethods: PaymentMethod[] = offlineData.paymentMethods.map(m => ({
+          id: m.id,
+          name: m.name,
+          is_default: null,
+          is_active: m.is_active,
+          created_at: null,
+          updated_at: null
+        }))
+        setPaymentMethods(offlineMethods)
+      }
+      // Use offline data for transactions
+      if (offlineData.cashDrawerTransactions.length > 0) {
+        const offlineTransactions: CashDrawerTransaction[] = offlineData.cashDrawerTransactions.map(t => ({
+          id: t.id,
+          drawer_id: t.drawer_id,
+          record_id: t.record_id,
+          transaction_type: t.transaction_type,
+          amount: t.amount,
+          balance_after: t.balance_after,
+          sale_id: t.sale_id,
+          notes: t.notes,
+          performed_by: t.performed_by,
+          created_at: t.created_at,
+          safe_name: t.record_name,
+          customer_name: t.customer_name
+        }))
+        setTransactions(offlineTransactions)
+        setHasLoadedTransactions(true)
+      }
+    } else if (isOnline) {
+      setIsUsingOfflineData(false)
+    }
+  }, [isOnline, isOfflineReady, offlineData])
+
+  // Convert pending sales to transaction format for display
+  const pendingSalesAsTransactions: CashDrawerTransaction[] = pendingSales.map(sale => ({
+    id: `pending_${sale.local_id}`,
+    drawer_id: null,
+    record_id: sale.record_id,
+    transaction_type: sale.invoice_type === 'Sale Return' ? 'return' : 'sale',
+    amount: sale.invoice_type === 'Sale Return' ? -sale.total_amount : sale.total_amount,
+    balance_after: null,
+    sale_id: null,
+    notes: `فاتورة معلقة: ${sale.temp_invoice_number}`,
+    performed_by: sale.user_name,
+    created_at: sale.created_at,
+    safe_name: sale.record_name || 'لا يوجد',
+    customer_name: sale.customer_name
+  }))
+
+  // Always combine pending sales with transactions (shows pending at top)
+  const allTransactions = [...pendingSalesAsTransactions, ...transactions]
+
   return (
     <div className="h-screen bg-[#2B3544] overflow-hidden">
       {/* Top Header */}
@@ -613,7 +717,22 @@ export default function SafesPage() {
               إدارة الخزن والسجلات وطرق الدفع
             </h1>
           </div>
-          <div></div>
+          <div className="flex items-center gap-3">
+            {/* Offline Indicator */}
+            {!isOnline && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-900/50 border border-orange-600 rounded-lg">
+                <ExclamationTriangleIcon className="h-4 w-4 text-orange-400" />
+                <span className="text-orange-300 text-sm font-medium">وضع عدم الاتصال</span>
+              </div>
+            )}
+            {/* Pending Sales Badge */}
+            {pendingSalesCount > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-900/50 border border-yellow-600 rounded-lg">
+                <CloudIcon className="h-4 w-4 text-yellow-400" />
+                <span className="text-yellow-300 text-sm font-medium">{pendingSalesCount} فاتورة معلقة</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Unified Control Bar - Tabs, Filters, Count & Search in ONE row */}
@@ -875,8 +994,18 @@ export default function SafesPage() {
         {activeTab === 'records' && (
           <div className="p-6 pt-4">
             {/* Transactions Table */}
+            {/* Offline Mode Notice */}
+            {isUsingOfflineData && (
+              <div className="mb-4 p-3 bg-orange-900/30 border border-orange-600 rounded-lg flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-5 w-5 text-orange-400" />
+                <span className="text-orange-300 text-sm">
+                  أنت في وضع عدم الاتصال. يتم عرض البيانات المحفوظة من آخر مزامنة.
+                </span>
+              </div>
+            )}
+
             <div className="bg-pos-darker rounded-lg overflow-hidden border border-gray-700">
-              {isLoadingTransactions ? (
+              {isLoadingTransactions && !isUsingOfflineData ? (
                 <div className="p-8 text-center text-gray-400">
                   جاري تحميل السجلات...
                 </div>
@@ -897,29 +1026,43 @@ export default function SafesPage() {
                   </thead>
                   <tbody className="bg-pos-darker divide-y divide-gray-700">
                     {filteredTransactions.length > 0 ? (
-                      filteredTransactions.map((tx, index) => (
-                        <tr
-                          key={tx.id}
-                          className="hover:bg-gray-700 transition-colors cursor-pointer"
-                          onContextMenu={(e) => handleContextMenu(e, tx)}
-                        >
-                          <td className="p-3 text-white font-medium">{index + 1}</td>
-                          <td className="p-3">{getTransactionTypeBadge(tx.transaction_type)}</td>
-                          <td className="p-3 text-white">{tx.safe_name}</td>
-                          <td className="p-3">{formatAmount(tx.amount)}</td>
-                          <td className="p-3 text-gray-300">{formatPrice(tx.balance_after || 0)}</td>
-                          <td className="p-3 text-gray-400 max-w-[200px] truncate" title={tx.notes || ''}>
-                            {tx.notes || '-'}
-                          </td>
-                          <td className="p-3 text-gray-400">{tx.customer_name || '-'}</td>
-                          <td className="p-3 text-gray-400">{tx.performed_by || '-'}</td>
-                          <td className="p-3 text-gray-400">{formatDateTime(tx.created_at)}</td>
-                        </tr>
-                      ))
+                      filteredTransactions.map((tx, index) => {
+                        const isPending = tx.id.startsWith('pending_')
+                        return (
+                          <tr
+                            key={tx.id}
+                            className={`hover:bg-gray-700 transition-colors cursor-pointer ${isPending ? 'bg-yellow-900/20' : ''}`}
+                            onContextMenu={(e) => !isPending && handleContextMenu(e, tx)}
+                          >
+                            <td className="p-3 text-white font-medium">{index + 1}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                {getTransactionTypeBadge(tx.transaction_type)}
+                                {isPending && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs bg-yellow-900 text-yellow-300 border border-yellow-600">
+                                    معلق
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-white">{tx.safe_name}</td>
+                            <td className="p-3">{formatAmount(tx.amount)}</td>
+                            <td className="p-3 text-gray-300">
+                              {isPending ? <span className="text-yellow-400">-</span> : formatPrice(tx.balance_after || 0)}
+                            </td>
+                            <td className="p-3 text-gray-400 max-w-[200px] truncate" title={tx.notes || ''}>
+                              {tx.notes || '-'}
+                            </td>
+                            <td className="p-3 text-gray-400">{tx.customer_name || '-'}</td>
+                            <td className="p-3 text-gray-400">{tx.performed_by || '-'}</td>
+                            <td className="p-3 text-gray-400">{formatDateTime(tx.created_at)}</td>
+                          </tr>
+                        )
+                      })
                     ) : (
                       <tr>
                         <td colSpan={9} className="p-8 text-center text-gray-400">
-                          لا توجد سجلات متاحة
+                          {isUsingOfflineData ? 'لا توجد سجلات محفوظة للعرض في وضع عدم الاتصال' : 'لا توجد سجلات متاحة'}
                         </td>
                       </tr>
                     )}
