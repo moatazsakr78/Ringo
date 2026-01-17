@@ -544,6 +544,27 @@ export default function SafesPage() {
     safe.name.toLowerCase().includes(safesSearchTerm.toLowerCase())
   )
 
+  // Convert pending sales to transaction format for display
+  // MOVED HERE - must be defined before filteredTransactions
+  const pendingSalesAsTransactions: CashDrawerTransaction[] = pendingSales.map(sale => ({
+    id: `pending_${sale.local_id}`,
+    drawer_id: null,
+    record_id: sale.record_id,
+    transaction_type: sale.invoice_type === 'Sale Return' ? 'return' : 'sale',
+    amount: sale.invoice_type === 'Sale Return' ? -sale.total_amount : sale.total_amount,
+    balance_after: null,
+    sale_id: null,
+    notes: `فاتورة معلقة: ${sale.temp_invoice_number}`,
+    performed_by: sale.user_name,
+    created_at: sale.created_at,
+    safe_name: sale.record_name || 'لا يوجد',
+    customer_name: sale.customer_name
+  }))
+
+  // Always combine pending sales with transactions (shows pending at top)
+  // MOVED HERE - must be defined before filteredTransactions
+  const allTransactions = [...pendingSalesAsTransactions, ...transactions]
+
   // Use allTransactions for filtering (includes pending sales when offline)
   const filteredTransactions = allTransactions.filter(tx =>
     (tx.notes?.toLowerCase().includes(transactionSearchTerm.toLowerCase()) || false) ||
@@ -678,25 +699,6 @@ export default function SafesPage() {
       setIsUsingOfflineData(false)
     }
   }, [isOnline, isOfflineReady, offlineData])
-
-  // Convert pending sales to transaction format for display
-  const pendingSalesAsTransactions: CashDrawerTransaction[] = pendingSales.map(sale => ({
-    id: `pending_${sale.local_id}`,
-    drawer_id: null,
-    record_id: sale.record_id,
-    transaction_type: sale.invoice_type === 'Sale Return' ? 'return' : 'sale',
-    amount: sale.invoice_type === 'Sale Return' ? -sale.total_amount : sale.total_amount,
-    balance_after: null,
-    sale_id: null,
-    notes: `فاتورة معلقة: ${sale.temp_invoice_number}`,
-    performed_by: sale.user_name,
-    created_at: sale.created_at,
-    safe_name: sale.record_name || 'لا يوجد',
-    customer_name: sale.customer_name
-  }))
-
-  // Always combine pending sales with transactions (shows pending at top)
-  const allTransactions = [...pendingSalesAsTransactions, ...transactions]
 
   return (
     <div className="h-screen bg-[#2B3544] overflow-hidden">
