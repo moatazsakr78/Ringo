@@ -73,15 +73,12 @@ export async function POST(request: NextRequest) {
         const key = msgData.key || {};
         const isOutgoing = key.fromMe === true;
 
-        // Skip outgoing messages - they're already saved by Send API
-        // This prevents duplicate messages in the database
-        if (isOutgoing) {
-          console.log('⏭️ Skipping outgoing message (already saved by Send API)');
-          continue;
-        }
+        // Process both incoming and outgoing messages
+        // Outgoing messages from the real WhatsApp app need to be stored
+        // Messages sent via our Send API will be handled by upsert (ignoreDuplicates)
 
-        // Parse WasenderAPI message format
-        const message = parseWasenderMessage(msgData);
+        // Parse WasenderAPI message format with isOutgoing flag
+        const message = parseWasenderMessage(msgData, isOutgoing);
 
         if (message) {
           // Extra validation before storing
@@ -94,7 +91,8 @@ export async function POST(request: NextRequest) {
             continue;
           }
 
-          console.log(`📥 Incoming message (${event}):`, message.customerName, '-', message.text);
+          const msgDirection = isOutgoing ? '📤 Outgoing' : '📥 Incoming';
+          console.log(`${msgDirection} message (${event}):`, message.customerName, '-', message.text);
 
           // Check if message contains media that needs decryption
           let mediaUrl = message.mediaUrl;
@@ -114,6 +112,8 @@ export async function POST(request: NextRequest) {
 
           // Use upsert to prevent duplicates (atomic operation)
           // Store both incoming and outgoing messages
+          // For outgoing messages from real WhatsApp app, customer_name should be the recipient name
+          // but we use 'الفاروق جروب' as sender name for display consistency
           const { error: dbError } = await supabase
             .schema('elfaroukgroup')
             .from('whatsapp_messages')
@@ -121,12 +121,12 @@ export async function POST(request: NextRequest) {
               message_id: message.messageId,
               msg_id: message.msgId || null, // WasenderAPI integer ID for replyTo
               from_number: message.from,
-              customer_name: message.customerName,
+              customer_name: isOutgoing ? 'الفاروق جروب' : message.customerName,
               message_text: message.text,
-              message_type: 'incoming',
+              message_type: isOutgoing ? 'outgoing' : 'incoming',
               media_type: message.mediaType || 'text',
               media_url: mediaUrl || null,
-              is_read: false,
+              is_read: isOutgoing ? true : false, // Outgoing messages are always "read"
               created_at: message.timestamp.toISOString(),
               // Quoted/Reply message fields
               quoted_message_id: message.quotedMessageId || null,
@@ -150,12 +150,12 @@ export async function POST(request: NextRequest) {
               message_id: message.messageId,
               msg_id: message.msgId || null,
               from_number: message.from,
-              customer_name: message.customerName,
+              customer_name: isOutgoing ? 'الفاروق جروب' : message.customerName,
               message_text: message.text,
-              message_type: 'incoming',
+              message_type: isOutgoing ? 'outgoing' : 'incoming',
               media_type: message.mediaType || 'text',
               media_url: mediaUrl || null,
-              is_read: false,
+              is_read: isOutgoing ? true : false,
               created_at: message.timestamp.toISOString(),
               quoted_message_id: message.quotedMessageId || null,
               quoted_message_text: message.quotedMessageText || null,
@@ -163,15 +163,17 @@ export async function POST(request: NextRequest) {
             };
 
             // إرسال broadcast لجميع الـ clients المتصلين
+            // Use 'new_message' for outgoing, 'incoming_message' for incoming
+            const broadcastEvent = isOutgoing ? 'new_message' : 'incoming_message';
             supabaseForBroadcast
               .channel('whatsapp_global')
               .send({
                 type: 'broadcast',
-                event: 'incoming_message',
+                event: broadcastEvent,
                 payload: messageData
               })
               .then(() => {
-                console.log('📡 Broadcast sent for incoming message');
+                console.log(`📡 Broadcast sent for ${isOutgoing ? 'outgoing' : 'incoming'} message`);
               })
               .catch((err) => {
                 console.error('❌ Broadcast failed:', err);
@@ -298,7 +300,7 @@ interface ParsedMessage {
   quotedMessageSender?: string;
 }
 
-function parseWasenderMessage(msgData: any): ParsedMessage | null {
+function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): ParsedMessage | null {
   try {
     const key = msgData.key || {};
     const message = msgData.message || {};
@@ -318,12 +320,20 @@ function parseWasenderMessage(msgData: any): ParsedMessage | null {
       console.log('📌 No msgId found, will use message_id as fallback for replies');
     }
 
-    // Get phone number - WasenderAPI uses cleanedSenderPn or cleanedParticipantPn
-    let from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
-
-    // Fallback to remoteJid if no clean phone number
-    if (!from && key.remoteJid) {
-      from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+    // Get phone number - handle differently for outgoing vs incoming
+    let from = '';
+    if (isOutgoing) {
+      // For outgoing messages: remoteJid is the customer (recipient)
+      if (key.remoteJid) {
+        from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+      }
+    } else {
+      // For incoming messages: cleanedSenderPn is the customer (sender)
+      from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
+      // Fallback to remoteJid if no clean phone number
+      if (!from && key.remoteJid) {
+        from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+      }
     }
 
     if (!from) {
