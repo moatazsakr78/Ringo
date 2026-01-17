@@ -12,6 +12,16 @@ import type {
   PaymentEntry
 } from './types'
 
+// دالة لإرجاع الوقت بتوقيت القاهرة في صيغة ISO
+// Cairo is UTC+2 (Egypt doesn't use DST since 2014)
+function getCairoISOString(): string {
+  const now = new Date()
+  const cairoOffset = 2 * 60 // 2 hours in minutes
+  const utcOffset = now.getTimezoneOffset() // Minutes behind UTC (negative for ahead)
+  const cairoTime = new Date(now.getTime() + (cairoOffset + utcOffset) * 60000)
+  return cairoTime.toISOString()
+}
+
 export interface OfflineCartItem {
   product: {
     id: string
@@ -179,7 +189,7 @@ export async function createOfflineSalesInvoice({
       credit_amount: creditAmount,
       user_id: userId,
       user_name: userName,
-      created_at: new Date().toISOString(), // Actual time of sale
+      created_at: getCairoISOString(), // توقيت القاهرة (UTC+2)
       synced_at: null,
       sync_status: 'pending',
       sync_error: null,
