@@ -155,6 +155,8 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
             price2,
             price3,
             price4,
+            quantity_per_carton,
+            product_code,
             rating,
             rating_count,
             discount_percentage,
@@ -764,7 +766,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           id, name, barcode, price, cost_price, main_image_url, sub_image_url,
           additional_images_urls, category_id, is_active, display_order, stock,
           min_stock, max_stock, unit, description, wholesale_price, price1, price2,
-          price3, price4, rating, rating_count, discount_percentage, discount_amount,
+          price3, price4, quantity_per_carton, product_code, rating, rating_count, discount_percentage, discount_amount,
           discount_start_date, discount_end_date,
           categories (id, name)
         `)
