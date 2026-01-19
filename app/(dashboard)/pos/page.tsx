@@ -7,6 +7,7 @@ const POS_COLUMN_VISIBILITY_KEY = 'pos-column-visibility-v2';
 import { useCart, CartProvider } from "@/lib/contexts/CartContext";
 import { useCartBadge } from "@/lib/hooks/useCartBadge";
 import { useUserProfile } from "@/lib/contexts/UserProfileContext";
+import { useCurrentBranch } from "@/lib/contexts/CurrentBranchContext";
 import { usePermissionCheck } from "@/lib/hooks/usePermissionCheck";
 import CartModal from "@/app/components/CartModal";
 import { useCompanySettings } from "@/lib/hooks/useCompanySettings";
@@ -98,7 +99,6 @@ import TopHeader from "../../components/layout/TopHeader";
 import RecordsSelectionModal from "../../components/RecordsSelectionModal";
 import CustomerSelectionModal from "../../components/CustomerSelectionModal";
 import PartySelectionModal, { SelectedParty, PartyType } from "../../components/PartySelectionModal";
-import BranchSelectionModal from "../../components/BranchSelectionModal";
 import PriceTypeSelectionModal, { PriceType, getPriceTypeName } from "../../components/PriceTypeSelectionModal";
 import HistoryModal from "../../components/HistoryModal";
 import AddToCartModal from "../../components/AddToCartModal";
@@ -166,6 +166,9 @@ function POSPageContent() {
   // Get user profile for default branch
   const { profile: userProfile, isAdmin } = useUserProfile();
 
+  // Get current branch from context (managed via TopHeader)
+  const { currentBranch: contextBranch, setCurrentBranch: setContextBranch, isLoading: isBranchLoading } = useCurrentBranch();
+
   // Permission check for changing branch
   const { can: hasPermission } = usePermissionCheck();
   const canChangeBranch = isAdmin || hasPermission('pos.change_branch');
@@ -215,7 +218,6 @@ function POSPageContent() {
   const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
   const [selectedPartyType, setSelectedPartyType] = useState<PartyType>('customer');
   const [selectedSupplierForSale, setSelectedSupplierForSale] = useState<any>(null);
-  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"table" | "grid">("grid");
@@ -331,7 +333,7 @@ function POSPageContent() {
   const [editItemsLoaded, setEditItemsLoaded] = useState(false);
 
   // Use persistent selections hook for main tab defaults only
-  // تمرير فرع الموظف من user_profiles لتحديد الفرع الافتراضي
+  // تمرير فرع الموظف من CurrentBranchContext بدلاً من user_profiles
   const {
     selections: globalSelections,
     isLoaded: selectionsLoaded,
@@ -344,7 +346,17 @@ function POSPageContent() {
     hasRequiredForSale: globalHasRequiredForSale,
     defaultCustomer, // Default customer for new tabs
     defaultBranch,   // Default branch for the user
-  } = usePersistentSelections(userProfile?.branch_id);
+  } = usePersistentSelections(contextBranch?.id);
+
+  // Sync branch from context to global selections when context branch changes
+  useEffect(() => {
+    if (contextBranch && selectionsLoaded) {
+      // Only update if the branch is different to avoid loops
+      if (!globalSelections.branch || globalSelections.branch.id !== contextBranch.id) {
+        setGlobalBranch(contextBranch);
+      }
+    }
+  }, [contextBranch, selectionsLoaded, globalSelections.branch, setGlobalBranch]);
 
   // Get selections from active tab (tab-specific selections)
   const selections = useMemo(() => {
@@ -563,6 +575,8 @@ function POSPageContent() {
   // Cleanup: Clear any stale edit invoice data from localStorage on page load
   // This prevents old data from interfering with new edit sessions
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
     const urlParams = new URLSearchParams(window.location.search);
     const isEdit = urlParams.get('edit') === 'true';
 
@@ -598,7 +612,9 @@ function POSPageContent() {
       // The edit mode will be set in the tab via updateActiveTabMode after tab creation
 
       // Read edit data from localStorage for customer info (localStorage is shared between tabs)
-      const editDataStr = localStorage.getItem('pos_edit_invoice');
+      const editDataStr = typeof window !== 'undefined'
+        ? localStorage.getItem('pos_edit_invoice')
+        : null;
       let customerData: any = null;
       let localStorageItems: any[] = [];
 
@@ -611,14 +627,18 @@ function POSPageContent() {
           // العميل الافتراضي: لا يمكن تعديل فواتيره - حذف فقط
           if (customerData?.customerId === '00000000-0000-0000-0000-000000000001') {
             alert('لا يمكن تعديل فواتير العميل الافتراضي - يمكن الحذف فقط');
-            localStorage.removeItem('pos_edit_invoice');
-            // Clear URL params and reload
-            window.history.replaceState({}, '', '/pos');
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('pos_edit_invoice');
+              // Clear URL params and reload
+              window.history.replaceState({}, '', '/pos');
+            }
             return;
           }
 
           // Clear localStorage after reading
-          localStorage.removeItem('pos_edit_invoice');
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('pos_edit_invoice');
+          }
         } catch (error) {
           console.error('Error parsing edit invoice data:', error);
         }
@@ -1188,10 +1208,6 @@ function POSPageContent() {
     setIsPartyModalOpen(!isPartyModalOpen);
   };
 
-  const toggleBranchModal = () => {
-    setIsBranchModalOpen(!isBranchModalOpen);
-  };
-
   const toggleCategoriesModal = () => {
     setIsCategoriesModalOpen(!isCategoriesModalOpen);
   };
@@ -1308,8 +1324,10 @@ function POSPageContent() {
   };
 
   const handleBranchSelect = (branch: any) => {
+    // Update context branch (this will trigger sync to selections via effect)
+    setContextBranch(branch);
+    // Also update local selections immediately
     setBranch(branch);
-    setIsBranchModalOpen(false);
     console.log("Selected branch:", branch);
   };
 
@@ -4199,7 +4217,6 @@ function POSPageContent() {
           selectedWarehouse={selectedWarehouse}
           setIsRecordsModalOpen={setIsRecordsModalOpen}
           setIsCustomerModalOpen={setIsCustomerModalOpen}
-          setIsBranchModalOpen={setIsBranchModalOpen}
           setIsHistoryModalOpen={setIsHistoryModalOpen}
           setIsSupplierModalOpen={setIsSupplierModalOpen}
           setIsWarehouseModalOpen={setIsWarehouseModalOpen}
@@ -4254,12 +4271,6 @@ function POSPageContent() {
           isOpen={showNewTabCustomerModal}
           onClose={() => setShowNewTabCustomerModal(false)}
           onSelectCustomer={handleNewTabCustomerSelect}
-        />
-
-        <BranchSelectionModal
-          isOpen={isBranchModalOpen}
-          onClose={() => setIsBranchModalOpen(false)}
-          onSelectBranch={handleBranchSelect}
         />
 
         <HistoryModal
@@ -4553,8 +4564,8 @@ function POSPageContent() {
                   )}
                 </button>
 
-                {/* Conditional Branch/Warehouse Button */}
-                {isPurchaseMode ? (
+                {/* Warehouse Button - Purchase Mode Only */}
+                {isPurchaseMode && (
                   <button
                     onClick={toggleWarehouseModal}
                     className="flex flex-col items-center p-2 text-gray-300 hover:text-white cursor-pointer min-w-[80px] transition-all relative"
@@ -4565,35 +4576,6 @@ function POSPageContent() {
                       <div className="w-1 h-1 bg-red-400 rounded-full mt-1"></div>
                     )}
                   </button>
-                ) : (
-                  <div className="flex flex-col items-center p-2 min-w-[80px] relative">
-                    {/* زر الفرع - قابل للتغيير لمن عنده صلاحية فقط */}
-                    {canChangeBranch ? (
-                      <button
-                        onClick={toggleBranchModal}
-                        className="flex flex-col items-center text-gray-300 hover:text-white cursor-pointer transition-all"
-                        title="اضغط لتغيير الفرع"
-                      >
-                        <BuildingOfficeIcon className="h-5 w-5 mb-1" />
-                        <span className="text-sm truncate max-w-[70px]">
-                          {selections.branch?.name || 'اختر فرع'}
-                        </span>
-                        {!selections.branch && (
-                          <div className="w-1 h-1 bg-red-400 rounded-full mt-1"></div>
-                        )}
-                      </button>
-                    ) : (
-                      <div
-                        className="flex flex-col items-center text-gray-400"
-                        title={selections.branch?.name || 'لا يوجد فرع'}
-                      >
-                        <BuildingOfficeIcon className="h-5 w-5 mb-1" />
-                        <span className="text-sm truncate max-w-[70px]">
-                          {selections.branch?.name || 'لا يوجد فرع'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
                 )}
 
                 {/* Party Selection Button (Customer/Supplier) */}
@@ -4858,8 +4840,8 @@ function POSPageContent() {
                 )}
               </button>
 
-              {/* Conditional Branch/Warehouse Button */}
-              {isPurchaseMode ? (
+              {/* Warehouse Button - Purchase Mode Only (Mobile) */}
+              {isPurchaseMode && (
                 <button
                   onClick={toggleWarehouseModal}
                   className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative"
@@ -4870,26 +4852,6 @@ function POSPageContent() {
                     <div className="w-1 h-1 bg-red-400 rounded-full absolute -top-1 -right-1"></div>
                   )}
                 </button>
-              ) : canChangeBranch ? (
-                <button
-                  onClick={toggleBranchModal}
-                  className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-300 hover:text-white hover:bg-[#374151] cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative"
-                  title="اضغط لتغيير الفرع"
-                >
-                  <BuildingOfficeIcon className="h-4 w-4" />
-                  <span className="text-xs truncate max-w-[80px]">{selections.branch?.name || 'اختر فرع'}</span>
-                  {!selections.branch && (
-                    <div className="w-1 h-1 bg-red-400 rounded-full absolute -top-1 -right-1"></div>
-                  )}
-                </button>
-              ) : (
-                <div
-                  className="flex items-center gap-2 px-3 py-2 bg-[#2B3544] border border-gray-600 rounded text-gray-400 whitespace-nowrap flex-shrink-0"
-                  title={selections.branch?.name || 'لا يوجد فرع'}
-                >
-                  <BuildingOfficeIcon className="h-4 w-4" />
-                  <span className="text-xs truncate max-w-[80px]">{selections.branch?.name || 'لا يوجد فرع'}</span>
-                </div>
               )}
 
               {/* Price Type Button - Mobile */}
@@ -6498,13 +6460,6 @@ function POSPageContent() {
         isOpen={showNewTabCustomerModal}
         onClose={() => setShowNewTabCustomerModal(false)}
         onSelectCustomer={handleNewTabCustomerSelect}
-      />
-
-      {/* Branch Selection Modal */}
-      <BranchSelectionModal
-        isOpen={isBranchModalOpen}
-        onClose={() => setIsBranchModalOpen(false)}
-        onSelectBranch={handleBranchSelect}
       />
 
       {/* History Modal */}

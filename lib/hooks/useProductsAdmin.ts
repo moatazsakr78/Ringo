@@ -62,6 +62,7 @@ export interface Product {
   price2?: number | null;
   price3?: number | null;
   price4?: number | null;
+  quantity_per_carton?: number | null;
   product_code?: string | null;
   // New rating and discount fields
   rating?: number | null;
@@ -490,6 +491,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           price2: productData.price2 || 0,
           price3: productData.price3 || 0,
           price4: productData.price4 || 0,
+          quantity_per_carton: productData.quantity_per_carton,
           main_image_url: productData.main_image_url,
           sub_image_url: productData.sub_image_url,
           unit: productData.unit || 'قطعة',
@@ -530,6 +532,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           price2: productData.price2,
           price3: productData.price3,
           price4: productData.price4,
+          quantity_per_carton: productData.quantity_per_carton,
           category_id: productData.category_id,
           product_code: productData.product_code,
           main_image_url: productData.main_image_url,

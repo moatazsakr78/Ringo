@@ -23,6 +23,7 @@ export interface Product {
   price2?: number | null
   price3?: number | null
   price4?: number | null
+  quantity_per_carton?: number | null
   main_image_url?: string | null
   sub_image_url?: string | null
   additional_images_urls?: string[] | null // الحقل الجديد للصور الإضافية
@@ -561,6 +562,7 @@ export function useProducts() {
           price2: productData.price2 || 0,
           price3: productData.price3 || 0,
           price4: productData.price4 || 0,
+          quantity_per_carton: productData.quantity_per_carton,
           category_id: productData.category_id,
           product_code: productData.product_code,
           main_image_url: productData.main_image_url,
@@ -638,6 +640,7 @@ export function useProducts() {
           price2: productData.price2 || 0,
           price3: productData.price3 || 0,
           price4: productData.price4 || 0,
+          quantity_per_carton: productData.quantity_per_carton,
           main_image_url: productData.main_image_url,
           sub_image_url: productData.sub_image_url,
           additional_images_urls: additionalImagesValue, // ✨ الحقل الجديد للصور الإضافية

@@ -1169,6 +1169,7 @@ export type Database = {
           price2: number | null
           price3: number | null
           price4: number | null
+          quantity_per_carton: number | null
           product_code: string | null
           rating: number | null
           rating_count: number | null
@@ -1212,6 +1213,7 @@ export type Database = {
           price2?: number | null
           price3?: number | null
           price4?: number | null
+          quantity_per_carton?: number | null
           product_code?: string | null
           rating?: number | null
           rating_count?: number | null
@@ -1255,6 +1257,7 @@ export type Database = {
           price2?: number | null
           price3?: number | null
           price4?: number | null
+          quantity_per_carton?: number | null
           product_code?: string | null
           rating?: number | null
           rating_count?: number | null

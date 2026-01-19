@@ -47,6 +47,7 @@ import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useRoleRestrictions } from '@/lib/hooks/useRoleRestrictions';
 import { usePermissionTemplates, PermissionTemplate } from '@/lib/hooks/usePermissionTemplates';
 import { RoleType, ROLE_TYPES, ROLE_TYPE_COLORS } from '@/types/permissions';
+import UserBranchSelector from '@/app/components/UserBranchSelector';
 
 // Map icon names to components
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -158,6 +159,7 @@ export default function PermissionsPage() {
   const [updatingRole, setUpdatingRole] = useState(false);
   const [editingPermissionUserId, setEditingPermissionUserId] = useState<string | null>(null);
   const [updatingPermission, setUpdatingPermission] = useState(false);
+  const [editingBranchUserId, setEditingBranchUserId] = useState<string | null>(null);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
   const [derivedRoles, setDerivedRoles] = useState<Role[]>([]);
   const [isAddRoleModalOpen, setIsAddRoleModalOpen] = useState(false);
@@ -1300,6 +1302,46 @@ export default function PermissionsPage() {
           </div>
         );
       }
+    },
+    {
+      id: 'branches',
+      header: 'الفروع',
+      accessor: 'id' as keyof User,
+      width: 120,
+      render: (value: any, user: User) => (
+        <div className="flex items-center gap-2">
+          {editingBranchUserId === user.id ? (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setEditingBranchUserId(null)}>
+              <div
+                className="bg-[#2B3544] rounded-lg p-4 w-[400px] max-h-[80vh] overflow-y-auto shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-medium">تعيين الفروع - {user.name}</h3>
+                  <button
+                    onClick={() => setEditingBranchUserId(null)}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    <XMarkIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                <UserBranchSelector
+                  userId={user.id}
+                  onSave={() => setEditingBranchUserId(null)}
+                />
+              </div>
+            </div>
+          ) : null}
+          <button
+            onClick={() => setEditingBranchUserId(user.id)}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-md transition-colors"
+            title="تعيين الفروع"
+          >
+            <BuildingStorefrontIcon className="h-3 w-3" />
+            <span>تعيين</span>
+          </button>
+        </div>
+      )
     }
   ];
 

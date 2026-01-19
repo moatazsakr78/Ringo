@@ -500,3 +500,62 @@ export async function getProductDisplaySettings() {
     };
   }
 }
+
+/**
+ * Get catalog products for the public catalog page
+ * Only returns products with name and quantity_per_carton > 0
+ * Supports Static Generation with ISR
+ */
+export async function getCatalogProducts() {
+  try {
+    // Note: quantity_per_carton exists in DB but not in TypeScript types
+    // Using raw SQL query to ensure proper filtering
+    const { data: products, error } = await (supabase as any)
+      .from('products')
+      .select(`
+        id,
+        name,
+        product_code,
+        main_image_url,
+        price,
+        quantity_per_carton,
+        category_id,
+        categories (
+          id,
+          name
+        )
+      `)
+      .eq('is_active', true)
+      .not('name', 'is', null)
+      .gt('quantity_per_carton', 0)
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+
+    return products || [];
+  } catch (error) {
+    console.error('Error fetching catalog products:', error);
+    return [];
+  }
+}
+
+/**
+ * Get all active categories for the catalog filter
+ * Supports Static Generation with ISR
+ */
+export async function getCatalogCategories() {
+  try {
+    const { data: categories, error } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+
+    if (error) throw error;
+
+    return categories || [];
+  } catch (error) {
+    console.error('Error fetching catalog categories:', error);
+    return [];
+  }
+}

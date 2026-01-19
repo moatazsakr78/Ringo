@@ -7,6 +7,7 @@ import { SignalIcon, SignalSlashIcon } from '@heroicons/react/24/solid';
 import { useOfflineStatus } from '@/app/lib/hooks/useOfflineStatus';
 import { triggerManualSync, isSyncInProgress } from '@/app/lib/offline/syncManager';
 import PendingSalesModal from '../PendingSalesModal';
+import BranchSwitcher from '../BranchSwitcher';
 
 interface TopHeaderProps {
   onMenuClick?: () => void;
@@ -102,7 +103,7 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
   return (
     <div className="fixed top-0 left-0 right-0 z-50 h-12 bg-[#374151] border-b border-gray-600 px-4">
       <div className="flex items-center justify-between h-full">
-        {/* Left side - Menu button */}
+        {/* Left side (يظهر يمين الشاشة في RTL) - Menu + Branch Switcher */}
         <div className="flex items-center gap-2">
           <button
             onClick={onMenuClick}
@@ -112,8 +113,8 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
             <Bars3Icon className="h-6 w-6" />
           </button>
 
-          {/* Connection status */}
-          {getConnectionIndicator()}
+          {/* Branch Switcher - نُقل هنا */}
+          <BranchSwitcher />
 
           {/* Pending sales indicator */}
           {pendingSalesCount > 0 && (
@@ -133,16 +134,20 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
           <h1 className="text-white text-lg font-semibold">{getPageTitle()}</h1>
         </div>
 
-        {/* Right side - Website button */}
-        <div className="flex items-center">
+        {/* Right side (يظهر يسار الشاشة في RTL) - Website + Connection */}
+        <div className="flex items-center gap-2">
+          {/* Website button */}
           <button
             onClick={() => window.location.href = '/'}
             className="flex items-center gap-2 px-3 py-1.5 text-blue-400 hover:text-blue-300 hover:bg-gray-700 rounded-lg transition-colors"
             title="انتقل إلى الموقع الإلكتروني"
           >
             <GlobeAltIcon className="h-5 w-5" />
-            <span className="text-sm font-medium">الموقع</span>
+            <span className="text-sm font-medium hidden sm:inline">الموقع</span>
           </button>
+
+          {/* Connection status - نُقل هنا */}
+          {getConnectionIndicator()}
         </div>
       </div>
 

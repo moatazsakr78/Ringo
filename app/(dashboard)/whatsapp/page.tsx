@@ -604,6 +604,27 @@ export default function WhatsAppPage() {
             return [...prev, newMsg]
           })
         }
+
+        // تحديث قائمة المحادثات ونقلها للأعلى (مثل الواتساب الحقيقي)
+        setConversations(prev => {
+          const updated = [...prev]
+          const convIndex = updated.findIndex(c =>
+            cleanPhoneNumber(c.phoneNumber) === cleanedMsgNumber
+          )
+          if (convIndex >= 0) {
+            // محادثة موجودة - تحديثها
+            updated[convIndex] = {
+              ...updated[convIndex],
+              lastMessage: newMsg.message_text,
+              lastMessageTime: newMsg.created_at,
+              lastSender: 'me' as const
+            }
+            // نقل المحادثة للأعلى
+            const [conv] = updated.splice(convIndex, 1)
+            updated.unshift(conv)
+          }
+          return updated
+        })
       })
       .on('broadcast', { event: 'incoming_message' }, (payload) => {
         // ============================================

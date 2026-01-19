@@ -315,6 +315,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
     price2: '',
     price3: '',
     price4: '',
+    quantityPerCarton: '',
     isActive: true,
     shapeDescription: '',
     productColor: '#000000'
@@ -373,6 +374,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
         price2: editProduct.price2?.toString() || '',
         price3: editProduct.price3?.toString() || '',
         price4: editProduct.price4?.toString() || '',
+        quantityPerCarton: editProduct.quantity_per_carton?.toString() || '',
         isActive: editProduct.is_active ?? true,
         shapeDescription: '',
         productColor: '#000000'
@@ -705,10 +707,11 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
 
   const tabs = [
     'تفاصيل المنتج',
-    'السعر', 
+    'السعر',
     'المخزون',
     'الصور',
     'الشكل واللون',
+    'كتالوج',
     'الإعدادات'
   ]
 
@@ -1864,6 +1867,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
         price2: parseFloat(formData.price2) || 0,
         price3: parseFloat(formData.price3) || 0,
         price4: parseFloat(formData.price4) || 0,
+        quantity_per_carton: formData.quantityPerCarton ? parseInt(formData.quantityPerCarton) : null,
         category_id: formData.categoryId || undefined,
         product_code: formData.code.trim() || undefined,
         main_image_url: mainImageUrl || undefined,
@@ -2161,6 +2165,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
       price2: '',
       price3: '',
       price4: '',
+      quantityPerCarton: '',
       isActive: true,
       shapeDescription: '',
       productColor: '#000000'
@@ -2186,6 +2191,7 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
       price2: '',
       price3: '',
       price4: '',
+      quantityPerCarton: '',
       isActive: true,
       shapeDescription: '',
       productColor: '#000000'
@@ -3434,6 +3440,104 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
                 </div>
               </>
             )}
+          </div>
+        )
+
+      case 'كتالوج':
+        // حساب الأسعار تلقائياً
+        const piecePrice = parseFloat(formData.salePrice) || 0
+        const qtyPerCarton = parseInt(formData.quantityPerCarton) || 0
+        const dozenPrice = piecePrice * 12
+        const cartonPrice = piecePrice * qtyPerCarton
+
+        return (
+          <div className="space-y-4">
+            {/* اسم المنتج - مزامن */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                اسم المنتج
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"
+                placeholder="اسم المنتج"
+              />
+            </div>
+
+            {/* كود المنتج - مزامن */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                كود المنتج
+              </label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={(e) => handleInputChange('code', e.target.value)}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm"
+                placeholder="كود المنتج"
+              />
+            </div>
+
+            {/* الكمية داخل الكرتونة - إدخال */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                الكمية داخل الكرتونة
+              </label>
+              <input
+                type="number"
+                value={formData.quantityPerCarton}
+                onChange={(e) => handleInputChange('quantityPerCarton', e.target.value)}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="عدد القطع داخل الكرتونة"
+                min="0"
+              />
+            </div>
+
+            {/* سعر القطعة - مزامن مع سعر البيع */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                سعر القطعة
+              </label>
+              <input
+                type="number"
+                value={formData.salePrice}
+                onChange={(e) => handleInputChange('salePrice', e.target.value)}
+                className="w-full px-3 py-2 bg-[#2B3441] border border-[#4A5568] rounded text-white placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-[#5DADE2] focus:border-[#5DADE2] text-right text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                placeholder="سعر القطعة"
+                min="0"
+                step="0.01"
+              />
+            </div>
+
+            {/* سعر الدستة - محسوب (للقراءة فقط) */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                سعر الدستة (× 12)
+              </label>
+              <input
+                type="text"
+                value={dozenPrice.toFixed(2)}
+                readOnly
+                disabled
+                className="w-full px-3 py-2 bg-gray-600/30 border border-gray-600/50 rounded text-gray-300 text-right text-sm cursor-not-allowed"
+              />
+            </div>
+
+            {/* سعر الكرتونة - محسوب (للقراءة فقط) */}
+            <div>
+              <label className="block text-white text-sm font-medium mb-2 text-right">
+                سعر الكرتونة {qtyPerCarton > 0 ? `(× ${qtyPerCarton})` : ''}
+              </label>
+              <input
+                type="text"
+                value={qtyPerCarton > 0 ? cartonPrice.toFixed(2) : '---'}
+                readOnly
+                disabled
+                className="w-full px-3 py-2 bg-gray-600/30 border border-gray-600/50 rounded text-gray-300 text-right text-sm cursor-not-allowed"
+              />
+            </div>
           </div>
         )
 

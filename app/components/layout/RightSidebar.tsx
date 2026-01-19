@@ -12,7 +12,8 @@ import {
   ReceiptPercentIcon,
   ShareIcon,
   Squares2X2Icon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  BookOpenIcon
 } from '@heroicons/react/24/outline';
 import { useUserProfile } from '@/lib/hooks/useUserProfile';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
@@ -276,6 +277,23 @@ export default function RightSidebar({ isOpen, onClose, onCategorySelect }: Righ
                   </div>
                 </button>
 
+                {/* Catalog - كتالوج */}
+                <button
+                  onClick={() => {
+                    window.location.href = '/catalog';
+                    onClose();
+                  }}
+                  className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                >
+                  <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                    <BookOpenIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="font-semibold text-base text-black">كتالوج</h3>
+                    <p className="text-xs text-gray-600">عرض كتالوج المنتجات بالأسعار</p>
+                  </div>
+                </button>
+
                 {/* Categories - الفئات */}
                 <button
                   onClick={() => setShowCategories(true)}
@@ -363,6 +381,23 @@ export default function RightSidebar({ isOpen, onClose, onCategorySelect }: Righ
                   <div className="flex-1 text-right">
                     <h3 className="font-semibold text-base text-black">تابعنا</h3>
                     <p className="text-xs text-gray-600">حساباتنا على السوشيال ميديا</p>
+                  </div>
+                </button>
+
+                {/* Catalog - كتالوج */}
+                <button
+                  onClick={() => {
+                    window.location.href = '/catalog';
+                    onClose();
+                  }}
+                  className="flex items-center gap-3 w-full p-3 text-black hover:bg-gray-300 rounded-lg transition-colors text-right group"
+                >
+                  <div className="p-2 bg-[var(--primary-color)] rounded-full group-hover:bg-[var(--interactive-color)] transition-colors">
+                    <BookOpenIcon className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="font-semibold text-base text-black">كتالوج</h3>
+                    <p className="text-xs text-gray-600">عرض كتالوج المنتجات بالأسعار</p>
                   </div>
                 </button>
 
