@@ -4,7 +4,8 @@ import {
   decryptAndStoreMedia,
   hasMediaContent,
   getMediaType,
-  syncContactWithProfilePicture
+  syncContactWithProfilePicture,
+  cleanPhoneNumber
 } from '@/app/lib/whatsapp';
 
 // Supabase client for storing messages (Service Role)
@@ -305,6 +306,21 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
     const key = msgData.key || {};
     const message = msgData.message || {};
 
+    // === DEBUG LOGGING للرسائل الصادرة ===
+    if (isOutgoing) {
+      console.log('📤 === OUTGOING MESSAGE DEBUG ===');
+      console.log('📤 Full key object:', JSON.stringify(key, null, 2));
+      console.log('📤 Full msgData (without message):', JSON.stringify({ ...msgData, message: '[omitted]' }, null, 2));
+      console.log('📤 Key fields:', {
+        remoteJid: key.remoteJid,
+        cleanedRecipientPn: key.cleanedRecipientPn,
+        cleanedSenderPn: key.cleanedSenderPn,
+        cleanedParticipantPn: key.cleanedParticipantPn,
+        participant: key.participant,
+        fromMe: key.fromMe
+      });
+    }
+
     // Get message ID
     const messageId = key.id || msgData.id || `msg_${Date.now()}`;
 
@@ -323,10 +339,51 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
     // Get phone number - handle differently for outgoing vs incoming
     let from = '';
     if (isOutgoing) {
-      // For outgoing messages: remoteJid is the customer (recipient)
-      if (key.remoteJid) {
-        from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+      // 1. Try cleanedRecipientPn first (best source from WasenderAPI)
+      from = key.cleanedRecipientPn || key.cleanedParticipantPn || '';
+      console.log('📤 Step 1 - cleanedRecipientPn/cleanedParticipantPn:', from);
+
+      // 2. Try participant field
+      if (!from && key.participant) {
+        from = key.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+        from = cleanPhoneNumber(from);
+        console.log('📤 Step 2 - participant:', from);
       }
+
+      // 3. Fallback to remoteJid if it's a real phone number (not LID)
+      if (!from && key.remoteJid) {
+        const isLID = key.remoteJid.includes('@lid');
+        console.log('📤 Step 3 - remoteJid:', key.remoteJid, 'isLID:', isLID);
+
+        if (!isLID) {
+          from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+          from = cleanPhoneNumber(from);
+          console.log('📤 Step 3 - extracted from remoteJid:', from);
+        }
+      }
+
+      // 4. Check contextInfo for participant (reply messages might have it)
+      if (!from) {
+        const contextInfo = message.extendedTextMessage?.contextInfo ||
+                            message.imageMessage?.contextInfo ||
+                            message.videoMessage?.contextInfo ||
+                            message.audioMessage?.contextInfo;
+        if (contextInfo?.participant) {
+          from = contextInfo.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+          from = cleanPhoneNumber(from);
+          console.log('📤 Step 4 - contextInfo.participant:', from);
+        }
+      }
+
+      // 5. Final check - if still no valid number, skip
+      if (!from || from.length < 10) {
+        console.warn('⚠️ Skipping outgoing message: could not extract valid recipient phone number');
+        console.warn('⚠️ Full msgData for debugging:', JSON.stringify(msgData, null, 2));
+        return null;
+      }
+
+      from = cleanPhoneNumber(from);
+      console.log('📤 Final phone number:', from);
     } else {
       // For incoming messages: cleanedSenderPn is the customer (sender)
       from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
@@ -334,6 +391,8 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
       if (!from && key.remoteJid) {
         from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
       }
+      // تنظيف الرقم لضمان التنسيق الصحيح
+      from = cleanPhoneNumber(from);
     }
 
     if (!from) {

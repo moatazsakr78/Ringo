@@ -855,6 +855,108 @@ export async function getAllContacts(): Promise<WhatsAppContact[]> {
   }
 }
 
+// ============ Message Logs for Sync ============
+
+export interface MessageLog {
+  id: string;
+  msgId?: number;
+  from: string;
+  to: string;
+  fromMe: boolean;
+  messageBody: string;
+  messageType: string;
+  timestamp: number;
+  status?: string;
+  pushName?: string;
+  mediaUrl?: string;
+}
+
+// Fetch message logs from WasenderAPI for syncing
+// This retrieves messages that may have been missed by webhooks
+export async function fetchMessageLogs(limit: number = 100): Promise<{ logs: MessageLog[], debug: any }> {
+  const debug: any = {
+    token: false,
+    sessionId: null,
+    requestUrl: null,
+    responseStatus: null,
+    responseData: null,
+    error: null,
+    mappedCount: 0
+  };
+
+  try {
+    const token = await getApiToken();
+    if (!token) {
+      debug.error = 'No API token available';
+      console.error('❌ No API token available for fetching message logs');
+      return { logs: [], debug };
+    }
+    debug.token = true;
+
+    const sessionId = getSessionId();
+    if (!sessionId) {
+      debug.error = 'No session ID configured (WASENDER_SESSION_ID not set in .env)';
+      console.error('❌ No session ID configured');
+      return { logs: [], debug };
+    }
+    debug.sessionId = sessionId;
+
+    const requestUrl = `${WASENDER_API_URL}/whatsapp-sessions/${sessionId}/message-logs?limit=${limit}`;
+    debug.requestUrl = requestUrl;
+
+    console.log(`📋 Fetching message logs from: ${requestUrl}`);
+
+    // WasenderAPI message-logs endpoint
+    const response = await fetch(requestUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    debug.responseStatus = response.status;
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ parseError: 'Failed to parse error response' }));
+      debug.responseData = errorData;
+      debug.error = `API Error: ${response.status} - ${JSON.stringify(errorData)}`;
+      console.error('❌ Error fetching message logs:', response.status, errorData);
+      return { logs: [], debug };
+    }
+
+    const data = await response.json();
+    debug.responseData = data;
+    console.log(`📋 Raw API response:`, JSON.stringify(data, null, 2).substring(0, 500));
+    console.log(`📋 Fetched ${data.data?.length || data.logs?.length || data.messages?.length || 0} message logs`);
+
+    // WasenderAPI returns data in { success: true, data: [...] } format
+    const logs = data.data || data.logs || data.messages || [];
+
+    // Map to our interface
+    const mappedLogs = logs.map((log: any) => ({
+      id: log.id || log.key?.id || log.messageId,
+      msgId: log.msgId || log.msg_id,
+      from: log.from || log.key?.remoteJid?.replace('@s.whatsapp.net', '').replace('@c.us', '') || '',
+      to: log.to || '',
+      fromMe: log.fromMe === true || log.key?.fromMe === true,
+      messageBody: log.messageBody || log.body || log.message?.conversation || log.message?.extendedTextMessage?.text || '',
+      messageType: log.messageType || log.type || 'text',
+      timestamp: log.timestamp || log.messageTimestamp || Date.now() / 1000,
+      status: log.status,
+      pushName: log.pushName || log.notifyName,
+      mediaUrl: log.mediaUrl,
+    }));
+
+    debug.mappedCount = mappedLogs.length;
+    return { logs: mappedLogs, debug };
+  } catch (error) {
+    debug.error = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ Error in fetchMessageLogs:', error);
+    return { logs: [], debug };
+  }
+}
+
 // ============ Parse Incoming Webhook ============
 
 // Parse incoming webhook message from WasenderAPI

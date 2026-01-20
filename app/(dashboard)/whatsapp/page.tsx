@@ -300,6 +300,8 @@ export default function WhatsAppPage() {
   const [error, setError] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'checking'>('checking')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isSyncingMessages, setIsSyncingMessages] = useState(false)
+  const [syncResult, setSyncResult] = useState<{ synced: number; message: string } | null>(null)
   const [isRecordingVoice, setIsRecordingVoice] = useState(false)
   const [showMobileChat, setShowMobileChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -463,6 +465,64 @@ export default function WhatsAppPage() {
     }
   }, [fetchConversations])
 
+  // Background sync function (silent - no UI updates except for new messages)
+  const syncMessagesInBackground = useCallback(async (phoneNumber: string) => {
+    try {
+      const response = await fetch(`/api/whatsapp/sync?phone=${encodeURIComponent(phoneNumber)}&limit=50`)
+      const data = await response.json()
+
+      if (data.success && data.synced > 0) {
+        console.log(`🔄 Background sync: ${data.synced} new messages for ${phoneNumber}`)
+        // Only refresh if new messages were synced
+        await fetchConversationMessages(phoneNumber)
+        fetchConversationsRef.current()
+      }
+    } catch (error) {
+      // Silent - no error shown to user for background sync
+      console.error('🔄 Background sync error:', error)
+    }
+  }, [fetchConversationMessages])
+
+  // Sync messages from WasenderAPI message logs (for missed outgoing messages)
+  const syncMessages = useCallback(async () => {
+    try {
+      setIsSyncingMessages(true)
+      setSyncResult(null)
+      setError(null)
+
+      // Build URL with optional phone filter
+      let url = '/api/whatsapp/sync?limit=200'
+      if (selectedConversation) {
+        url += `&phone=${encodeURIComponent(selectedConversation)}`
+      }
+
+      const response = await fetch(url)
+      const data = await response.json()
+
+      if (data.success) {
+        console.log('✅ Messages synced:', data)
+        setSyncResult({ synced: data.synced, message: data.message })
+
+        // Refresh conversations and messages
+        await fetchConversations()
+        if (selectedConversation) {
+          await fetchConversationMessages(selectedConversation)
+        }
+
+        // Clear sync result after 5 seconds
+        setTimeout(() => setSyncResult(null), 5000)
+      } else {
+        console.error('❌ Sync failed:', data.error)
+        setError(data.error || 'فشل في مزامنة الرسائل')
+      }
+    } catch (err) {
+      console.error('❌ Error syncing messages:', err)
+      setError('فشل في مزامنة الرسائل')
+    } finally {
+      setIsSyncingMessages(false)
+    }
+  }, [selectedConversation, fetchConversations, fetchConversationMessages])
+
   // Mark messages as read when conversation is opened
   const markConversationAsRead = useCallback(async (phoneNumber: string) => {
     try {
@@ -502,6 +562,26 @@ export default function WhatsAppPage() {
       clearInterval(statusInterval)
     }
   }, [fetchConversations, checkConnectionStatus])
+
+  // Background sync for outgoing messages sent from mobile WhatsApp
+  // Runs every 15 seconds when a conversation is selected
+  useEffect(() => {
+    if (!selectedConversation) return
+
+    // Initial sync when conversation is selected
+    syncMessagesInBackground(selectedConversation)
+
+    // Set up interval for background sync
+    const syncInterval = setInterval(() => {
+      if (selectedConversationRef.current) {
+        syncMessagesInBackground(selectedConversationRef.current)
+      }
+    }, 15000) // Every 15 seconds
+
+    return () => {
+      clearInterval(syncInterval)
+    }
+  }, [selectedConversation, syncMessagesInBackground])
 
   // Single global Supabase Realtime channel for all WhatsApp messages
   // This prevents ChannelRateLimitReached by using ONE channel instead of per-conversation
@@ -1454,7 +1534,23 @@ export default function WhatsAppPage() {
             </div>
             {/* Spacer */}
             <div className="flex-1 min-w-[8px]" />
+            {/* Sync Result Notification */}
+            {syncResult && syncResult.synced > 0 && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-400 rounded-md text-xs flex-shrink-0">
+                <CheckCircleIcon className="h-4 w-4" />
+                <span>{syncResult.message}</span>
+              </div>
+            )}
             {/* Buttons */}
+            <button
+              onClick={syncMessages}
+              disabled={isSyncingMessages}
+              className="flex items-center gap-1 md:gap-2 px-2 py-1 md:px-3 md:py-2 text-gray-300 hover:text-white hover:bg-blue-600/30 rounded-md transition-colors disabled:opacity-50 flex-shrink-0"
+              title="مزامنة الرسائل من واتساب"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${isSyncingMessages ? 'animate-spin' : ''}`} />
+              <span className="text-xs md:text-sm whitespace-nowrap">{isSyncingMessages ? 'مزامنة...' : 'مزامنة'}</span>
+            </button>
             <button
               onClick={syncContacts}
               disabled={isSyncing}
