@@ -74,14 +74,8 @@ export async function POST(request: NextRequest) {
         const key = msgData.key || {};
         const isOutgoing = key.fromMe === true;
 
-        // تخطي الرسائل الصادرة - الـ Send Route يخزنها بالفعل بالرقم الصحيح
-        // الـ webhook يستخرج رقم LID بدلاً من الرقم الحقيقي مما يسبب ظهور الرسائل في شات منفصل
-        if (isOutgoing) {
-          console.log('⏭️ Skipping outgoing message from webhook - handled by send route');
-          continue;
-        }
-
-        // Process incoming messages only
+        // Process both incoming and outgoing messages
+        // Outgoing messages from mobile WhatsApp app need to be stored too
 
         // Parse WasenderAPI message format with isOutgoing flag
         const message = parseWasenderMessage(msgData, isOutgoing);
@@ -360,27 +354,25 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
     // Get phone number - handle differently for outgoing vs incoming
     let from = '';
     if (isOutgoing) {
-      // 1. Try cleanedRecipientPn first (best source from WasenderAPI)
-      from = key.cleanedRecipientPn || key.cleanedParticipantPn || '';
-      console.log('📤 Step 1 - cleanedRecipientPn/cleanedParticipantPn:', from);
+      // 1. أولاً: remoteJid (الأكثر موثوقية للرسائل الصادرة من الموبايل)
+      // This is the most reliable source for outgoing messages from mobile WhatsApp
+      if (key.remoteJid && !key.remoteJid.includes('@lid')) {
+        from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        from = cleanPhoneNumber(from);
+        console.log('📤 Step 1 - remoteJid (primary):', from);
+      }
 
-      // 2. Try participant field
+      // 2. Fallback: cleanedRecipientPn / cleanedParticipantPn
+      if (!from) {
+        from = key.cleanedRecipientPn || key.cleanedParticipantPn || '';
+        console.log('📤 Step 2 - cleanedRecipientPn/cleanedParticipantPn:', from);
+      }
+
+      // 3. Try participant field
       if (!from && key.participant) {
         from = key.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
         from = cleanPhoneNumber(from);
-        console.log('📤 Step 2 - participant:', from);
-      }
-
-      // 3. Fallback to remoteJid if it's a real phone number (not LID)
-      if (!from && key.remoteJid) {
-        const isLID = key.remoteJid.includes('@lid');
-        console.log('📤 Step 3 - remoteJid:', key.remoteJid, 'isLID:', isLID);
-
-        if (!isLID) {
-          from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
-          from = cleanPhoneNumber(from);
-          console.log('📤 Step 3 - extracted from remoteJid:', from);
-        }
+        console.log('📤 Step 3 - participant:', from);
       }
 
       // 4. Check contextInfo for participant (reply messages might have it)

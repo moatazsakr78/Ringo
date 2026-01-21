@@ -436,7 +436,10 @@ export default function WhatsAppPage() {
       // Update messages for this conversation
       setMessages(prevMessages => {
         // Remove old messages for this conversation and add new ones
-        const otherMessages = prevMessages.filter(m => m.from_number !== phoneNumber)
+        // Use cleanPhoneNumber to ensure consistent comparison
+        const otherMessages = prevMessages.filter(m =>
+          cleanPhoneNumber(m.from_number) !== cleanPhoneNumber(phoneNumber)
+        )
         return [...otherMessages, ...(data.messages || [])]
       })
     } catch (err) {
@@ -848,7 +851,10 @@ export default function WhatsAppPage() {
 
   // Scroll to bottom only when needed (new messages or conversation change)
   useEffect(() => {
-    const currentMessageCount = messages.filter(m => m.from_number === selectedConversation).length
+    // Use cleanPhoneNumber to ensure consistent comparison
+    const currentMessageCount = messages.filter(m =>
+      cleanPhoneNumber(m.from_number) === cleanPhoneNumber(selectedConversation || '')
+    ).length
     const isNewConversation = prevMessageCountRef.current === 0 && currentMessageCount > 0
     const hasNewMessages = currentMessageCount > prevMessageCountRef.current
 
