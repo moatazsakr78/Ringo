@@ -74,9 +74,14 @@ export async function POST(request: NextRequest) {
         const key = msgData.key || {};
         const isOutgoing = key.fromMe === true;
 
-        // Process both incoming and outgoing messages
-        // Outgoing messages from the real WhatsApp app need to be stored
-        // Messages sent via our Send API will be handled by upsert (ignoreDuplicates)
+        // تخطي الرسائل الصادرة - الـ Send Route يخزنها بالفعل بالرقم الصحيح
+        // الـ webhook يستخرج رقم LID بدلاً من الرقم الحقيقي مما يسبب ظهور الرسائل في شات منفصل
+        if (isOutgoing) {
+          console.log('⏭️ Skipping outgoing message from webhook - handled by send route');
+          continue;
+        }
+
+        // Process incoming messages only
 
         // Parse WasenderAPI message format with isOutgoing flag
         const message = parseWasenderMessage(msgData, isOutgoing);
@@ -301,6 +306,22 @@ interface ParsedMessage {
   quotedMessageSender?: string;
 }
 
+/**
+ * التحقق من صحة رقم الهاتف
+ * أرقام مصر: 12 رقم (20 + 10 أرقام)
+ * أرقام دولية: 10-13 رقم عادةً
+ * أي رقم أطول من 13 رقم هو على الأرجح LID identifier وليس رقم هاتف حقيقي
+ */
+function isValidPhoneNumber(phone: string): boolean {
+  if (!phone) return false;
+  const cleaned = phone.replace(/[^\d]/g, '');
+  // Valid phone numbers are between 10-13 digits
+  // Egyptian numbers: 20xxxxxxxxxx (12 digits)
+  // International: typically 10-13 digits
+  // LID identifiers are 14-15+ digits and should be rejected
+  return cleaned.length >= 10 && cleaned.length <= 13;
+}
+
 function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): ParsedMessage | null {
   try {
     const key = msgData.key || {};
@@ -375,15 +396,20 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
         }
       }
 
-      // 5. Final check - if still no valid number, skip
-      if (!from || from.length < 10) {
-        console.warn('⚠️ Skipping outgoing message: could not extract valid recipient phone number');
-        console.warn('⚠️ Full msgData for debugging:', JSON.stringify(msgData, null, 2));
+      // 5. Clean the phone number first
+      from = cleanPhoneNumber(from);
+      console.log('📤 Cleaned phone number:', from, '(length:', from.length, ')');
+
+      // 6. Final validation - check if it's a valid phone number
+      // This catches LID identifiers (14-15 digits) that slipped through
+      if (!isValidPhoneNumber(from)) {
+        console.warn('⚠️ Skipping outgoing message: invalid phone number length');
+        console.warn('⚠️ Phone number:', from, 'Length:', from.length);
+        console.warn('⚠️ Valid range is 10-13 digits. This is likely a LID identifier, not a real phone number.');
         return null;
       }
 
-      from = cleanPhoneNumber(from);
-      console.log('📤 Final phone number:', from);
+      console.log('📤 Final phone number (valid):', from);
     } else {
       // For incoming messages: cleanedSenderPn is the customer (sender)
       from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
@@ -393,6 +419,13 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
       }
       // تنظيف الرقم لضمان التنسيق الصحيح
       from = cleanPhoneNumber(from);
+
+      // Validate incoming message phone number too
+      if (!isValidPhoneNumber(from)) {
+        console.warn('⚠️ Skipping incoming message: invalid phone number');
+        console.warn('⚠️ Phone number:', from, 'Length:', from.length);
+        return null;
+      }
     }
 
     if (!from) {
