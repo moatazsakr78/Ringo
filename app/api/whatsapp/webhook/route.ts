@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
         // Outgoing messages from mobile WhatsApp app need to be stored too
 
         // Parse WasenderAPI message format with isOutgoing flag
-        const message = parseWasenderMessage(msgData, isOutgoing);
+        const message = await parseWasenderMessage(msgData, isOutgoing);
 
         if (message) {
           // Extra validation before storing
@@ -298,6 +298,8 @@ interface ParsedMessage {
   quotedMessageId?: string;
   quotedMessageText?: string;
   quotedMessageSender?: string;
+  // LID mapping fields (for saving mapping from incoming messages)
+  lidToSave?: string; // LID extracted from remoteJid
 }
 
 /**
@@ -316,7 +318,7 @@ function isValidPhoneNumber(phone: string): boolean {
   return cleaned.length >= 10 && cleaned.length <= 13;
 }
 
-function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): ParsedMessage | null {
+async function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Promise<ParsedMessage | null> {
   try {
     const key = msgData.key || {};
     const message = msgData.message || {};
@@ -354,54 +356,105 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
     // Get phone number - handle differently for outgoing vs incoming
     let from = '';
     if (isOutgoing) {
-      // 1. أولاً: remoteJid (الأكثر موثوقية للرسائل الصادرة من الموبايل)
-      // This is the most reliable source for outgoing messages from mobile WhatsApp
-      if (key.remoteJid && !key.remoteJid.includes('@lid')) {
-        from = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
-        from = cleanPhoneNumber(from);
-        console.log('📤 Step 1 - remoteJid (primary):', from);
+      // === أولوية استخراج الرقم للرسائل الصادرة ===
+      // الترتيب مهم جداً! cleanedRecipientPn هو الأكثر موثوقية لأن WasenderAPI بتنظفه مسبقاً
+      // remoteJid ممكن يحتوي على LID identifier (14-15 رقم) بدل رقم الهاتف الحقيقي
+
+      // 1. أولاً: cleanedRecipientPn (الأكثر موثوقية - رقم نظيف من WasenderAPI)
+      if (key.cleanedRecipientPn) {
+        from = cleanPhoneNumber(key.cleanedRecipientPn);
+        console.log('📤 Step 1 - cleanedRecipientPn (primary):', from);
       }
 
-      // 2. Fallback: cleanedRecipientPn / cleanedParticipantPn
-      if (!from) {
-        from = key.cleanedRecipientPn || key.cleanedParticipantPn || '';
-        console.log('📤 Step 2 - cleanedRecipientPn/cleanedParticipantPn:', from);
+      // 2. ثانياً: cleanedParticipantPn
+      if (!from && key.cleanedParticipantPn) {
+        from = cleanPhoneNumber(key.cleanedParticipantPn);
+        console.log('📤 Step 2 - cleanedParticipantPn:', from);
       }
 
-      // 3. Try participant field
+      // 3. ثالثاً: remoteJid (بس لو مش LID ورقم صالح)
+      // نتجنب LID identifiers اللي بتبدأ بـ @lid أو أطول من 13 رقم
+      if (!from && key.remoteJid && !key.remoteJid.includes('@lid')) {
+        const extracted = key.remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
+        const cleaned = cleanPhoneNumber(extracted);
+        // نتأكد إن الرقم صالح قبل ما نستخدمه
+        if (isValidPhoneNumber(cleaned)) {
+          from = cleaned;
+          console.log('📤 Step 3 - remoteJid (valid):', from);
+        } else {
+          console.log('📤 Step 3 - remoteJid skipped (invalid/LID):', extracted, '→', cleaned, '(length:', cleaned.length, ')');
+        }
+      }
+
+      // 4. رابعاً: participant field
       if (!from && key.participant) {
-        from = key.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
-        from = cleanPhoneNumber(from);
-        console.log('📤 Step 3 - participant:', from);
+        const extracted = key.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+        const cleaned = cleanPhoneNumber(extracted);
+        if (isValidPhoneNumber(cleaned)) {
+          from = cleaned;
+          console.log('📤 Step 4 - participant:', from);
+        } else {
+          console.log('📤 Step 4 - participant skipped (invalid):', extracted);
+        }
       }
 
-      // 4. Check contextInfo for participant (reply messages might have it)
+      // 5. خامساً: contextInfo.participant (للرسائل اللي فيها رد)
       if (!from) {
         const contextInfo = message.extendedTextMessage?.contextInfo ||
                             message.imageMessage?.contextInfo ||
                             message.videoMessage?.contextInfo ||
                             message.audioMessage?.contextInfo;
         if (contextInfo?.participant) {
-          from = contextInfo.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
-          from = cleanPhoneNumber(from);
-          console.log('📤 Step 4 - contextInfo.participant:', from);
+          const extracted = contextInfo.participant.replace('@s.whatsapp.net', '').replace('@c.us', '').replace('@lid', '');
+          const cleaned = cleanPhoneNumber(extracted);
+          if (isValidPhoneNumber(cleaned)) {
+            from = cleaned;
+            console.log('📤 Step 5 - contextInfo.participant:', from);
+          } else {
+            console.log('📤 Step 5 - contextInfo.participant skipped (invalid):', extracted);
+          }
         }
       }
 
-      // 5. Clean the phone number first
-      from = cleanPhoneNumber(from);
-      console.log('📤 Cleaned phone number:', from, '(length:', from.length, ')');
+      // 6. سادساً: LID Mapping Lookup (للرسائل اللي بترجع بـ LID بدل رقم الهاتف)
+      // لو لسه معندناش رقم صالح، نشوف لو الـ remoteJid فيه LID ونبحث في الـ mapping table
+      if (!from && key.remoteJid) {
+        // Extract LID from remoteJid (can be @lid or @s.whatsapp.net with 14+ digit number)
+        const lidMatch = key.remoteJid.match(/(\d{14,})@/);
+        if (lidMatch) {
+          const lid = lidMatch[1];
+          console.log('📤 Step 6 - Looking up LID mapping for:', lid);
 
-      // 6. Final validation - check if it's a valid phone number
-      // This catches LID identifiers (14-15 digits) that slipped through
-      if (!isValidPhoneNumber(from)) {
-        console.warn('⚠️ Skipping outgoing message: invalid phone number length');
-        console.warn('⚠️ Phone number:', from, 'Length:', from.length);
-        console.warn('⚠️ Valid range is 10-13 digits. This is likely a LID identifier, not a real phone number.');
+          // Look up in whatsapp_lid_mappings table
+          const { data: mapping, error: mappingError } = await supabase
+            .schema('elfaroukgroup')
+            .from('whatsapp_lid_mappings')
+            .select('phone_number, customer_name')
+            .eq('lid', lid)
+            .single();
+
+          if (mapping && !mappingError) {
+            from = mapping.phone_number;
+            console.log('📤 Step 6 - LID resolved to phone:', lid, '→', from);
+          } else {
+            console.log('📤 Step 6 - No LID mapping found for:', lid, '- Error:', mappingError?.message || 'none');
+          }
+        }
+      }
+
+      // Final validation
+      if (!from) {
+        console.warn('⚠️ Skipping outgoing message: could not extract valid phone number');
+        console.warn('⚠️ Available fields:', {
+          cleanedRecipientPn: key.cleanedRecipientPn,
+          cleanedParticipantPn: key.cleanedParticipantPn,
+          remoteJid: key.remoteJid,
+          participant: key.participant
+        });
         return null;
       }
 
-      console.log('📤 Final phone number (valid):', from);
+      console.log('📤 Final phone number:', from, '(length:', from.length, ')');
     } else {
       // For incoming messages: cleanedSenderPn is the customer (sender)
       from = key.cleanedSenderPn || key.cleanedParticipantPn || '';
@@ -417,6 +470,39 @@ function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): Parsed
         console.warn('⚠️ Skipping incoming message: invalid phone number');
         console.warn('⚠️ Phone number:', from, 'Length:', from.length);
         return null;
+      }
+
+      // === SAVE LID MAPPING ===
+      // لما تيجي رسالة واردة، لو الـ remoteJid فيه LID نحفظ الـ mapping
+      // ده هيساعدنا نربط الرسائل الصادرة اللي بترجع بـ LID بدل رقم الهاتف
+      if (key.remoteJid) {
+        const lidMatch = key.remoteJid.match(/(\d{14,})@/);
+        if (lidMatch) {
+          const lid = lidMatch[1];
+          // Only save if we found a valid phone number
+          if (from && isValidPhoneNumber(from)) {
+            console.log('📥 Found LID in incoming message:', lid, '→', from);
+
+            // Save the LID mapping (upsert to handle updates)
+            const customerName = msgData.pushName || key.pushName || msgData.notifyName || from;
+            supabase
+              .schema('elfaroukgroup')
+              .from('whatsapp_lid_mappings')
+              .upsert({
+                lid: lid,
+                phone_number: from,
+                customer_name: customerName,
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'lid' })
+              .then(({ error }) => {
+                if (error) {
+                  console.error('❌ Error saving LID mapping:', error.message);
+                } else {
+                  console.log('✅ LID mapping saved:', lid, '→', from);
+                }
+              });
+          }
+        }
       }
     }
 
