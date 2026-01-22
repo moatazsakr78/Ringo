@@ -1266,11 +1266,6 @@ export default function WhatsAppPage() {
             : msg
         ))
 
-        // ========================
-        // 8.1 تحديث قائمة المحادثات لضمان التزامن
-        // ========================
-        fetchConversations()
-
         // Broadcast to other devices for cross-device sync
         const supabase = getSupabase()
         supabase
