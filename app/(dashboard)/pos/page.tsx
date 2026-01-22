@@ -2208,47 +2208,60 @@ function POSPageContent() {
           : getProductPriceByType(modalProduct),
     };
 
-    // البحث عن المنتج في السلة
-    const existingItemIndex = cartItems.findIndex(
-      (item) => item.product.id === modalProduct.id,
-    );
+    // نقل كل المنطق داخل setCartItems callback لتجنب مشكلة stale closure
+    setCartItems((prev) => {
+      // البحث عن المنتج في السلة الحالية (prev) - وليس cartItems القديمة
+      const existingItemIndex = prev.findIndex(
+        (item) => item.product.id === modalProduct.id,
+      );
 
-    if (existingItemIndex >= 0) {
-      // المنتج موجود - تحديثه
-      setCartItems((prev) => {
+      if (existingItemIndex >= 0) {
+        // المنتج موجود - تحديثه
         const newCartItems = [...prev];
         const existingItem = { ...newCartItems[existingItemIndex] };
 
-        // تحديث الكميات والألوان المحددة
-        existingItem.quantity = totalQuantity;
-        existingItem.selectedColors =
-          Object.keys(selections).length > 0 ? selections : null;
-        existingItem.total = productWithPrice.price * totalQuantity;
+        // إضافة الكمية الجديدة للكمية الموجودة
+        if (Object.keys(selections).length > 0) {
+          // منتج بألوان - دمج الألوان
+          if (!existingItem.selectedColors) {
+            existingItem.selectedColors = {};
+          }
+          // إضافة كميات الألوان الجديدة للموجودة
+          for (const [color, qty] of Object.entries(selections)) {
+            existingItem.selectedColors[color] =
+              (existingItem.selectedColors[color] || 0) + (qty as number);
+          }
+          // حساب الكمية الإجمالية من مجموع الألوان
+          existingItem.quantity = Object.values(existingItem.selectedColors)
+            .reduce((sum: number, q) => sum + (q as number), 0);
+        } else {
+          // منتج بدون ألوان - إضافة بسيطة
+          existingItem.quantity += totalQuantity;
+        }
+        existingItem.total = productWithPrice.price * existingItem.quantity;
 
         newCartItems[existingItemIndex] = existingItem;
         updateActiveTabCart(newCartItems);
         return newCartItems;
-      });
-    } else {
-      // منتج جديد - إضافته مع الفرع الحالي
-      const newCartItem = {
-        id: productWithPrice.id.toString(),
-        product: productWithPrice,
-        quantity: totalQuantity,
-        selectedColors: Object.keys(selections).length > 0 ? selections : null,
-        price: productWithPrice.price || 0,
-        total: (productWithPrice.price || 0) * totalQuantity,
-        // إضافة معلومات الفرع للمنتج
-        branch_id: currentBranch?.id || '',
-        branch_name: currentBranch?.name || '',
-      };
+      } else {
+        // منتج جديد - إضافته مع الفرع الحالي
+        const newCartItem = {
+          id: productWithPrice.id.toString(),
+          product: productWithPrice,
+          quantity: totalQuantity,
+          selectedColors: Object.keys(selections).length > 0 ? selections : null,
+          price: productWithPrice.price || 0,
+          total: (productWithPrice.price || 0) * totalQuantity,
+          // إضافة معلومات الفرع للمنتج
+          branch_id: currentBranch?.id || '',
+          branch_name: currentBranch?.name || '',
+        };
 
-      setCartItems((prev) => {
         const newCart = [...prev, newCartItem];
         updateActiveTabCart(newCart);
         return newCart;
-      });
-    }
+      }
+    });
 
     // إغلاق النافذة
     setShowColorSelectionModal(false);
