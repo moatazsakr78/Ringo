@@ -18,6 +18,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
+import { cache } from '@/app/lib/cache/memoryCache';
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,10 +56,17 @@ export async function POST(request: NextRequest) {
     revalidatePath('/');
     console.log(`✅ Revalidated home page`);
 
+    // Clear memory cache to ensure fresh data
+    const cacheStatsBefore = cache.getStats();
+    cache.clear();
+    console.log(`✅ Cleared memory cache (${cacheStatsBefore.size} items removed)`);
+
     return NextResponse.json({
       success: true,
       revalidated: true,
       paths: [path, productId ? `/product/${productId}` : null, '/'].filter(Boolean),
+      cacheCleared: true,
+      cacheItemsRemoved: cacheStatsBefore.size,
       timestamp: new Date().toISOString()
     });
 

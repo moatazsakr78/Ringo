@@ -209,6 +209,10 @@ export function useProducts() {
       setIsLoading(true)
       setError(null)
 
+      // 🔄 Clear potentially stale cache to ensure fresh inventory data
+      console.log('🧹 Clearing products cache...')
+      cache.invalidatePattern('products:')
+
       // Load selected branches for stock calculation
       const { data: displaySettings } = await supabase
         .from('product_display_settings')
@@ -273,6 +277,15 @@ export function useProducts() {
     }
   }, [])
 
+  // Helper function to batch array into chunks
+  const batchArray = <T,>(array: T[], batchSize: number): T[][] => {
+    const batches: T[][] = []
+    for (let i = 0; i < array.length; i += batchSize) {
+      batches.push(array.slice(i, i + batchSize))
+    }
+    return batches
+  }
+
   // Helper function to fetch and process products
   const fetchAndProcessProducts = async (selectedBranchIds: string[], branchesData: Branch[]) => {
     // Fetch base products with categories (excluding soft-deleted products)
@@ -297,51 +310,78 @@ export function useProducts() {
       return []
     }
 
-    // OPTIMIZATION: Batch fetch all inventory data in one query
+    // OPTIMIZATION: Batch fetch inventory/variants/videos in chunks to avoid URL length limits
     const productIds = productsData.map(p => p.id)
+    const BATCH_SIZE = 100
+    const productIdBatches = batchArray(productIds, BATCH_SIZE)
 
-    const [inventoryData, variantsData, videosData] = await Promise.all([
-      // Single query for all inventory data
-      supabase
-        .from('inventory')
-        .select('product_id, branch_id, quantity, min_stock, audit_status')
-        .in('product_id', productIds)
-        .then(({ data, error }) => {
-          if (error) {
-            console.warn('Unable to fetch inventory data:', error)
-            return []
-          }
-          return data || []
-        }),
+    console.log(`🔍 Fetching data in ${productIdBatches.length} batches for ${productIds.length} products`)
 
-      // Single query for all color & shape definitions
-      supabase
-        .from('product_color_shape_definitions')
-        .select('*')
-        .in('product_id', productIds)
-        .order('sort_order', { ascending: true })
-        .then(({ data, error }) => {
-          if (error) {
-            console.warn('Unable to fetch color/shape definitions:', error)
-            return []
-          }
-          return data || []
-        }),
+    // Batch inventory fetch (100 products per batch)
+    const inventoryBatches = await Promise.all(
+      productIdBatches.map(async (batchIds, index) => {
+        const { data, error } = await supabase
+          .from('inventory')
+          .select('product_id, branch_id, quantity, min_stock, audit_status')
+          .in('product_id', batchIds)
 
-      // ✨ Single query for all videos data
-      (supabase as any)
-        .from('product_videos')
-        .select('*')
-        .in('product_id', productIds)
-        .order('sort_order', { ascending: true })
-        .then(({ data, error }: any) => {
-          if (error) {
-            console.warn('Unable to fetch videos data:', error)
-            return []
-          }
-          return data || []
-        })
-    ])
+        if (error) {
+          console.error(`❌ Inventory batch ${index + 1} error:`, error)
+          return []
+        }
+        console.log(`✅ Inventory batch ${index + 1}/${productIdBatches.length}: ${data?.length || 0} records`)
+        return data || []
+      })
+    )
+
+    // Flatten all inventory batches into single array
+    const inventoryData = inventoryBatches.flat()
+    console.log(`📊 Total inventory records: ${inventoryData.length}`)
+
+    // Log sample data with non-zero quantity
+    if (inventoryData.length > 0) {
+      const withStock = inventoryData.filter((d: any) => d.quantity > 0)
+      console.log('📊 Records with stock > 0:', withStock.length)
+      if (withStock.length > 0) {
+        console.log('📊 Sample record with stock:', withStock[0])
+      }
+    }
+
+    // Batch variants fetch
+    const variantsBatches = await Promise.all(
+      productIdBatches.map(async (batchIds) => {
+        const { data, error } = await supabase
+          .from('product_color_shape_definitions')
+          .select('*')
+          .in('product_id', batchIds)
+          .order('sort_order', { ascending: true })
+
+        if (error) {
+          console.warn('Unable to fetch color/shape definitions:', error)
+          return []
+        }
+        return data || []
+      })
+    )
+    const variantsData = variantsBatches.flat()
+
+    // Batch videos fetch
+    const videosBatches = await Promise.all(
+      productIdBatches.map(async (batchIds) => {
+        const { data, error } = await (supabase as any)
+          .from('product_videos')
+          .select('*')
+          .in('product_id', batchIds)
+          .order('sort_order', { ascending: true })
+
+        if (error) {
+          console.warn('Unable to fetch videos data:', error)
+          return []
+        }
+        return data || []
+      })
+    )
+    const videosData = videosBatches.flat()
 
     // OPTIMIZATION: Group inventory, variants, and videos by product_id for O(1) lookup
     const inventoryByProduct = new Map<string, any[]>()
@@ -355,6 +395,8 @@ export function useProducts() {
       }
       inventoryByProduct.get(productId)!.push(inv)
     })
+
+    console.log('📦 Inventory grouped for', inventoryByProduct.size, 'products')
 
     variantsData.forEach((variant: any) => {
       const productId = variant.product_id
@@ -768,7 +810,7 @@ export function useProducts() {
     const productsChannel = supabase
       .channel('products_changes_optimized')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'products' },
+        { event: '*', schema: 'elfaroukgroup', table: 'products' },
         async (payload) => {
           // OPTIMIZATION: Invalidate cache and refetch only when necessary
           cache.invalidatePattern('products:')
@@ -826,7 +868,7 @@ export function useProducts() {
     const inventoryChannel = supabase
       .channel('inventory_changes_optimized')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'inventory' },
+        { event: '*', schema: 'elfaroukgroup', table: 'inventory' },
         (payload: any) => {
           // OPTIMIZATION: Update specific product inventory without full refetch
           if (payload.new && payload.new.product_id) {
@@ -871,7 +913,7 @@ export function useProducts() {
     const variantDefsChannel = supabase
       .channel('variant_definitions_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'product_color_shape_definitions' },
+        { event: '*', schema: 'elfaroukgroup', table: 'product_color_shape_definitions' },
         async (payload: any) => {
           // When color/shape definitions change, refetch for the affected product
           const productId = payload.new?.product_id || payload.old?.product_id
@@ -911,7 +953,7 @@ export function useProducts() {
     const variantQuantitiesChannel = supabase
       .channel('variant_quantities_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'product_variant_quantities' },
+        { event: '*', schema: 'elfaroukgroup', table: 'product_variant_quantities' },
         async (payload: any) => {
           // When quantities change, we need to refetch for affected product
           // Since we don't have product_id directly, we need to get it from the definition
@@ -960,7 +1002,7 @@ export function useProducts() {
     const displaySettingsChannel = supabase
       .channel('product_display_settings_changes')
       .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'product_display_settings' },
+        { event: 'UPDATE', schema: 'elfaroukgroup', table: 'product_display_settings' },
         (payload: any) => {
           if (payload.new?.selected_branches) {
             // Reload products to recalculate with new branch selection
