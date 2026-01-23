@@ -45,9 +45,14 @@ export default function BranchSwitcher() {
     );
   }
 
-  // Show nothing if no branch is selected
+  // Show warning if no branch is selected
   if (!currentBranch) {
-    return null;
+    return (
+      <div className="flex items-center gap-1 px-3 py-1.5 bg-yellow-500/20 rounded-lg">
+        <BuildingStorefrontIcon className="h-4 w-4 text-yellow-400" />
+        <span className="text-sm text-yellow-300">لم يتم تحديد فرع</span>
+      </div>
+    );
   }
 
   // If only one branch, show it without dropdown

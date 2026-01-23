@@ -166,20 +166,70 @@ export function CurrentBranchProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, fetchUserBranches]);
 
-  // Effect to load branches when user changes
+  // Effect to load branches - ALWAYS load branches (even for unauthenticated users)
   useEffect(() => {
-    if (!isAuthenticated || !user) {
-      setCurrentBranchState(null);
-      setUserBranches([]);
-      setIsLoading(false);
+    const loadBranches = async () => {
+      setIsLoading(true);
       setError(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-      return;
-    }
 
-    fetchUserBranches(user.id);
+      try {
+        // إذا المستخدم مسجل دخول، حاول جلب فروعه المخصصة
+        if (isAuthenticated && user?.id) {
+          await fetchUserBranches(user.id);
+          return;
+        }
+
+        // Fallback: جلب كل الفروع النشطة للمستخدمين غير المسجلين
+        const { data: allBranches, error: branchesError } = await supabase
+          .from('branches')
+          .select('id, name, name_en, address, phone, is_active, is_default')
+          .eq('is_active', true)
+          .order('is_default', { ascending: false })
+          .order('name', { ascending: true });
+
+        if (branchesError) {
+          console.error('Error fetching branches:', branchesError);
+          setError('فشل في جلب الفروع');
+          setUserBranches([]);
+          setIsLoading(false);
+          return;
+        }
+
+        if (allBranches?.length) {
+          setUserBranches(allBranches);
+
+          // اختيار الفرع من localStorage أو الافتراضي
+          const savedBranchId = typeof window !== 'undefined'
+            ? localStorage.getItem(STORAGE_KEY)
+            : null;
+
+          let branchToSet: Branch | null = null;
+
+          if (savedBranchId) {
+            branchToSet = allBranches.find((b: Branch) => b.id === savedBranchId) || null;
+          }
+
+          if (!branchToSet) {
+            // استخدم الفرع الافتراضي أو الأول
+            branchToSet = allBranches.find((b: Branch) => b.is_default) || allBranches[0];
+          }
+
+          if (branchToSet) {
+            setCurrentBranchState(branchToSet);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(STORAGE_KEY, branchToSet.id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading branches:', err);
+        setError('حدث خطأ في جلب الفروع');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadBranches();
   }, [user?.id, isAuthenticated, fetchUserBranches]);
 
   const value: CurrentBranchContextValue = {

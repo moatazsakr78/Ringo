@@ -4,6 +4,7 @@ import { SessionProvider } from 'next-auth/react'
 import { EditOrderProvider } from '@/lib/contexts/EditOrderContext'
 import { FavoritesProvider } from '@/lib/contexts/FavoritesContext'
 import { CurrentBranchProvider } from '@/lib/contexts/CurrentBranchContext'
+import { AutoSelectInputProvider } from './components/AutoSelectInputProvider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
@@ -11,7 +12,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <FavoritesProvider>
         <CurrentBranchProvider>
           <EditOrderProvider>
-            {children}
+            <AutoSelectInputProvider>
+              {children}
+            </AutoSelectInputProvider>
           </EditOrderProvider>
         </CurrentBranchProvider>
       </FavoritesProvider>

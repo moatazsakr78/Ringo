@@ -105,6 +105,14 @@ export function useInfiniteSupplierStatement(
 
     const { startDate, endDate } = getDateRangeFromFilter(currentDateFilter)
 
+    // Get supplier's linked customer
+    const { data: supplierData } = await supabase
+      .from('suppliers')
+      .select('linked_customer_id')
+      .eq('id', currentSupplierId)
+      .single()
+    const linkedCustomerId = supplierData?.linked_customer_id
+
     // Fetch purchase invoices (newest first)
     let purchasesQuery = supabase
       .from('purchase_invoices')
@@ -162,12 +170,79 @@ export function useInfiniteSupplierStatement(
 
     if (paymentsError) throw paymentsError
 
-    // Get safe names for payments
-    const paymentSafeIds = (paymentsData || []).filter(p => p.safe_id).map(p => p.safe_id as string)
+    // Fetch sales from linked customer (if any)
+    let salesData: any[] = []
+    if (linkedCustomerId) {
+      let salesQuery = supabase
+        .from('sales')
+        .select(`
+          id, invoice_number, total_amount, invoice_type, created_at, time,
+          record:records(name),
+          cashier:user_profiles(full_name)
+        `)
+        .eq('customer_id', linkedCustomerId)
+
+      if (startDate) {
+        salesQuery = salesQuery.gte('created_at', startDate.toISOString())
+      }
+      if (endDate) {
+        salesQuery = salesQuery.lte('created_at', endDate.toISOString())
+      }
+      if (cursorData) {
+        salesQuery = salesQuery.or(`created_at.lt.${cursorData.created_at},and(created_at.eq.${cursorData.created_at},id.lt.${cursorData.id})`)
+      }
+
+      salesQuery = salesQuery
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(pageSize)
+
+      const { data, error: salesError } = await salesQuery
+      if (salesError) throw salesError
+      salesData = data || []
+    }
+
+    // Fetch customer payments from linked customer (if any)
+    let customerPaymentsData: any[] = []
+    if (linkedCustomerId) {
+      let customerPaymentsQuery = supabase
+        .from('customer_payments')
+        .select(`
+          id, amount, notes, created_at, payment_date, safe_id,
+          creator:user_profiles(full_name)
+        `)
+        .eq('customer_id', linkedCustomerId)
+        .is('sale_id', null)  // Standalone payments only
+
+      if (startDate) {
+        customerPaymentsQuery = customerPaymentsQuery.gte('created_at', startDate.toISOString())
+      }
+      if (endDate) {
+        customerPaymentsQuery = customerPaymentsQuery.lte('created_at', endDate.toISOString())
+      }
+      if (cursorData) {
+        customerPaymentsQuery = customerPaymentsQuery.or(`created_at.lt.${cursorData.created_at},and(created_at.eq.${cursorData.created_at},id.lt.${cursorData.id})`)
+      }
+
+      customerPaymentsQuery = customerPaymentsQuery
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(pageSize)
+
+      const { data, error: customerPaymentsError } = await customerPaymentsQuery
+      if (customerPaymentsError) throw customerPaymentsError
+      customerPaymentsData = data || []
+    }
+
+    // Get safe names for payments (both supplier and customer payments)
+    const paymentSafeIds = [
+      ...(paymentsData || []).filter(p => p.safe_id).map(p => p.safe_id as string),
+      ...customerPaymentsData.filter(p => p.safe_id).map(p => p.safe_id as string)
+    ]
     const safesMap = await fetchSafeNames(paymentSafeIds)
 
     // Build combined statement items
-    const items: Array<{ item: any; type: 'purchase' | 'payment'; date: Date }> = []
+    const items: Array<{ item: any; type: 'purchase' | 'payment' | 'sale' | 'customerPayment'; date: Date }> = []
 
     // Add purchases
     purchasesData?.forEach(purchase => {
@@ -178,11 +253,29 @@ export function useInfiniteSupplierStatement(
       })
     })
 
-    // Add payments
+    // Add supplier payments
     paymentsData?.forEach(payment => {
       items.push({
         item: payment,
         type: 'payment',
+        date: new Date(payment.created_at)
+      })
+    })
+
+    // Add sales from linked customer
+    salesData.forEach(sale => {
+      items.push({
+        item: sale,
+        type: 'sale',
+        date: new Date(sale.created_at)
+      })
+    })
+
+    // Add customer payments from linked customer
+    customerPaymentsData.forEach(payment => {
+      items.push({
+        item: payment,
+        type: 'customerPayment',
         date: new Date(payment.created_at)
       })
     })
@@ -228,7 +321,7 @@ export function useInfiniteSupplierStatement(
           employee_name: (purchase as any).creator?.full_name || null,
           notes: (purchase as any).notes || null
         })
-      } else {
+      } else if (item.type === 'payment') {
         const payment = item.item
         const amount = Math.abs(payment.amount || 0)
 
@@ -249,6 +342,80 @@ export function useInfiniteSupplierStatement(
           paidAmount: amount,
           balance: balanceAfter,
           isNegative: true,
+          safe_name: payment.safe_id ? safesMap.get(payment.safe_id) || null : null,
+          employee_name: (payment as any).creator?.full_name || null,
+          userNotes: payment.notes || null,
+          notes: payment.notes || null
+        })
+      } else if (item.type === 'sale') {
+        const sale = item.item
+        const isReturn = sale.invoice_type === 'Sale Return'
+        const invoiceAmount = Math.abs(sale.total_amount)
+
+        const operationType = isReturn ? 'مرتجع بيع' : 'فاتورة بيع'
+
+        // Sale from linked customer REDUCES supplier balance
+        // Sale Return INCREASES supplier balance
+        const netAmount = isReturn ? invoiceAmount : -invoiceAmount
+
+        const balanceAfter = balance
+        balance = balance - netAmount
+
+        statementItems.push({
+          id: `sale-${sale.id}`,
+          saleId: sale.id,
+          date: item.date,
+          description: `فاتورة ${sale.invoice_number}`,
+          type: operationType,
+          amount: netAmount,
+          invoiceValue: invoiceAmount,
+          paidAmount: 0,
+          balance: balanceAfter,
+          isNegative: !isReturn,
+          safe_name: (sale as any).record?.name || null,
+          employee_name: (sale as any).cashier?.full_name || null
+        })
+      } else if (item.type === 'customerPayment') {
+        const payment = item.item
+        const isLoan = payment.notes?.startsWith('سلفة')
+        const isDiscount = payment.notes?.startsWith('خصم')
+        const amount = Math.abs(payment.amount || 0)
+
+        let operationType: string
+        let netAmount: number
+
+        if (isLoan) {
+          // سلفة: تزيد ما على العميل = تقلل ما له عند المورد
+          operationType = 'إضافة'
+          netAmount = -amount  // Reduces supplier balance
+        } else if (isDiscount) {
+          // خصم: يقلل ما على العميل = يزيد ما له عند المورد
+          operationType = 'خصم'
+          netAmount = amount  // Increases supplier balance
+        } else {
+          // دفعة: تقلل ما على العميل = تزيد ما له عند المورد
+          operationType = 'دفعة عميل'
+          netAmount = amount  // Increases supplier balance
+        }
+
+        const balanceAfter = balance
+        balance = balance - netAmount
+
+        statementItems.push({
+          id: `customer-payment-${payment.id}`,
+          customerPaymentId: payment.id,
+          date: item.date,
+          description: isLoan
+            ? `إضافة: ${payment.notes?.replace(/^سلفة\s*-?\s*/, '') || ''}`
+            : isDiscount
+              ? `خصم: ${payment.notes?.replace(/^خصم\s*-?\s*/, '') || ''}`
+              : `دفعة عميل: ${payment.notes || ''}`,
+          type: operationType,
+          amount: netAmount,
+          invoiceValue: 0,
+          paidAmount: amount,
+          balance: balanceAfter,
+          isNegative: isLoan,
           safe_name: payment.safe_id ? safesMap.get(payment.safe_id) || null : null,
           employee_name: (payment as any).creator?.full_name || null,
           userNotes: payment.notes || null,

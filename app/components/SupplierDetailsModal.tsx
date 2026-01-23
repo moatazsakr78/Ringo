@@ -2830,9 +2830,12 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
                             <ResizableTable
                               className="h-full w-full"
                               columns={statementColumns}
-                              data={accountStatements.map((item, index, arr) => ({
+                              data={accountStatements.map((item, idx, arr) => ({
                                 ...item,
-                                isFirstRow: index === 0
+                                index: idx + 1,
+                                displayDate: item.date ? new Date(item.date).toLocaleDateString('en-GB') : '-',
+                                displayTime: item.date ? new Date(item.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase() : '-',
+                                isFirstRow: idx === 0
                               }))}
                               onRowDoubleClick={handleStatementRowDoubleClick}
                               reportType="SUPPLIER_STATEMENT_REPORT"

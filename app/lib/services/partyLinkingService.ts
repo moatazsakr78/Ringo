@@ -421,6 +421,9 @@ export async function calculateCustomerBalanceWithLinked(customerId: string): Pr
       const amount = Number(p.amount) || 0;
       if (p.notes?.startsWith('سلفة')) {
         loansTotal += amount;
+      } else if (p.notes?.startsWith('خصم')) {
+        // الخصم يقلل الرصيد مثل الدفعة
+        paymentsTotal += amount;
       } else {
         paymentsTotal += amount;
       }
@@ -517,12 +520,15 @@ export async function calculateSupplierBalanceWithLinked(supplierId: string): Pr
         .select('amount, notes')
         .eq('customer_id', supplier.linked_customer_id);
 
-      // Separate loans (سلفة) from regular payments (دفعة)
+      // Separate loans (سلفة) from regular payments (دفعة) and discounts (خصم)
       (customerPayments || []).forEach(p => {
         const amount = Number(p.amount) || 0;
         if (p.notes?.startsWith('سلفة')) {
           // سلفة: تزيد ما على العميل (وبالتالي تقلل ما له عندنا كمورد)
           linkedCustomerLoans += amount;
+        } else if (p.notes?.startsWith('خصم')) {
+          // خصم: يقلل ما على العميل مثل الدفعة (وبالتالي يزيد ما له عندنا كمورد)
+          linkedCustomerPayments += amount;
         } else {
           // دفعة: تقلل ما على العميل (وبالتالي تزيد ما له عندنا كمورد)
           linkedCustomerPayments += amount;

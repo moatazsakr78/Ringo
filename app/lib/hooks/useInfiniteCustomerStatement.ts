@@ -11,6 +11,7 @@ export interface CustomerStatementItem {
   id: string
   saleId?: string | null
   paymentId?: string | null
+  purchaseId?: string | null
   date: Date
   description: string
   type: string
@@ -101,6 +102,14 @@ export function useInfiniteCustomerStatement(
 
     const { startDate, endDate } = getDateRangeFromFilter(currentDateFilter)
 
+    // Get customer's linked supplier
+    const { data: customerData } = await supabase
+      .from('customers')
+      .select('linked_supplier_id')
+      .eq('id', currentCustomerId)
+      .single()
+    const linkedSupplierId = customerData?.linked_supplier_id
+
     // Fetch sales (newest first)
     let salesQuery = supabase
       .from('sales')
@@ -159,6 +168,38 @@ export function useInfiniteCustomerStatement(
 
     if (paymentsError) throw paymentsError
 
+    // Fetch purchase invoices from linked supplier (if any)
+    let purchasesData: any[] = []
+    if (linkedSupplierId) {
+      let purchasesQuery = supabase
+        .from('purchase_invoices')
+        .select(`
+          id, invoice_number, total_amount, invoice_type, created_at,
+          record:records(name),
+          creator:user_profiles(full_name)
+        `)
+        .eq('supplier_id', linkedSupplierId)
+
+      if (startDate) {
+        purchasesQuery = purchasesQuery.gte('created_at', startDate.toISOString())
+      }
+      if (endDate) {
+        purchasesQuery = purchasesQuery.lte('created_at', endDate.toISOString())
+      }
+      if (cursorData) {
+        purchasesQuery = purchasesQuery.or(`created_at.lt.${cursorData.created_at},and(created_at.eq.${cursorData.created_at},id.lt.${cursorData.id})`)
+      }
+
+      purchasesQuery = purchasesQuery
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(pageSize)
+
+      const { data, error: purchasesError } = await purchasesQuery
+      if (purchasesError) throw purchasesError
+      purchasesData = data || []
+    }
+
     // Get safe names for payments
     const paymentSafeIds = (paymentsData || []).filter(p => p.safe_id).map(p => p.safe_id as string)
     const safesMap = await fetchSafeNames(paymentSafeIds)
@@ -204,7 +245,7 @@ export function useInfiniteCustomerStatement(
     }
 
     // Build combined statement items
-    const items: Array<{ item: any; type: 'sale' | 'payment'; date: Date }> = []
+    const items: Array<{ item: any; type: 'sale' | 'payment' | 'purchase'; date: Date }> = []
 
     // Add sales
     salesData?.forEach(sale => {
@@ -221,6 +262,15 @@ export function useInfiniteCustomerStatement(
         item: payment,
         type: 'payment',
         date: new Date(payment.created_at)
+      })
+    })
+
+    // Add purchase invoices from linked supplier
+    purchasesData.forEach(purchase => {
+      items.push({
+        item: purchase,
+        type: 'purchase',
+        date: new Date(purchase.created_at)
       })
     })
 
@@ -277,7 +327,7 @@ export function useInfiniteCustomerStatement(
           safe_name: (sale as any).record?.name || saleTx?.record?.name || null,
           employee_name: (sale as any).cashier?.full_name || saleTx?.performed_by || null
         })
-      } else {
+      } else if (item.type === 'payment') {
         const payment = item.item
         const isLoan = payment.notes?.startsWith('سلفة')
         const amount = Math.abs(payment.amount || 0)
@@ -293,8 +343,8 @@ export function useInfiniteCustomerStatement(
           id: `payment-${payment.id}`,
           paymentId: payment.id,
           date: item.date,
-          description: isLoan ? `سلفة: ${payment.notes || ''}` : `دفعة: ${payment.notes || ''}`,
-          type: isLoan ? 'سلفة' : 'دفعة',
+          description: isLoan ? `إضافة: ${payment.notes?.replace(/^سلفة\s*-?\s*/, '') || ''}` : `دفعة: ${payment.notes || ''}`,
+          type: isLoan ? 'إضافة' : 'دفعة',
           amount: netAmount,
           invoiceValue: 0,
           paidAmount: amount,
@@ -303,6 +353,34 @@ export function useInfiniteCustomerStatement(
           safe_name: payment.safe_id ? safesMap.get(payment.safe_id) || null : null,
           employee_name: (payment as any).creator?.full_name || null,
           userNotes: payment.notes || null
+        })
+      } else if (item.type === 'purchase') {
+        const purchase = item.item
+        const isReturn = purchase.invoice_type === 'Purchase Return'
+        const invoiceAmount = Math.abs(purchase.total_amount)
+
+        const operationType = isReturn ? 'مرتجع شراء' : 'فاتورة شراء'
+
+        // Purchase invoice REDUCES customer balance (like a payment)
+        // Purchase return INCREASES customer balance (like a sale)
+        const netAmount = isReturn ? invoiceAmount : -invoiceAmount
+
+        const balanceAfter = balance
+        balance = balance - netAmount
+
+        statementItems.push({
+          id: `purchase-${purchase.id}`,
+          purchaseId: purchase.id,
+          date: item.date,
+          description: `فاتورة ${purchase.invoice_number}`,
+          type: operationType,
+          amount: netAmount,
+          invoiceValue: invoiceAmount,
+          paidAmount: 0,
+          balance: balanceAfter,
+          isNegative: !isReturn,
+          safe_name: (purchase as any).record?.name || null,
+          employee_name: (purchase as any).creator?.full_name || null
         })
       }
     })

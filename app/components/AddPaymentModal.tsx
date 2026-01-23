@@ -14,7 +14,7 @@ interface AddPaymentModalProps {
   entityName: string
   currentBalance: number
   onPaymentAdded?: () => void
-  initialPaymentType?: 'payment' | 'loan'
+  initialPaymentType?: 'payment' | 'loan' | 'discount'
 }
 
 export default function AddPaymentModal({
@@ -36,7 +36,7 @@ export default function AddPaymentModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [records, setRecords] = useState<any[]>([])
   const [isLoadingRecords, setIsLoadingRecords] = useState(false)
-  const [paymentType, setPaymentType] = useState<'payment' | 'loan'>(initialPaymentType)
+  const [paymentType, setPaymentType] = useState<'payment' | 'loan' | 'discount'>(initialPaymentType)
   const [paymentMethods, setPaymentMethods] = useState<any[]>([])
   const [isLoadingPaymentMethods, setIsLoadingPaymentMethods] = useState(false)
 
@@ -119,7 +119,8 @@ export default function AddPaymentModal({
       return
     }
 
-    if (!notes || notes.trim() === '') {
+    // البيان مطلوب فقط للسلفة والخصم
+    if ((paymentType === 'loan' || paymentType === 'discount') && (!notes || notes.trim() === '')) {
       alert('يرجى إدخال البيان')
       return
     }
@@ -147,7 +148,9 @@ export default function AddPaymentModal({
         // إعداد الملاحظات مع توضيح نوع العملية
         const paymentNotes = paymentType === 'loan'
           ? `سلفة${notes ? ` - ${notes}` : ''}`
-          : notes || null
+          : paymentType === 'discount'
+            ? `خصم - ${notes}`
+            : notes || null
 
         const { data, error } = await supabase
           .from('customer_payments')
@@ -166,13 +169,13 @@ export default function AddPaymentModal({
 
         if (error) {
           console.error('Error adding payment:', error)
-          alert(paymentType === 'loan' ? 'حدث خطأ أثناء إضافة السلفة' : 'حدث خطأ أثناء إضافة الدفعة')
+          alert(paymentType === 'loan' ? 'حدث خطأ أثناء إضافة السلفة' : paymentType === 'discount' ? 'حدث خطأ أثناء إضافة الخصم' : 'حدث خطأ أثناء إضافة الدفعة')
           return
         }
 
         // Record payment in the selected safe (if a safe was selected)
-        // للدفعة: إيداع في الخزنة / للسلفة: سحب من الخزنة
-        if (recordId && paymentMethod === 'cash') {
+        // للدفعة: إيداع في الخزنة / للسلفة: سحب من الخزنة / للخصم: لا حركة نقدية
+        if (recordId && paymentMethod === 'cash' && paymentType !== 'discount') {
           try {
             // Get or create drawer for this record
             let { data: drawer, error: drawerError } = await supabase
@@ -234,7 +237,9 @@ export default function AddPaymentModal({
         // إعداد الملاحظات مع توضيح نوع العملية للمورد
         const supplierPaymentNotes = paymentType === 'loan'
           ? `سلفة${notes ? ` - ${notes}` : ''}`
-          : notes || null
+          : paymentType === 'discount'
+            ? `خصم - ${notes}`
+            : notes || null
 
         const { data, error } = await supabase
           .from('supplier_payments')
@@ -253,13 +258,13 @@ export default function AddPaymentModal({
 
         if (error) {
           console.error('Error adding payment:', error)
-          alert(paymentType === 'loan' ? 'حدث خطأ أثناء إضافة السلفة' : 'حدث خطأ أثناء إضافة الدفعة')
+          alert(paymentType === 'loan' ? 'حدث خطأ أثناء إضافة السلفة' : paymentType === 'discount' ? 'حدث خطأ أثناء إضافة الخصم' : 'حدث خطأ أثناء إضافة الدفعة')
           return
         }
 
         // Record payment in the selected safe (if a safe was selected)
-        // للدفعة: المال يخرج من الخزنة (سلبي) / للسلفة: المال يدخل للخزنة (إيجابي)
-        if (recordId && paymentMethod === 'cash') {
+        // للدفعة: المال يخرج من الخزنة (سلبي) / للسلفة: المال يدخل للخزنة (إيجابي) / للخصم: لا حركة نقدية
+        if (recordId && paymentMethod === 'cash' && paymentType !== 'discount') {
           try {
             // Get or create drawer for this record
             let { data: drawer, error: drawerError } = await supabase
@@ -352,7 +357,7 @@ export default function AddPaymentModal({
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-600">
             <h2 className="text-xl font-bold text-white">
-              {paymentType === 'loan' ? 'إضافة سلفة' : 'إضافة دفعة'} - {entityName}
+              {paymentType === 'loan' ? 'إضافة سلفة' : paymentType === 'discount' ? 'إضافة خصم' : 'إضافة دفعة'} - {entityName}
             </h2>
             <button
               onClick={onClose}
@@ -365,18 +370,29 @@ export default function AddPaymentModal({
           {/* Body */}
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
 
-            {/* Payment Type Toggle - 3/4 للدفعة و 1/4 للسلفة */}
+            {/* Payment Type Toggle - 3 أزرار متساوية */}
             <div className="flex gap-2 p-1 bg-[#1F2937] rounded-lg border border-gray-600">
               <button
                 type="button"
                 onClick={() => setPaymentType('payment')}
-                className={`flex-[3] py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 ${
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 ${
                   paymentType === 'payment'
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'text-gray-400 hover:text-white hover:bg-gray-700'
                 }`}
               >
                 دفعة
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentType('discount')}
+                className={`flex-1 py-2 px-3 rounded-md text-sm font-medium transition-all duration-200 ${
+                  paymentType === 'discount'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-700'
+                }`}
+              >
+                خصم
               </button>
               <button
                 type="button"
@@ -395,9 +411,13 @@ export default function AddPaymentModal({
             <div className={`rounded p-4 text-center ${
               paymentType === 'loan'
                 ? 'bg-orange-600/20 border border-orange-600'
-                : 'bg-blue-600/20 border border-blue-600'
+                : paymentType === 'discount'
+                  ? 'bg-purple-600/20 border border-purple-600'
+                  : 'bg-blue-600/20 border border-blue-600'
             }`}>
-              <div className={`text-sm mb-1 ${paymentType === 'loan' ? 'text-orange-300' : 'text-blue-300'}`}>
+              <div className={`text-sm mb-1 ${
+                paymentType === 'loan' ? 'text-orange-300' : paymentType === 'discount' ? 'text-purple-300' : 'text-blue-300'
+              }`}>
                 الرصيد الحالي
               </div>
               <div className="text-2xl font-bold text-white">{formatPrice(currentBalance)}</div>
@@ -406,12 +426,17 @@ export default function AddPaymentModal({
                   السلفة ستزيد الرصيد المستحق على العميل
                 </div>
               )}
+              {paymentType === 'discount' && (
+                <div className="text-xs text-purple-300 mt-1">
+                  الخصم سيقلل الرصيد المستحق على العميل
+                </div>
+              )}
             </div>
 
             {/* Amount Input */}
             <div>
               <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
-                {paymentType === 'loan' ? 'مبلغ السلفة' : 'مبلغ الدفعة'} <span className="text-red-400">*</span>
+                {paymentType === 'loan' ? 'مبلغ السلفة' : paymentType === 'discount' ? 'مبلغ الخصم' : 'مبلغ الدفعة'} <span className="text-red-400">*</span>
               </label>
               <input
                 type="number"
@@ -420,9 +445,9 @@ export default function AddPaymentModal({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 className={`w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 ${
-                  paymentType === 'loan' ? 'focus:ring-orange-500' : 'focus:ring-blue-500'
+                  paymentType === 'loan' ? 'focus:ring-orange-500' : paymentType === 'discount' ? 'focus:ring-purple-500' : 'focus:ring-blue-500'
                 }`}
-                placeholder={paymentType === 'loan' ? 'أدخل مبلغ السلفة' : 'أدخل مبلغ الدفعة'}
+                placeholder={paymentType === 'loan' ? 'أدخل مبلغ السلفة' : paymentType === 'discount' ? 'أدخل مبلغ الخصم' : 'أدخل مبلغ الدفعة'}
                 required
               />
             </div>
@@ -452,6 +477,18 @@ export default function AddPaymentModal({
                 </div>
                 <div className="text-xl font-bold text-white">
                   {formatPrice(currentBalance + parseFloat(amount))}
+                </div>
+              </div>
+            )}
+
+            {/* New Balance Display for Discount */}
+            {amount && parseFloat(amount) > 0 && paymentType === 'discount' && (
+              <div className="rounded p-3 text-center bg-purple-600/20 border border-purple-600">
+                <div className="text-sm mb-1 text-purple-300">
+                  الرصيد الجديد بعد الخصم
+                </div>
+                <div className="text-xl font-bold text-white">
+                  {formatPrice(currentBalance - parseFloat(amount))}
                 </div>
               </div>
             )}
@@ -504,15 +541,17 @@ export default function AddPaymentModal({
             {/* البيان */}
             <div>
               <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
-                البيان <span className="text-red-400">*</span>
+                البيان {(paymentType === 'loan' || paymentType === 'discount') && <span className="text-red-400">*</span>}
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                className="w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                className={`w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 resize-none ${
+                  paymentType === 'loan' ? 'focus:ring-orange-500' : paymentType === 'discount' ? 'focus:ring-purple-500' : 'focus:ring-blue-500'
+                }`}
                 placeholder="أدخل البيان"
-                required
+                required={paymentType === 'loan' || paymentType === 'discount'}
               />
             </div>
 
@@ -528,18 +567,22 @@ export default function AddPaymentModal({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || !amount || parseFloat(amount) <= 0 || !notes || notes.trim() === ''}
+                disabled={isSubmitting || !amount || parseFloat(amount) <= 0 || ((paymentType === 'loan' || paymentType === 'discount') && (!notes || notes.trim() === ''))}
                 className={`flex-1 px-4 py-2 text-white rounded font-medium transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed ${
                   paymentType === 'loan'
                     ? 'bg-orange-600 hover:bg-orange-700'
-                    : 'bg-blue-600 hover:bg-blue-700'
+                    : paymentType === 'discount'
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
                 }`}
               >
                 {isSubmitting
                   ? 'جاري الإضافة...'
                   : paymentType === 'loan'
                     ? 'إضافة السلفة'
-                    : 'إضافة الدفعة'
+                    : paymentType === 'discount'
+                      ? 'إضافة الخصم'
+                      : 'إضافة الدفعة'
                 }
               </button>
             </div>
