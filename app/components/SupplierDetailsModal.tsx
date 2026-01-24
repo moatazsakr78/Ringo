@@ -1785,10 +1785,10 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
     {
       id: 'index',
       header: '#',
-      accessor: 'id',
+      accessor: 'index',
       width: 50,
-      render: (value: any, item: any, index: number) => (
-        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{item.id}</span>
+      render: (value: number, item: any) => (
+        <span className={item.amount >= 0 ? 'text-amber-400' : 'text-white'}>{value}</span>
       )
     },
     {

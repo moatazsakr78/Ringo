@@ -378,25 +378,25 @@ function POSPageContent() {
     if (activeTabId === 'main') {
       setGlobalRecord(record);
     } else {
-      updateActiveTabSelections({ ...activePOSTab?.selections, record });
+      updateActiveTabSelections({ record });
     }
-  }, [activeTabId, activePOSTab?.selections, setGlobalRecord, updateActiveTabSelections]);
+  }, [activeTabId, setGlobalRecord, updateActiveTabSelections]);
 
   const setCustomer = useCallback((customer: any) => {
     if (activeTabId === 'main') {
       setGlobalCustomer(customer);
     } else {
-      updateActiveTabSelections({ ...activePOSTab?.selections, customer });
+      updateActiveTabSelections({ customer });
     }
-  }, [activeTabId, activePOSTab?.selections, setGlobalCustomer, updateActiveTabSelections]);
+  }, [activeTabId, setGlobalCustomer, updateActiveTabSelections]);
 
   const setBranch = useCallback((branch: any) => {
     if (activeTabId === 'main') {
       setGlobalBranch(branch);
     } else {
-      updateActiveTabSelections({ ...activePOSTab?.selections, branch });
+      updateActiveTabSelections({ branch });
     }
-  }, [activeTabId, activePOSTab?.selections, setGlobalBranch, updateActiveTabSelections]);
+  }, [activeTabId, setGlobalBranch, updateActiveTabSelections]);
 
   const clearSelections = useCallback(() => {
     if (activeTabId === 'main') {
@@ -1288,13 +1288,20 @@ function POSPageContent() {
         setCartItems([]);
         console.log("Transferred cart to new customer tab:", customer?.name);
       } else {
-        // Empty cart - create new tab without transfer
-        addTabWithCustomer(customer, {
-          branch: globalSelections.branch,
-          record: globalSelections.record,
-          priceType: selectedPriceType,
-        });
-        console.log("Created new tab for customer:", customer?.name);
+        // Empty cart - just update the main tab's customer (don't create new tab)
+        setCustomer(customer);
+
+        // Apply customer's default record if set
+        if (customer?.default_record_id) {
+          setRecord({ id: customer.default_record_id });
+        }
+
+        // Apply customer's default price type if set
+        if (customer?.default_price_type) {
+          setSelectedPriceType(customer.default_price_type);
+        }
+
+        console.log("Updated main tab customer:", customer?.name);
       }
     } else {
       // Either not main tab OR selecting default customer - update customer and apply defaults
@@ -5949,13 +5956,8 @@ function POSPageContent() {
                         className="h-full w-full"
                         columns={visibleTableColumns}
                         data={filteredProducts}
-                        selectedRowId={selectedProduct?.id || null}
                         onRowClick={(product, index) => {
-                          if (selectedProduct?.id === product.id) {
-                            setSelectedProduct(null);
-                          } else {
-                            setSelectedProduct(product as Product);
-                          }
+                          handleProductClick(product);
                         }}
                       />
                     </div>
@@ -5970,19 +5972,10 @@ function POSPageContent() {
                             <div
                               key={product.id}
                               onClick={() => {
-                                if (!isProductVisible(product.id)) return; // Don't allow clicks on hidden products
-                                if (selectedProduct?.id === product.id) {
-                                  setSelectedProduct(null);
-                                } else {
-                                  setSelectedProduct(product);
-                                }
+                                if (!isProductVisible(product.id)) return;
                                 handleProductClick(product);
                               }}
-                              className={`bg-[#374151] rounded-lg p-3 cursor-pointer transition-all duration-200 border-2 relative group ${
-                                selectedProduct?.id === product.id
-                                  ? "border-blue-500 bg-[#434E61]"
-                                  : "border-transparent hover:border-gray-500 hover:bg-[#434E61]"
-                              } ${!isProductVisible(product.id) ? "hidden" : ""}`}
+                              className={`bg-[#374151] rounded-lg p-3 cursor-pointer transition-all duration-200 border-2 border-transparent hover:border-gray-500 hover:bg-[#434E61] relative group ${!isProductVisible(product.id) ? "hidden" : ""}`}
                             >
                               {/* Product Image */}
                               <div className="mb-3 relative">

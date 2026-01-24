@@ -142,7 +142,28 @@ export function useInfiniteSupplierStatement(
 
     if (purchasesError) throw purchasesError
 
-    // Fetch payments (newest first)
+    // Get purchase IDs and fetch linked payments
+    const purchaseIds = purchasesData?.map(p => p.id) || []
+    let paidAmountsMap = new Map<string, number>()
+
+    if (purchaseIds.length > 0) {
+      // Fetch payments linked to purchase invoices
+      const { data: linkedPayments } = await supabase
+        .from('supplier_payments')
+        .select('purchase_invoice_id, amount')
+        .in('purchase_invoice_id', purchaseIds)
+
+      if (linkedPayments) {
+        linkedPayments.forEach(payment => {
+          if (payment.purchase_invoice_id) {
+            const existing = paidAmountsMap.get(payment.purchase_invoice_id) || 0
+            paidAmountsMap.set(payment.purchase_invoice_id, existing + Number(payment.amount || 0))
+          }
+        })
+      }
+    }
+
+    // Fetch standalone payments (not linked to invoices) - newest first
     let paymentsQuery = supabase
       .from('supplier_payments')
       .select(`
@@ -150,6 +171,7 @@ export function useInfiniteSupplierStatement(
         creator:user_profiles(full_name)
       `)
       .eq('supplier_id', currentSupplierId)
+      .is('purchase_invoice_id', null)  // Only standalone payments
 
     if (startDate) {
       paymentsQuery = paymentsQuery.gte('created_at', startDate.toISOString())
@@ -296,11 +318,24 @@ export function useInfiniteSupplierStatement(
         const isReturn = purchase.invoice_type === 'Purchase Return'
         const invoiceAmount = Math.abs(purchase.total_amount)
 
-        const operationType = isReturn ? 'مرتجع شراء' : 'فاتورة شراء'
+        // Get paid amount from the map (linked payments)
+        const paidAmount = Math.abs(paidAmountsMap.get(purchase.id) || 0)
+        const hasPaidAmount = paidAmount > 0
+
+        // Determine operation type based on whether there's a payment
+        let operationType: string
+        if (isReturn) {
+          operationType = hasPaidAmount ? 'مرتجع شراء - دفعة' : 'مرتجع شراء'
+        } else {
+          operationType = hasPaidAmount ? 'فاتورة شراء - دفعة' : 'فاتورة شراء'
+        }
 
         // Purchase increases supplier balance (we owe them more)
         // Return decreases supplier balance (we owe them less)
-        const netAmount = isReturn ? -invoiceAmount : invoiceAmount
+        // Payment reduces the effect
+        const netAmount = isReturn
+          ? -invoiceAmount + paidAmount
+          : invoiceAmount - paidAmount
 
         const balanceAfter = balance
         balance = balance - netAmount
@@ -314,7 +349,7 @@ export function useInfiniteSupplierStatement(
           type: operationType,
           amount: netAmount,
           invoiceValue: invoiceAmount,
-          paidAmount: 0,
+          paidAmount: paidAmount,
           balance: balanceAfter,
           isNegative: isReturn,
           safe_name: (purchase as any).record?.name || null,

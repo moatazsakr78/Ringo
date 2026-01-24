@@ -429,11 +429,11 @@ export function usePOSTabs(): UsePOSTabsReturn {
     });
   }, [activeTabId, saveState]);
 
-  const updateActiveTabSelections = useCallback((selections: any) => {
+  const updateActiveTabSelections = useCallback((newSelections: Partial<POSTab['selections']>) => {
     setTabs(prev => {
       const newTabs = prev.map(tab =>
         tab.id === activeTabId
-          ? { ...tab, selections }
+          ? { ...tab, selections: { ...tab.selections, ...newSelections } }
           : tab
       );
       // Instant save
