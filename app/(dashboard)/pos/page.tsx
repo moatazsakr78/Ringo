@@ -152,6 +152,7 @@ import {
   ExclamationTriangleIcon,
   PencilIcon,
   TruckIcon,
+  TrashIcon,
 } from "@heroicons/react/24/outline";
 
 function POSPageContent() {
@@ -245,6 +246,7 @@ function POSPageContent() {
   // Purchase Mode States
   const [isPurchaseMode, setIsPurchaseMode] = useState(false);
   const [showPurchaseModeConfirm, setShowPurchaseModeConfirm] = useState(false);
+  const [showClearCartConfirm, setShowClearCartConfirm] = useState(false);
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [isSupplierModalForNewPurchase, setIsSupplierModalForNewPurchase] = useState(false); // لتمييز إذا كان لبدء شراء جديد
   const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
@@ -546,6 +548,13 @@ function POSPageContent() {
 
   // ✨ OPTIMIZED: Use useProductsOptimized for inventory data + better performance
   const { products, branches, isLoading, error, fetchProducts } = useProducts();
+
+  // ✨ PERFORMANCE: Branch lookup map for O(1) access instead of O(n) find()
+  const branchLookup = useMemo(() => {
+    const map = new Map<string, typeof branches[0]>();
+    branches.forEach(branch => map.set(branch.id, branch));
+    return map;
+  }, [branches]);
 
   // Device Detection for Tablet View
   const [isTabletDevice, setIsTabletDevice] = useState(false);
@@ -1800,6 +1809,28 @@ function POSPageContent() {
     if (!hasSearchFilter && !hasCategoryFilter) return products;
     return products.filter((p) => filteredProductIds?.has(p.id));
   }, [products, debouncedSearchQuery, selectedCategoryId, categoryFilterIds, filteredProductIds]);
+
+  // ✨ PERFORMANCE: Pre-compute inventory totals to avoid O(n²) calculations in render
+  // This calculates totalQuantity and branchQuantities once when products/branches change
+  const productsWithComputedInventory = useMemo(() => {
+    return products.map(product => ({
+      ...product,
+      _computed: {
+        totalQuantity: product.inventoryData
+          ? Object.values(product.inventoryData).reduce(
+              (sum: number, inv: any) => sum + (inv?.quantity || 0), 0
+            )
+          : 0,
+        branchQuantities: product.inventoryData
+          ? Object.entries(product.inventoryData).map(([locationId, inventory]: [string, any]) => ({
+              locationId,
+              quantity: (inventory as any)?.quantity || 0,
+              name: branchLookup.get(locationId)?.name || `موقع ${locationId.slice(0, 8)}`
+            }))
+          : []
+      }
+    }));
+  }, [products, branchLookup]);
 
   // OPTIMIZED: Memoized refresh handler
   const handleRefresh = useCallback(() => {
@@ -4986,6 +5017,25 @@ function POSPageContent() {
                 </button>
               )}
 
+              {/* Postponed Invoices Button - Mobile */}
+              <button
+                onClick={() => setIsPostponedModalOpen(true)}
+                className={`flex items-center gap-2 px-3 py-2 border border-gray-600 rounded cursor-pointer whitespace-nowrap flex-shrink-0 transition-colors relative ${
+                  postponedTabs.length > 0
+                    ? "bg-orange-600 text-white hover:bg-orange-700 border-orange-500"
+                    : "bg-[#2B3544] text-gray-300 hover:text-white hover:bg-[#374151]"
+                }`}
+                title="الفواتير المؤجلة"
+              >
+                <ClockIcon className="h-4 w-4" />
+                <span className="text-xs">الفواتير</span>
+                {postponedTabs.length > 0 && (
+                  <span className="bg-orange-300 text-orange-800 text-xs px-1.5 rounded-full font-bold">
+                    {postponedTabs.length}
+                  </span>
+                )}
+              </button>
+
               <button
                 onClick={printPreviewReceipt}
                 disabled={cartItems.length === 0}
@@ -5565,15 +5615,32 @@ function POSPageContent() {
                   {/* Cart Items Area - Full Height */}
                   <div className="flex-1 border-t-2 border-gray-500 flex flex-col min-h-0">
                     {cartItems.length === 0 ? (
-                      <div className="flex flex-col justify-center items-center h-full p-8">
-                        <ShoppingCartIcon className="h-24 w-24 text-gray-500 mb-8" />
-                        <p className="text-gray-400 text-sm text-center mb-4">
-                          اضغط على المنتجات لإضافتها للسلة
-                        </p>
-                        <div className="text-center">
-                          <span className="bg-gray-600 px-3 py-1 rounded text-sm text-gray-300">
-                            0 منتج
-                          </span>
+                      <div className="flex-1 flex flex-col min-h-0">
+                        {/* Cart Header - Always visible */}
+                        <div className="p-4 border-b border-gray-600 flex-shrink-0">
+                          <div className="flex items-center gap-2">
+                            {/* Close button */}
+                            <button
+                              onClick={() => setIsCartOpen(false)}
+                              className="text-gray-400 hover:text-white mr-2"
+                              title="إغلاق السلة"
+                            >
+                              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                            <span className="text-white font-medium">السلة</span>
+                            <span className="bg-gray-600 px-2 py-1 rounded text-xs text-gray-400">
+                              0
+                            </span>
+                          </div>
+                        </div>
+                        {/* Empty State */}
+                        <div className="flex flex-col justify-center items-center flex-1 p-8">
+                          <ShoppingCartIcon className="h-24 w-24 text-gray-500 mb-8" />
+                          <p className="text-gray-400 text-sm text-center mb-4">
+                            اضغط على المنتجات لإضافتها للسلة
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -5645,7 +5712,7 @@ function POSPageContent() {
                                 </button>
                                 <span className="text-gray-500">|</span>
                                 <button
-                                  onClick={() => clearCart()}
+                                  onClick={() => setShowClearCartConfirm(true)}
                                   className="text-red-400 hover:text-red-300 text-sm"
                                   title="مسح السلة"
                                 >
@@ -5945,9 +6012,9 @@ function POSPageContent() {
                     <div className="flex-1 overflow-hidden">
                       <div className="h-full overflow-y-auto scrollbar-hide p-4">
                         <div className="grid gap-4 grid-cols-2 md:grid-cols-6">
-                          {/* OPTIMIZED: Use CSS visibility to hide products instead of filtering */}
-                          {/* This keeps images loaded in DOM and prevents re-loading on search changes */}
-                          {products.map((product, index) => (
+                          {/* OPTIMIZED: Use pre-computed inventory data for O(1) access */}
+                          {/* This avoids O(n²) complexity from branches.find() and reduce() on every render */}
+                          {productsWithComputedInventory.map((product, index) => (
                             <div
                               key={product.id}
                               onClick={() => {
@@ -5999,48 +6066,32 @@ function POSPageContent() {
                                   </span>
                                 </div>
 
-                                {/* Total Quantity */}
+                                {/* Total Quantity - Using pre-computed value */}
                                 <div className="flex justify-between items-center">
                                   <span className="text-blue-400 font-medium">
-                                    {(product.inventoryData &&
-                                      Object.values(product.inventoryData).reduce(
-                                        (sum: number, inv: any) =>
-                                          sum + (inv?.quantity || 0),
-                                        0,
-                                      )) ||
-                                      0}
+                                    {product._computed.totalQuantity}
                                   </span>
                                   <span className="text-gray-400">
                                     الكمية الإجمالية
                                   </span>
                                 </div>
 
-                                {/* Branch Quantities */}
-                                {product.inventoryData &&
-                                  Object.entries(product.inventoryData).map(
-                                    ([locationId, inventory]: [string, any]) => {
-                                      const branch = branches.find(
-                                        (b) => b.id === locationId,
-                                      );
-                                      const locationName =
-                                        branch?.name ||
-                                        `موقع ${locationId.slice(0, 8)}`;
-
-                                      return (
-                                        <div
-                                          key={locationId}
-                                          className="flex justify-between items-center"
-                                        >
-                                          <span className="text-white">
-                                            {inventory?.quantity || 0}
-                                          </span>
-                                          <span className="text-gray-400 truncate">
-                                            {locationName}
-                                          </span>
-                                        </div>
-                                      );
-                                    },
-                                  )}
+                                {/* Branch Quantities - Using pre-computed values for O(1) access */}
+                                {product._computed.branchQuantities.map(
+                                  ({ locationId, quantity, name }) => (
+                                    <div
+                                      key={locationId}
+                                      className="flex justify-between items-center"
+                                    >
+                                      <span className="text-white">
+                                        {quantity}
+                                      </span>
+                                      <span className="text-gray-400 truncate">
+                                        {name}
+                                      </span>
+                                    </div>
+                                  )
+                                )}
                               </div>
                             </div>
                           ))}
@@ -7261,6 +7312,61 @@ function POSPageContent() {
                 >
                   <XMarkIcon className="h-5 w-5" />
                   إغلاق الفاتورة
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Clear Cart Confirmation Modal */}
+      {showClearCartConfirm && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+            onClick={() => setShowClearCartConfirm(false)}
+          />
+
+          {/* Modal */}
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="bg-[#2B3544] rounded-2xl shadow-2xl border border-[#4A5568] w-full max-w-sm">
+              {/* Header */}
+              <div className="flex items-center justify-center p-6 border-b border-[#4A5568]">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                    <TrashIcon className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 text-center">
+                <h3 className="text-lg font-bold text-white mb-2">مسح السلة</h3>
+                <p className="text-gray-300 text-sm">
+                  هل أنت متأكد أنك تريد حذف جميع المنتجات من السلة؟
+                </p>
+                <p className="text-gray-400 text-xs mt-2">
+                  ({cartItems.length} منتج)
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 p-4 border-t border-[#4A5568]">
+                <button
+                  onClick={() => setShowClearCartConfirm(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-medium transition-colors"
+                >
+                  إلغاء
+                </button>
+                <button
+                  onClick={() => {
+                    clearCart();
+                    setShowClearCartConfirm(false);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
+                >
+                  مسح الكل
                 </button>
               </div>
             </div>
