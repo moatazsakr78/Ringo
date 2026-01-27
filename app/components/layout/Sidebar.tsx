@@ -111,7 +111,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 py-2">
+        <nav className="flex-1 py-2 overflow-y-auto scrollbar-hide">
           {sidebarItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
