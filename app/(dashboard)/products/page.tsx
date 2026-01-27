@@ -127,6 +127,10 @@ export default function ProductsPage() {
   const [isToolbarHidden, setIsToolbarHidden] = useState(false)
   const [lastScrollY, setLastScrollY] = useState(0)
 
+  // ✨ PERFORMANCE: Limit visible products to reduce DOM nodes
+  const VISIBLE_PRODUCTS_LIMIT = 50
+  const [showAllProducts, setShowAllProducts] = useState(false)
+
   // ✨ OPTIMIZED: Use super-optimized admin hook (reduces queries significantly!)
   const { products, setProducts, branches, isLoading, error, fetchProducts, createProduct, updateProduct, deleteProduct, hideProduct, getProductUsageStats } = useProductsAdmin()
   const { fetchBranchInventory, fetchProductVariants } = useBranches()
@@ -879,6 +883,29 @@ export default function ProductsPage() {
     return filtered
   }, [products, searchQuery, selectedCategory, categories, getAllSubcategoryIds, missingDataFilter, missingDataFilterMode])
 
+  // ✨ PERFORMANCE: Limit visible products to reduce DOM nodes (like POS page)
+  const visibleProducts = useMemo(() => {
+    // If searching, filtering, or user clicked "show all" - show all results
+    const hasActiveFilter = searchQuery || (selectedCategory && selectedCategory.name !== 'منتجات') || missingDataFilter.size > 0
+    if (hasActiveFilter || showAllProducts) {
+      return filteredProducts
+    }
+    // Otherwise limit to first 50 products
+    return filteredProducts.slice(0, VISIBLE_PRODUCTS_LIMIT)
+  }, [filteredProducts, searchQuery, selectedCategory, missingDataFilter, showAllProducts])
+
+  // Reset showAllProducts when filters change
+  useEffect(() => {
+    setShowAllProducts(false)
+  }, [searchQuery, selectedCategory, missingDataFilter])
+
+  // Check if there are more products to show
+  const hasMoreProducts = !showAllProducts &&
+    !searchQuery &&
+    !(selectedCategory && selectedCategory.name !== 'منتجات') &&
+    missingDataFilter.size === 0 &&
+    filteredProducts.length > VISIBLE_PRODUCTS_LIMIT
+
   // Use tablet view if detected as tablet or mobile device
   if (isTablet) {
     return (
@@ -1232,7 +1259,7 @@ export default function ProductsPage() {
 
                 {/* Right Side - Additional controls can be added here */}
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-400">عرض {filteredProducts.length} من أصل {products.length} منتج</span>
+                  <span className="text-sm text-gray-400">عرض {visibleProducts.length} من أصل {filteredProducts.length} منتج {hasMoreProducts ? `(${filteredProducts.length - visibleProducts.length} منتج إضافي)` : ''}</span>
                 </div>
               </div>
             </div>
@@ -1243,7 +1270,7 @@ export default function ProductsPage() {
                 <ResizableTable
                   className="h-full w-full"
                   columns={dynamicTableColumns}
-                  data={filteredProducts}
+                  data={visibleProducts}
                   selectedRowId={selectedProduct?.id || null}
                   reportType="PRODUCTS_REPORT"
                   onRowClick={(product, index) => {
@@ -1259,7 +1286,7 @@ export default function ProductsPage() {
                 // Grid View
                 <div className="h-full overflow-y-auto scrollbar-hide p-4">
                   <div className="grid grid-cols-6 gap-4">
-                    {filteredProducts.map((product, index) => {
+                    {visibleProducts.map((product, index) => {
                       const isSelected = isSelectionMode
                         ? selectedProductIds.includes(product.id)
                         : selectedProduct?.id === product.id
@@ -1389,6 +1416,18 @@ export default function ProductsPage() {
                       </div>
                     })}
                   </div>
+
+                  {/* ✨ PERFORMANCE: Load All Products Button */}
+                  {hasMoreProducts && (
+                    <div className="flex justify-center py-6">
+                      <button
+                        onClick={() => setShowAllProducts(true)}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg"
+                      >
+                        تحميل كل المنتجات ({filteredProducts.length - VISIBLE_PRODUCTS_LIMIT} منتج إضافي)
+                      </button>
+                    </div>
+                  )}
 
                   {/* Spacer div to compensate for hidden toolbar */}
                   <div

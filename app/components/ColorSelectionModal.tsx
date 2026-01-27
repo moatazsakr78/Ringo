@@ -47,6 +47,7 @@ export default function ColorSelectionModal({
 }: ColorSelectionModalProps) {
   const [selections, setSelections] = useState<{[key: string]: number}>({})
   const [manualQuantity, setManualQuantity] = useState(1) // للمنتجات بدون ألوان
+  const [isFirstDigitInput, setIsFirstDigitInput] = useState(true) // تتبع حالة أول رقم يدخل
   const [editingColorQuantity, setEditingColorQuantity] = useState<string | null>(null)
 
   // Reference to the quantity input for auto-focus
@@ -107,6 +108,13 @@ export default function ColorSelectionModal({
       setProductCode(product.product_code ?? '')
     }
   }, [product, isPurchaseMode])
+
+  // إعادة تعيين حالة الإدخال عند فتح النافذة
+  useEffect(() => {
+    if (isOpen) {
+      setIsFirstDigitInput(true)
+    }
+  }, [isOpen])
 
   // منطق استخراج الألوان المتاحة
   const getProductColors = () => {
@@ -711,11 +719,16 @@ export default function ColorSelectionModal({
                     <button
                       key={num}
                       onClick={() => {
-                        const currentStr = manualQuantity.toString();
-                        // If quantity is 1 (default), replace it with the pressed number
-                        const newValue = currentStr === '1' && manualQuantity === 1
-                          ? num
-                          : parseInt(currentStr + num);
+                        let newValue: number;
+                        if (isFirstDigitInput) {
+                          // أول رقم يُكتب - استبدال القيمة الافتراضية
+                          newValue = num;
+                          setIsFirstDigitInput(false);
+                        } else {
+                          // الأرقام التالية - إضافة للقيمة الحالية
+                          const currentStr = manualQuantity.toString();
+                          newValue = parseInt(currentStr + num);
+                        }
                         if (newValue <= 9999) {
                           setManualQuantity(newValue);
                         }
@@ -727,7 +740,10 @@ export default function ColorSelectionModal({
                   ))}
                   {/* Clear Button */}
                   <button
-                    onClick={() => setManualQuantity(1)}
+                    onClick={() => {
+                      setManualQuantity(1);
+                      setIsFirstDigitInput(true);
+                    }}
                     className="h-12 bg-red-600/20 hover:bg-red-600/30 active:bg-red-600/30 text-red-400 text-lg font-medium rounded-lg transition-colors border border-red-600/50"
                   >
                     C
@@ -735,9 +751,9 @@ export default function ColorSelectionModal({
                   {/* Zero Button */}
                   <button
                     onClick={() => {
-                      const currentStr = manualQuantity.toString();
-                      // Don't allow leading zero or adding zero when quantity is 1
-                      if (currentStr !== '0' && manualQuantity !== 1) {
+                      // لا نسمح بإدخال 0 كأول رقم
+                      if (!isFirstDigitInput) {
+                        const currentStr = manualQuantity.toString();
                         const newValue = parseInt(currentStr + '0');
                         if (newValue <= 9999) {
                           setManualQuantity(newValue);
@@ -756,6 +772,7 @@ export default function ColorSelectionModal({
                         setManualQuantity(parseInt(currentStr.slice(0, -1)));
                       } else {
                         setManualQuantity(1);
+                        setIsFirstDigitInput(true);
                       }
                     }}
                     className="h-12 bg-orange-600/20 hover:bg-orange-600/30 active:bg-orange-600/30 text-orange-400 text-lg font-medium rounded-lg transition-colors border border-orange-600/50"

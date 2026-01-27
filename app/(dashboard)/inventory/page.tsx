@@ -118,6 +118,10 @@ export default function InventoryPage() {
   // ✨ OPTIMIZED: Use super-optimized admin hook (reduces 201 queries to 3!)
   const { products, setProducts, branches, isLoading, error, fetchProducts } = useProductsAdmin()
 
+  // ✨ PERFORMANCE: Limit visible products to reduce DOM nodes
+  const VISIBLE_PRODUCTS_LIMIT = 50
+  const [showAllProducts, setShowAllProducts] = useState(false)
+
   // Categories state for filtering
   const [categories, setCategories] = useState<Category[]>([])
 
@@ -728,6 +732,28 @@ export default function InventoryPage() {
 
     return filtered;
   }, [products, searchQuery, stockStatusFilters, auditStatusFilters, selectedAuditBranch, selectedBranches, getStockStatus, selectedCategory, categories, getAllSubcategoryIds])
+
+  // ✨ PERFORMANCE: Limit visible products to reduce DOM nodes (like POS page)
+  const visibleProducts = useMemo(() => {
+    // If searching, filtering by category, or user clicked "show all" - show all results
+    const hasActiveFilter = searchQuery || (selectedCategory && selectedCategory.name !== 'منتجات')
+    if (hasActiveFilter || showAllProducts) {
+      return filteredProducts
+    }
+    // Otherwise limit to first 50 products
+    return filteredProducts.slice(0, VISIBLE_PRODUCTS_LIMIT)
+  }, [filteredProducts, searchQuery, selectedCategory, showAllProducts])
+
+  // Reset showAllProducts when filters change
+  useEffect(() => {
+    setShowAllProducts(false)
+  }, [searchQuery, selectedCategory, stockStatusFilters, auditStatusFilters])
+
+  // Check if there are more products to show
+  const hasMoreProducts = !showAllProducts &&
+    !searchQuery &&
+    !(selectedCategory && selectedCategory.name !== 'منتجات') &&
+    filteredProducts.length > VISIBLE_PRODUCTS_LIMIT
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen)
@@ -1368,7 +1394,7 @@ export default function InventoryPage() {
                 <ResizableTable
                   className="h-full w-full"
                   columns={dynamicTableColumns}
-                  data={filteredProducts}
+                  data={visibleProducts}
                   selectedRowId={selectedProduct?.id || null}
                   onRowClick={(item, index) => {
                     // Toggle selection: if already selected, deselect it
@@ -1383,7 +1409,7 @@ export default function InventoryPage() {
                 // Grid View
                 <div className="h-full overflow-y-auto scrollbar-hide p-4">
                   <div className="grid grid-cols-6 gap-4">
-                    {filteredProducts.map((product, index) => (
+                    {visibleProducts.map((product, index) => (
                       <div
                         key={product.id}
                         onClick={() => {
@@ -1489,6 +1515,18 @@ export default function InventoryPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* ✨ PERFORMANCE: Load All Products Button */}
+                  {hasMoreProducts && (
+                    <div className="flex justify-center py-6">
+                      <button
+                        onClick={() => setShowAllProducts(true)}
+                        className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg"
+                      >
+                        تحميل كل المنتجات ({filteredProducts.length - VISIBLE_PRODUCTS_LIMIT} منتج إضافي)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

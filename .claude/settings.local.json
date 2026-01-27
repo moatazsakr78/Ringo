@@ -345,7 +345,8 @@
       "Bash(git -C \"C:\\\\Users\\\\pc\\\\Desktop\\\\elfaroukgroup\" diff .claude/settings.local.json)",
       "Bash(start http://localhost:3001/whatsapp)",
       "Bash(start:*)",
-      "Bash(du -sh:*)"
+      "Bash(du -sh:*)",
+      "Bash(npx next lint:*)"
     ],
     "deny": [],
     "additionalDirectories": [
