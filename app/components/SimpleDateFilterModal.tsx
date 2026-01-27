@@ -185,10 +185,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
       />
 
       {/* Modal */}
-      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#2B3544] border border-gray-600 rounded-lg shadow-xl z-50 w-[580px]">
-        
+      <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-[#2B3544] border border-gray-600 rounded-lg shadow-xl z-50 w-[95vw] max-w-[580px] max-h-[90vh] overflow-y-auto">
+
         {/* Header */}
-        <div className="bg-[#374151] border-b border-gray-600 px-6 py-4 rounded-t-lg">
+        <div className="bg-[#374151] border-b border-gray-600 px-3 sm:px-6 py-3 sm:py-4 rounded-t-lg">
           <div className="flex items-center justify-between">
             <h3 className="text-white font-medium text-lg">التاريخ</h3>
             <button
@@ -200,17 +200,17 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
           </div>
         </div>
 
-        <div className="p-6">
+        <div className="p-3 sm:p-6">
           {/* Date Range Display */}
-          <div className="bg-blue-600 text-white px-4 py-2 rounded text-center font-medium mb-6">
+          <div className="bg-blue-600 text-white px-3 sm:px-4 py-2 rounded text-center font-medium text-sm sm:text-base mb-4 sm:mb-6">
             {getDateRangeText()}
           </div>
 
           {/* Quick Filter Buttons */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-6">
             <button
               onClick={() => handleFilterClick('today')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'today'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -218,10 +218,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
             >
               اليوم
             </button>
-            
+
             <button
               onClick={() => handleFilterClick('current_week')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'current_week'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -229,10 +229,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
             >
               الأسبوع الحالي
             </button>
-            
+
             <button
               onClick={() => handleFilterClick('current_month')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'current_month'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -240,10 +240,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
             >
               الشهر الحالي
             </button>
-            
+
             <button
               onClick={() => handleFilterClick('last_week')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'last_week'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -251,10 +251,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
             >
               الأسبوع الماضي
             </button>
-            
+
             <button
               onClick={() => handleFilterClick('last_month')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'last_month'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -262,10 +262,10 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
             >
               الشهر الماضي
             </button>
-            
+
             <button
               onClick={() => handleFilterClick('custom')}
-              className={`p-3 rounded text-sm font-medium border transition-colors ${
+              className={`p-2 sm:p-3 rounded text-xs sm:text-sm font-medium border transition-colors ${
                 selectedFilter === 'custom'
                   ? 'bg-blue-600 text-white border-blue-500'
                   : 'bg-[#374151] text-gray-300 border-gray-600 hover:bg-gray-600'
@@ -354,26 +354,26 @@ export default function SimpleDateFilterModal({ isOpen, onClose, onDateFilterCha
         </div>
 
         {/* Footer Buttons */}
-        <div className="bg-[#374151] border-t border-gray-600 px-6 py-4 rounded-b-lg">
-          <div className="flex justify-between">
+        <div className="bg-[#374151] border-t border-gray-600 px-3 sm:px-6 py-3 sm:py-4 rounded-b-lg">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 sm:justify-between">
             {/* Clear All Button */}
             <button
               onClick={handleClearAll}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+              className="px-4 sm:px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors text-sm sm:text-base order-last sm:order-first"
             >
               إلغاء التحديد
             </button>
-            
-            <div className="flex gap-3">
+
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={handleCancel}
-                className="px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors"
+                className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-gray-600 hover:bg-gray-500 text-white rounded transition-colors text-sm sm:text-base"
               >
                 إلغاء
               </button>
               <button
                 onClick={handleApply}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                className="flex-1 sm:flex-none px-4 sm:px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm sm:text-base"
               >
                 موافق
               </button>

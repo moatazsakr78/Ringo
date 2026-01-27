@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, PencilSquareIcon, TrashIcon, TableCellsIcon, CalendarDaysIcon, PrinterIcon, DocumentIcon, ArrowDownTrayIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, XMarkIcon, ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, ChevronUpIcon, PlusIcon, PencilSquareIcon, TrashIcon, TableCellsIcon, CalendarDaysIcon, PrinterIcon, DocumentIcon, ArrowDownTrayIcon, DocumentArrowDownIcon, EllipsisVerticalIcon } from '@heroicons/react/24/outline'
 import ResizableTable from './tables/ResizableTable'
 import { supabase } from '../lib/supabase/client'
 import ConfirmDeleteModal from './ConfirmDeleteModal'
@@ -55,6 +55,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
   const [mobileSelectedInvoice, setMobileSelectedInvoice] = useState<any>(null)
   const [mobileInvoiceItems, setMobileInvoiceItems] = useState<any[]>([])
   const [isLoadingMobileInvoiceItems, setIsLoadingMobileInvoiceItems] = useState(false)
+  const [showMobileActions, setShowMobileActions] = useState(false)
 
   useEffect(() => {
     const checkDevice = () => {
@@ -2936,50 +2937,71 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                 </div>
 
                 {/* Action Buttons */}
-                <div className="bg-[#2B3544] border-b border-gray-600 px-3 py-2 flex gap-2">
-                  {!isDefaultCustomer && !mobileSelectedInvoice.isFromLinkedSupplier && (
+                <div className="bg-[#2B3544] border-b border-gray-600 px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    {/* زر الإجراءات */}
                     <button
-                      onClick={() => {
-                        const editData = {
-                          saleId: mobileSelectedInvoice.id,
-                          invoiceNumber: mobileSelectedInvoice.invoice_number,
-                          customerId: customer.id,
-                          customerName: customer.name,
-                          customerPhone: customer.phone,
-                          items: mobileInvoiceItems.map(item => ({
-                            productId: item.product?.id,
-                            productName: item.product?.name,
-                            quantity: item.quantity,
-                            unitPrice: item.unit_price,
-                            discount: item.discount || 0,
-                            barcode: item.product?.barcode,
-                            main_image_url: item.product?.main_image_url
-                          }))
-                        }
-                        localStorage.setItem('pos_edit_invoice', JSON.stringify(editData))
-                        window.open(`/pos?edit=true&saleId=${mobileSelectedInvoice.id}`, '_blank')
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                      onClick={() => setShowMobileActions(!showMobileActions)}
+                      className="flex items-center gap-2 text-gray-400 hover:text-white py-2 px-3 rounded-lg hover:bg-gray-600/30 transition-colors"
                     >
-                      <PencilSquareIcon className="h-4 w-4" />
-                      <span>تحرير</span>
+                      <EllipsisVerticalIcon className="h-5 w-5" />
+                      <span className="text-sm">الإجراءات</span>
+                      {showMobileActions ? (
+                        <ChevronUpIcon className="h-4 w-4" />
+                      ) : (
+                        <ChevronDownIcon className="h-4 w-4" />
+                      )}
                     </button>
+                  </div>
+
+                  {/* الأزرار - تظهر فقط عند الضغط */}
+                  {showMobileActions && (
+                    <div className="flex gap-2 mt-2 animate-fadeIn">
+                      {!isDefaultCustomer && !mobileSelectedInvoice.isFromLinkedSupplier && (
+                        <button
+                          onClick={() => {
+                            const editData = {
+                              saleId: mobileSelectedInvoice.id,
+                              invoiceNumber: mobileSelectedInvoice.invoice_number,
+                              customerId: customer.id,
+                              customerName: customer.name,
+                              customerPhone: customer.phone,
+                              items: mobileInvoiceItems.map(item => ({
+                                productId: item.product?.id,
+                                productName: item.product?.name,
+                                quantity: item.quantity,
+                                unitPrice: item.unit_price,
+                                discount: item.discount || 0,
+                                barcode: item.product?.barcode,
+                                main_image_url: item.product?.main_image_url
+                              }))
+                            }
+                            localStorage.setItem('pos_edit_invoice', JSON.stringify(editData))
+                            window.open(`/pos?edit=true&saleId=${mobileSelectedInvoice.id}`, '_blank')
+                          }}
+                          className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                        >
+                          <PencilSquareIcon className="h-4 w-4" />
+                          <span>تحرير</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          handleDeleteInvoice(mobileSelectedInvoice)
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                        <span>حذف</span>
+                      </button>
+                      <button
+                        onClick={() => setShowColumnManager(true)}
+                        className="flex items-center justify-center gap-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg py-2 px-3 text-sm font-medium transition-colors"
+                      >
+                        <TableCellsIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   )}
-                  <button
-                    onClick={() => {
-                      handleDeleteInvoice(mobileSelectedInvoice)
-                    }}
-                    className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                    <span>حذف</span>
-                  </button>
-                  <button
-                    onClick={() => setShowColumnManager(true)}
-                    className="flex items-center justify-center gap-1.5 bg-gray-600 hover:bg-gray-700 text-white rounded-lg py-2 px-3 text-sm font-medium transition-colors"
-                  >
-                    <TableCellsIcon className="h-4 w-4" />
-                  </button>
                 </div>
 
                 {/* Invoice Items */}
@@ -3318,44 +3340,121 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
                   ) : accountStatements.length === 0 ? (
                     <div className="text-center py-8 text-gray-400">لا توجد حركات</div>
                   ) : (
-                    accountStatements.map((statement, index) => (
-                      <div
-                        key={index}
-                        className="bg-[#374151] rounded-lg p-4"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            statement.type === 'فاتورة بيع'
-                              ? 'bg-blue-500/20 text-blue-400'
-                              : statement.type === 'مرتجع بيع'
-                                ? 'bg-orange-500/20 text-orange-400'
-                                : statement.type === 'دفعة'
-                                  ? 'bg-green-500/20 text-green-400'
-                                  : statement.type === 'دين'
-                                    ? 'bg-red-500/20 text-red-400'
-                                    : 'bg-purple-500/20 text-purple-400'
-                          }`}>
-                            {statement.type}
-                          </span>
-                          <span className={`font-bold text-lg ${
-                            statement.amount < 0 ? 'text-green-400' : 'text-white'
-                          }`}>
-                            {formatPrice(Math.abs(statement.amount || 0), 'system')}
-                          </span>
+                    accountStatements.map((statement, index) => {
+                      // حساب الصافي
+                      const netAmount = statement.invoiceValue - statement.paidAmount
+                      // تحديد إذا كانت العملية تزيد الحساب
+                      const isIncreasing = statement.amount >= 0
+
+                      return (
+                        <div
+                          key={statement.id || index}
+                          onClick={() => {
+                            // إذا كان العنصر فاتورة، نفتح تفاصيلها
+                            if (statement.saleId) {
+                              const sale = sales.find(s => s.id === statement.saleId)
+                              if (sale) {
+                                openMobileInvoiceDetails(sale)
+                              }
+                            }
+                          }}
+                          className={`bg-[#374151] rounded-lg p-3 transition-colors ${
+                            statement.saleId ? 'cursor-pointer active:bg-[#4B5563]' : ''
+                          } ${
+                            isIncreasing
+                              ? 'border-2 border-amber-500/50'
+                              : 'border-2 border-gray-500/50'
+                          }`}
+                        >
+                          {/* الصف العلوي: نوع العملية + التاريخ */}
+                          <div className="flex justify-between items-center mb-2">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium border ${
+                              isIncreasing
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-600'
+                                : 'bg-gray-500/20 text-gray-300 border-gray-600'
+                            }`}>
+                              {statement.type}
+                            </span>
+                            <span className="text-gray-400 text-xs">
+                              {new Date(statement.date).toLocaleDateString('en-GB')}
+                            </span>
+                          </div>
+
+                          {/* البيان/الوصف */}
+                          {statement.description && (
+                            <div className="text-sm text-gray-300 mb-3">{statement.description}</div>
+                          )}
+
+                          {/* صف الأرقام: قيمة الفاتورة | المدفوع | الصافي */}
+                          <div className="grid grid-cols-3 gap-2 text-xs mb-3">
+                            {/* قيمة الفاتورة */}
+                            <div className="text-center">
+                              <div className="text-gray-500 mb-1">قيمة الفاتورة</div>
+                              <div className="flex items-center justify-center gap-1">
+                                {statement.invoiceValue > 0 ? (
+                                  <>
+                                    <span className="text-green-400">↑</span>
+                                    <span className="text-green-400 font-medium">
+                                      {formatPrice(statement.invoiceValue, 'system')}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-500">-</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* المبلغ المدفوع */}
+                            <div className="text-center">
+                              <div className="text-gray-500 mb-1">المدفوع</div>
+                              <div className="flex items-center justify-center gap-1">
+                                {statement.paidAmount > 0 ? (
+                                  <>
+                                    <span className="text-red-400">↓</span>
+                                    <span className="text-red-400 font-medium">
+                                      {formatPrice(statement.paidAmount, 'system')}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-500">-</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* الصافي */}
+                            <div className="text-center">
+                              <div className="text-gray-500 mb-1">الصافي</div>
+                              <div className="flex items-center justify-center gap-1">
+                                {netAmount !== 0 ? (
+                                  <>
+                                    <span className={netAmount > 0 ? 'text-green-400' : 'text-red-400'}>
+                                      {netAmount > 0 ? '↑' : '↓'}
+                                    </span>
+                                    <span className="text-blue-400 font-medium">
+                                      {formatPrice(Math.abs(netAmount), 'system')}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-gray-500">-</span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* الرصيد */}
+                          <div className="flex justify-end items-center">
+                            <span className="text-gray-500 text-xs ml-2">الرصيد:</span>
+                            <span className={`text-sm font-medium ${
+                              index === 0
+                                ? 'bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded'
+                                : 'text-gray-400'
+                            }`}>
+                              {formatPrice(statement.balance, 'system')}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex justify-between items-center text-sm text-gray-400 mb-2">
-                          <span>{new Date(statement.date).toLocaleDateString('en-GB')}</span>
-                          <span className={`font-medium ${
-                            statement.balance < 0 ? 'text-green-400' : statement.balance > 0 ? 'text-red-400' : 'text-gray-400'
-                          }`}>
-                            رصيد: {formatPrice(statement.balance, 'system')}
-                          </span>
-                        </div>
-                        {statement.description && (
-                          <div className="text-sm text-gray-300">{statement.description}</div>
-                        )}
-                      </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
               )}
