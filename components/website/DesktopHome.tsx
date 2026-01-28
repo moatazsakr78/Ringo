@@ -58,7 +58,11 @@ export default function DesktopHome({
   const { isRightSidebarOpen, toggleRightSidebar, closeRightSidebar } = useRightSidebar();
   const [websiteProducts, setWebsiteProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
-  
+
+  // Performance: Limit visible products for better rendering
+  const VISIBLE_PRODUCTS_LIMIT = 20;
+  const [showAllProducts, setShowAllProducts] = useState(false);
+
   // Get user profile to check admin status
   const { isAdmin, profile, loading: profileLoading } = useUserProfile();
 
@@ -507,6 +511,23 @@ export default function DesktopHome({
 
   const featuredProducts = websiteProducts.filter(product => product.isFeatured || product.isOnSale);
 
+  // Performance: Limit visible products for better rendering on client devices
+  const visibleProducts = useMemo(() => {
+    if (searchQuery || showAllProducts) {
+      return filteredProducts;
+    }
+    return filteredProducts.slice(0, VISIBLE_PRODUCTS_LIMIT);
+  }, [filteredProducts, searchQuery, showAllProducts]);
+
+  const hasMoreProducts = !showAllProducts &&
+    !searchQuery &&
+    filteredProducts.length > VISIBLE_PRODUCTS_LIMIT;
+
+  // Reset showAllProducts when search or category changes
+  useEffect(() => {
+    setShowAllProducts(false);
+  }, [searchQuery, selectedCategory]);
+
   // Handle product click to show modal instead of navigation
   const handleProductClick = (productId: string) => {
     setSelectedProductId(productId);
@@ -822,7 +843,7 @@ export default function DesktopHome({
             {selectedCategory === 'الكل' ? 'جميع المنتجات' : selectedCategory}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredProducts.map((product) => (
+            {visibleProducts.map((product) => (
               <InteractiveProductCard
                 key={product.id}
                 product={product}
@@ -832,6 +853,17 @@ export default function DesktopHome({
                 displaySettings={displaySettings}
               />
             ))}
+
+            {hasMoreProducts && (
+              <div className="col-span-full flex justify-center py-6">
+                <button
+                  onClick={() => setShowAllProducts(true)}
+                  className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-lg"
+                >
+                  عرض المزيد ({filteredProducts.length - VISIBLE_PRODUCTS_LIMIT} منتج)
+                </button>
+              </div>
+            )}
           </div>
         </section>
       </main>

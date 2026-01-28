@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -38,6 +38,10 @@ export default function CatalogView({ initialProducts, categories }: CatalogView
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
+  // Performance: Limit visible products for better rendering
+  const VISIBLE_PRODUCTS_LIMIT = 20;
+  const [showAllProducts, setShowAllProducts] = useState(false);
+
   // Filter products based on search and category
   const filteredProducts = useMemo(() => {
     return initialProducts.filter((product) => {
@@ -53,6 +57,23 @@ export default function CatalogView({ initialProducts, categories }: CatalogView
       return matchesSearch && matchesCategory;
     });
   }, [initialProducts, searchTerm, selectedCategoryId]);
+
+  // Performance: Limit visible products for better rendering on client devices
+  const visibleProducts = useMemo(() => {
+    if (searchTerm || showAllProducts) {
+      return filteredProducts;
+    }
+    return filteredProducts.slice(0, VISIBLE_PRODUCTS_LIMIT);
+  }, [filteredProducts, searchTerm, showAllProducts]);
+
+  const hasMoreProducts = !showAllProducts &&
+    !searchTerm &&
+    filteredProducts.length > VISIBLE_PRODUCTS_LIMIT;
+
+  // Reset showAllProducts when search or category changes
+  useEffect(() => {
+    setShowAllProducts(false);
+  }, [searchTerm, selectedCategoryId]);
 
   return (
     <div className="min-h-screen bg-gray-100" dir="rtl">
@@ -157,13 +178,24 @@ export default function CatalogView({ initialProducts, categories }: CatalogView
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredProducts.map((product, index) => (
+            {visibleProducts.map((product, index) => (
               <ProductCatalogCard
                 key={product.id}
                 product={product}
                 priority={index < 6}
               />
             ))}
+
+            {hasMoreProducts && (
+              <div className="col-span-full flex justify-center py-6">
+                <button
+                  onClick={() => setShowAllProducts(true)}
+                  className="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors shadow-lg"
+                >
+                  عرض المزيد ({filteredProducts.length - VISIBLE_PRODUCTS_LIMIT} منتج)
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
