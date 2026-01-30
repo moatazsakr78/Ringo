@@ -21,9 +21,9 @@ import {
  */
 
 // Enable ISR with optimal cache + on-demand revalidation
-// ✨ Perfect balance: Updates every 60 seconds + instant updates via revalidation API
-// Result: Fresh stock data + minimal database load!
-export const revalidate = 60; // 1 minute
+// ✨ التجديد كل ساعة لتقليل استهلاك Vercel + التجديد الفوري عبر revalidation API
+// يوفر ~140K function invocation/شهر!
+export const revalidate = 3600; // 1 hour
 
 // Enable static generation
 export const dynamic = 'force-static';

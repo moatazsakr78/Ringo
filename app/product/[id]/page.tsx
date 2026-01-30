@@ -15,9 +15,9 @@ import { notFound } from 'next/navigation';
 import ProductDetailContent from './ProductDetailContent';
 
 // ✅ ISR Configuration: Long cache time + On-Demand Revalidation
-// Cache stays fresh for 10 minutes as a fallback
+// Cache stays fresh for 1 hour as a fallback (يوفر موارد Vercel)
 // But updates are INSTANT via on-demand revalidation (when you save in admin)
-export const revalidate = 600; // 10 minutes
+export const revalidate = 3600; // 1 hour
 
 // ✅ Dynamic params for on-demand static generation
 export const dynamicParams = true;

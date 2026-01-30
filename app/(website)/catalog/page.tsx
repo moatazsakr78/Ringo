@@ -13,8 +13,9 @@ import CatalogView from './CatalogView';
  * - CDN-friendly: Can be cached on edge for fast delivery
  */
 
-// Enable ISR with 60 seconds revalidation
-export const revalidate = 60;
+// Enable ISR with 1 hour revalidation (يوفر موارد Vercel)
+// التجديد الفوري عبر on-demand revalidation API عند تعديل المنتجات
+export const revalidate = 3600; // 1 hour
 
 // Enable static generation
 export const dynamic = 'force-static';

@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { detectDeviceClient, DeviceInfo } from '@/lib/device-detection';
-import DesktopHome from '@/components/website/DesktopHome';
-import TabletHome from '@/components/website/TabletHome';
-import MobileHome from '@/components/website/MobileHome';
+import { ACTIVE_TEMPLATE } from '@/template.config';
+// Import template components dynamically based on active template
+import { DesktopHome, TabletHome, MobileHome } from '@/templates/default';
 import { useRealCart } from '@/lib/useRealCart';
 import { useAuth } from '@/lib/useAuth';
 import { UserInfo } from '@/components/website/shared/types';

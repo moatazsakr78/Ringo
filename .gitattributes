@@ -1,0 +1,32 @@
+# Git Attributes for El Farouk Group Store
+# ==========================================
+
+# Template files - Use "ours" merge strategy to prevent overwriting during rebase
+# This ensures that template customizations are preserved when updating the engine
+templates/** merge=ours
+template.config.ts merge=ours
+
+# Standard text files
+*.md text
+*.txt text
+*.json text
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.css text
+*.html text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+
+# End of file

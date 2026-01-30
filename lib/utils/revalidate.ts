@@ -32,6 +32,7 @@ export async function revalidateHomePage(): Promise<RevalidateResponse> {
       body: JSON.stringify({
         path: '/',
         secret: CLIENT_REVALIDATE_KEY,
+        revalidateHome: true, // ✅ مطلوب لتجديد الصفحة الرئيسية
       }),
     });
 
@@ -103,6 +104,7 @@ export async function revalidateAll(productId?: string): Promise<RevalidateRespo
         path: '/',
         productId,
         secret: CLIENT_REVALIDATE_KEY,
+        revalidateHome: true, // ✅ مطلوب لتجديد الصفحة الرئيسية
       }),
     });
 

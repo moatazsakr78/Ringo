@@ -40,21 +40,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ✅ تحسين: إيقاف Cascading Revalidation
+    // بدلاً من تجديد كل الصفحات، نجدد فقط الصفحات المطلوبة
+    // هذا يوفر موارد Vercel ويقلل ISR writes
+
+    const revalidatedPaths: string[] = [];
+
     // Revalidate specific paths
     if (path) {
       revalidatePath(path);
+      revalidatedPaths.push(path);
       console.log(`✅ Revalidated path: ${path}`);
     }
 
-    // If productId provided, revalidate that product page
+    // If productId provided, revalidate that product page only
     if (productId) {
       revalidatePath(`/product/${productId}`);
+      revalidatedPaths.push(`/product/${productId}`);
       console.log(`✅ Revalidated product: ${productId}`);
     }
 
-    // Always revalidate home page when products change
-    revalidatePath('/');
-    console.log(`✅ Revalidated home page`);
+    // ✅ تحسين: تجديد الصفحة الرئيسية فقط عند الطلب الصريح
+    // مش كل تعديل منتج يحتاج تجديد الصفحة الرئيسية
+    // الـ home page بتتجدد أوتوماتيكياً كل ساعة (revalidate = 3600)
+    if (body.revalidateHome === true) {
+      revalidatePath('/');
+      revalidatedPaths.push('/');
+      console.log(`✅ Revalidated home page (explicit request)`);
+    } else {
+      console.log(`ℹ️ Skipped home page revalidation (use revalidateHome: true to force)`);
+    }
 
     // Clear memory cache to ensure fresh data
     const cacheStatsBefore = cache.getStats();
@@ -64,7 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       revalidated: true,
-      paths: [path, productId ? `/product/${productId}` : null, '/'].filter(Boolean),
+      paths: revalidatedPaths,
       cacheCleared: true,
       cacheItemsRemoved: cacheStatsBefore.size,
       timestamp: new Date().toISOString()
@@ -91,9 +106,10 @@ export async function GET(request: NextRequest) {
       body: {
         secret: 'your_secret_key',
         path: '/product/[id] or /',
-        productId: 'optional-product-uuid'
+        productId: 'optional-product-uuid',
+        revalidateHome: 'boolean (optional) - set to true to also revalidate home page'
       }
     },
-    note: 'This endpoint refreshes cached pages instantly when products are updated'
+    note: 'This endpoint refreshes cached pages instantly when products are updated. Home page revalidation is now optional to save Vercel resources.'
   });
 }
