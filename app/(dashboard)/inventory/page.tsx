@@ -34,6 +34,7 @@ import {
   Squares2X2Icon,
   ListBulletIcon,
   EyeIcon,
+  EyeSlashIcon,
   XMarkIcon,
   PencilSquareIcon
 } from '@heroicons/react/24/outline'
@@ -77,6 +78,7 @@ export default function InventoryPage() {
   const [showProductModal, setShowProductModal] = useState(false)
   const [modalProduct, setModalProduct] = useState<any>(null)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [showPurchasePrice, setShowPurchasePrice] = useState(false)
   const [showColumnsModal, setShowColumnsModal] = useState(false)
   const [visibleColumns, setVisibleColumns] = useState<{[key: string]: boolean}>({})
   const inventoryVisibilityLoadedRef = useRef(false)
@@ -1546,6 +1548,7 @@ export default function InventoryPage() {
                                 // Set first available image as selected
                                 const firstImage = product.allImages?.[0] || product.main_image_url || null
                                 setSelectedImage(firstImage)
+                                setShowPurchasePrice(false) // Reset purchase price visibility
                                 setShowProductModal(true)
                               }}
                               className={`bg-black/50 hover:bg-black/90 text-white p-2 rounded-full opacity-0 ${!isSidebarOpen ? 'group-hover:opacity-100' : 'pointer-events-none'} transition-all duration-200 shadow-lg`}
@@ -1739,9 +1742,20 @@ export default function InventoryPage() {
                           <p className="text-gray-400 text-sm mb-1">سعر البيع</p>
                           <p className="text-green-400 font-bold text-xl">{(modalProduct.price || 0).toFixed(2)}</p>
                         </div>
-                        <div className="bg-[#2B3544] rounded-lg p-4 text-center">
-                          <p className="text-gray-400 text-sm mb-1">سعر الشراء</p>
-                          <p className="text-orange-400 font-bold text-xl">{(modalProduct.cost_price || 0).toFixed(2)}</p>
+                        <div
+                          onClick={() => setShowPurchasePrice(!showPurchasePrice)}
+                          className="bg-[#2B3544] rounded-lg p-4 text-center cursor-pointer hover:bg-[#374151] transition-colors relative"
+                        >
+                          {showPurchasePrice ? (
+                            <>
+                              <p className="text-gray-400 text-sm mb-1">سعر الشراء</p>
+                              <p className="text-orange-400 font-bold text-xl">{(modalProduct.cost_price || 0).toFixed(2)}</p>
+                            </>
+                          ) : (
+                            <div className="flex items-center justify-center h-full min-h-[52px]">
+                              <EyeSlashIcon className="h-6 w-6 text-gray-500" />
+                            </div>
+                          )}
                         </div>
                         <div className="bg-[#2B3544] rounded-lg p-4 text-center">
                           <p className="text-gray-400 text-sm mb-1">سعر الجملة</p>
