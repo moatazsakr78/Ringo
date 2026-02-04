@@ -202,13 +202,27 @@ export const CacheKeys = {
   inventory: (productId: string) => `inventory:${productId}`,
   variants: (productId: string) => `variants:${productId}`,
   productsWithData: () => 'products:enriched',
+  // Dashboard cache keys
+  dashboardKPIs: () => 'dashboard:kpis',
+  dashboardSalesTrend: () => 'dashboard:salesTrend',
+  dashboardTopProducts: () => 'dashboard:topProducts',
+  dashboardTopCustomers: () => 'dashboard:topCustomers',
+  dashboardRecentOrders: () => 'dashboard:recentOrders',
+  dashboardLowStock: () => 'dashboard:lowStock',
+  dashboardAll: () => 'dashboard:all',
 } as const
 
 // Cache TTL constants
 export const CacheTTL = {
   products: 5 * 60 * 1000,      // 5 minutes
-  branches: 10 * 60 * 1000,     // 10 minutes  
+  branches: 10 * 60 * 1000,     // 10 minutes
   categories: 15 * 60 * 1000,   // 15 minutes
   inventory: 2 * 60 * 1000,     // 2 minutes (more dynamic)
   variants: 3 * 60 * 1000,      // 3 minutes
+  // Dashboard TTLs
+  dashboardKPIs: 30 * 1000,        // 30 seconds (sensitive data)
+  dashboardCharts: 2 * 60 * 1000,  // 2 minutes
+  dashboardOrders: 30 * 1000,      // 30 seconds
+  dashboardStock: 60 * 1000,       // 1 minute
+  dashboardAll: 30 * 1000,         // 30 seconds (main cache)
 } as const

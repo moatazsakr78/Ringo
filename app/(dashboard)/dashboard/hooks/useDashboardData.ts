@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/app/lib/supabase/client';
+import { cache, CacheKeys, CacheTTL } from '@/app/lib/cache/memoryCache';
 import {
   fetchKPIs,
   fetchSalesTrend,
@@ -111,22 +112,47 @@ const fetchLowStockProducts = async (limit: number = 10): Promise<LowStockProduc
   return lowStock;
 };
 
+// Auto-refresh interval (30 seconds)
+const AUTO_REFRESH_INTERVAL = 30 * 1000;
+
 export function useDashboardData() {
   const [data, setData] = useState<DashboardData>(initialData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const isFetchingRef = useRef(false);
 
   const todayFilter: DateFilter = { type: 'today' };
   const weekFilter: DateFilter = { type: 'current_week' };
   const monthFilter: DateFilter = { type: 'current_month' };
 
-  const fetchAllData = useCallback(async () => {
-    setLoading(true);
+  const fetchAllData = useCallback(async (forceRefresh = false) => {
+    // Prevent concurrent fetches
+    if (isFetchingRef.current && !forceRefresh) {
+      return;
+    }
+
+    // 1. Stale-While-Revalidate: Show cached data immediately
+    if (!forceRefresh) {
+      const cachedData = cache.get<DashboardData>(CacheKeys.dashboardAll());
+      if (cachedData) {
+        setData(cachedData);
+        setLoading(false);
+        // Continue to fetch fresh data in background
+      }
+    }
+
+    isFetchingRef.current = true;
+
+    // Only show loading spinner if no cached data
+    if (!cache.has(CacheKeys.dashboardAll()) || forceRefresh) {
+      setLoading(true);
+    }
+
     setError(null);
 
     try {
-      // Fetch all data in parallel
+      // 2. Fetch all data in parallel
       const [
         kpisResult,
         salesTrendResult,
@@ -143,21 +169,26 @@ export function useDashboardData() {
         fetchLowStockProducts(10),
       ]);
 
-      setData({
+      const newData: DashboardData = {
         kpis: kpisResult.status === 'fulfilled' ? kpisResult.value : null,
         salesTrend: salesTrendResult.status === 'fulfilled' ? salesTrendResult.value : [],
         topProducts: topProductsResult.status === 'fulfilled' ? topProductsResult.value : [],
         topCustomers: topCustomersResult.status === 'fulfilled' ? topCustomersResult.value : [],
         recentOrders: recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : [],
         lowStockProducts: lowStockResult.status === 'fulfilled' ? lowStockResult.value : [],
-      });
+      };
 
+      // 3. Save to cache
+      cache.set(CacheKeys.dashboardAll(), newData, CacheTTL.dashboardAll);
+
+      setData(newData);
       setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('حدث خطأ في تحميل البيانات');
     } finally {
       setLoading(false);
+      isFetchingRef.current = false;
     }
   }, []);
 
@@ -166,9 +197,18 @@ export function useDashboardData() {
     fetchAllData();
   }, [fetchAllData]);
 
-  // Manual refresh function
+  // Auto-refresh in background every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchAllData(false); // Silent refresh (uses cache first)
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => clearInterval(interval);
+  }, [fetchAllData]);
+
+  // Manual refresh function (force refresh, bypass cache)
   const refresh = useCallback(() => {
-    fetchAllData();
+    fetchAllData(true);
   }, [fetchAllData]);
 
   return {
