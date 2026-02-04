@@ -131,19 +131,40 @@ export async function generateInventoryPDF(
   options: PDFExportOptions,
   onProgress?: (current: number, total: number, productName: string) => void
 ): Promise<void> {
-  // Create PDF document (A4 landscape for more columns)
+  // Get enabled columns in order
+  const enabledColumns = options.columns.filter(col => col.enabled)
+
+  // Calculate total table width based on column types
+  let totalTableWidth = 0
+  enabledColumns.forEach((col) => {
+    if (col.id === 'main_image_url') {
+      totalTableWidth += 35
+    } else if (col.id === 'name') {
+      totalTableWidth += 55
+    } else if (col.id === 'index') {
+      totalTableWidth += 12
+    } else {
+      // Default width for other columns (product_code, price, quantity_per_carton, barcode, totalQuantity, category)
+      totalTableWidth += 40
+    }
+  })
+
+  // Add margins (10mm left + 10mm right)
+  const calculatedPageWidth = totalTableWidth + 20
+  // Ensure minimum width and cap at A4 landscape width
+  const pageWidth = Math.max(150, Math.min(calculatedPageWidth, 297))
+  const pageHeight = 210 // A4 height
+
+  // Create PDF document with dynamic width
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
-    format: 'a4'
+    format: [pageWidth, pageHeight]
   })
 
   // Register and set Arabic font
   registerArabicFont(doc)
   doc.setFont('Amiri')
-
-  // Get enabled columns in order
-  const enabledColumns = options.columns.filter(col => col.enabled)
 
   // Build table headers (RTL - reverse order for Arabic)
   const headers = enabledColumns.map(col => col.label).reverse()
@@ -219,7 +240,7 @@ export async function generateInventoryPDF(
   }
 
   // === NEW HEADER DESIGN ===
-  const pageWidth = doc.internal.pageSize.getWidth()
+  const actualPageWidth = doc.internal.pageSize.getWidth()
   const headerHeight = 25
 
   // Fetch active theme color from database
@@ -227,7 +248,7 @@ export async function generateInventoryPDF(
 
   // 1. Draw header bar with store theme color
   doc.setFillColor(themeColorRgb[0], themeColorRgb[1], themeColorRgb[2])
-  doc.rect(0, 0, pageWidth, headerHeight, 'F')
+  doc.rect(0, 0, actualPageWidth, headerHeight, 'F')
 
   // 2. Add logo (on the left side)
   const logoUrl = options.logoUrl || '/assets/logo/El Farouk Group2.png'
@@ -255,22 +276,20 @@ export async function generateInventoryPDF(
   const imageColIndex = enabledColumns.findIndex(col => col.id === 'main_image_url')
   const reversedImageColIndex = imageColIndex >= 0 ? enabledColumns.length - 1 - imageColIndex : -1
 
-  // Calculate column widths - reduced margins for better space utilization
-  const tableWidth = doc.internal.pageSize.getWidth() - 20 // reduced from 28 to 20
-  const colCount = enabledColumns.length
-
-  // Define column widths based on content type - larger image column
+  // Define column widths based on content type - using fixed widths matching page calculation
   const columnStyles: { [key: number]: { cellWidth: number } } = {}
   enabledColumns.forEach((col, idx) => {
     const reversedIdx = enabledColumns.length - 1 - idx
-    let width = tableWidth / colCount // Default equal width
+    let width: number
 
     if (col.id === 'main_image_url') {
-      width = 35 // Increased from 25 for larger images
+      width = 35 // Image column
     } else if (col.id === 'name') {
-      width = 55 // Increased for product names
+      width = 55 // Product name column
     } else if (col.id === 'index') {
-      width = 12 // Narrow for index
+      width = 12 // Index column
+    } else {
+      width = 40 // Default width for other columns
     }
 
     columnStyles[reversedIdx] = { cellWidth: width }

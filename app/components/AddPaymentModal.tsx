@@ -493,49 +493,52 @@ export default function AddPaymentModal({
               </div>
             )}
 
-            {/* Record Selection */}
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
-                الخزنة
-              </label>
-              {isLoadingRecords ? (
-                <div className="text-gray-400 text-sm text-center py-2">جاري تحميل الخزنات...</div>
-              ) : (
-                <select
-                  value={recordId}
-                  onChange={(e) => setRecordId(e.target.value)}
-                  className="w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">لا يوجد</option>
-                  {records.map((record) => (
-                    <option key={record.id} value={record.id}>
-                      {record.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            {/* الخزنة وطريقة الدفع - جنب بعض */}
+            <div className="flex gap-4">
+              {/* Record Selection - الخزنة */}
+              <div className="flex-1">
+                <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
+                  الخزنة
+                </label>
+                {isLoadingRecords ? (
+                  <div className="text-gray-400 text-sm text-center py-2">جاري تحميل الخزنات...</div>
+                ) : (
+                  <select
+                    value={recordId}
+                    onChange={(e) => setRecordId(e.target.value)}
+                    className="w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">لا يوجد</option>
+                    {records.map((record) => (
+                      <option key={record.id} value={record.id}>
+                        {record.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
 
-            {/* Payment Method */}
-            <div>
-              <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
-                طريقة الدفع
-              </label>
-              {isLoadingPaymentMethods ? (
-                <div className="text-gray-400 text-sm text-center py-2">جاري تحميل طرق الدفع...</div>
-              ) : (
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {paymentMethods.map((method) => (
-                    <option key={method.id} value={method.name}>
-                      {method.name}
-                    </option>
-                  ))}
-                </select>
-              )}
+              {/* Payment Method - طريقة الدفع */}
+              <div className="flex-1">
+                <label className="block text-gray-300 text-sm font-medium mb-2 text-right">
+                  طريقة الدفع
+                </label>
+                {isLoadingPaymentMethods ? (
+                  <div className="text-gray-400 text-sm text-center py-2">جاري تحميل طرق الدفع...</div>
+                ) : (
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="w-full px-4 py-2 bg-[#1F2937] border border-gray-600 rounded text-white text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {paymentMethods.map((method) => (
+                      <option key={method.id} value={method.name}>
+                        {method.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
             </div>
 
             {/* البيان */}
