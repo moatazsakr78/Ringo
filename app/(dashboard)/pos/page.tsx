@@ -1760,8 +1760,42 @@ function POSPageContent() {
       matchingIds = new Set<string>();
 
       // Use search index for fast lookup based on search mode
+      // Supports multi-word search: finds products containing ALL words (in any order)
       const getMatchesFromIndex = (index: Map<string, Set<string>>) => {
-        return index.get(query) || new Set<string>();
+        // Split query into words
+        const words = query.split(/\s+/).filter(w => w.length > 0);
+
+        if (words.length === 0) return new Set<string>();
+
+        // For single word, use direct lookup (prefix matching)
+        if (words.length === 1) {
+          return index.get(words[0]) || new Set<string>();
+        }
+
+        // For multiple words: find products matching ALL words (intersection)
+        let result: Set<string> | null = null;
+
+        for (const word of words) {
+          const matches = index.get(word);
+          if (!matches || matches.size === 0) {
+            return new Set<string>(); // If any word has no matches, return empty
+          }
+
+          if (result === null) {
+            result = new Set(matches);
+          } else {
+            // Intersection: keep only products that match this word too
+            const newResult = new Set<string>();
+            result.forEach(id => {
+              if (matches.has(id)) {
+                newResult.add(id);
+              }
+            });
+            result = newResult;
+          }
+        }
+
+        return result || new Set<string>();
       };
 
       switch (searchMode) {
