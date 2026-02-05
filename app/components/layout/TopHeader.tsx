@@ -59,6 +59,7 @@ export default function TopHeader({ onMenuClick, isMenuOpen = false, pageTitle }
 
   // Hide header on website pages
   if (pathname === '/' ||
+      pathname?.startsWith('/store/') ||
       (pathname?.startsWith('/product') && pathname !== '/products') ||
       pathname === '/cart' ||
       pathname?.startsWith('/auth/') ||

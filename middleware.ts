@@ -107,7 +107,7 @@ export default auth(async (req) => {
 
   // Rewrite homepage and store pages to brand-specific routes
   // Only if not already a /store/ route, not admin, not auth, not API, not customer-only
-  if (brand && !isAdminPath && !isCustomerPath && !isAuthPath && !isApiPath && !isStoreBrandRoute) {
+  if (brand && !brand.is_default && !isAdminPath && !isCustomerPath && !isAuthPath && !isApiPath && !isStoreBrandRoute) {
     // Rewrite store-facing pages to /store/[brandSlug] routes
     if (pathname === '/') {
       const url = req.nextUrl.clone()
