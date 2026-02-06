@@ -66,6 +66,9 @@ export async function getWebsiteProducts(brandId?: string | null) {
             display_order: bp.display_order || 0,
           }])
         );
+      } else {
+        // Brand has no linked products → return empty store
+        return [];
       }
     }
 
@@ -541,12 +544,13 @@ export async function getStoreTheme(brandId?: string | null) {
       }
     }
 
-    // Fallback: get any active theme
+    // Fallback: get default brand's active theme (limit 1 to avoid error with multiple active themes)
     const { data: defaultTheme } = await supabase
       .from('store_theme_colors')
       .select('*')
       .eq('is_active', true)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (defaultTheme) {
       return {
