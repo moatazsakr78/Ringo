@@ -57,21 +57,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          // Get brand_id from request headers (set by middleware)
-          const brandId = getBrandIdFromHeaders()
-
-          // Use Supabase client to query auth_users table for authentication
-          let authQuery = supabase
+          // Query auth_users by email only (shared accounts across all brands)
+          const { data: authUsers, error: authError } = await supabase
             .from('auth_users')
             .select('id, email, name, image, password_hash, brand_id')
             .eq('email', credentials.email)
-
-          // Filter by brand if available (allows same email on different brands)
-          if (brandId) {
-            authQuery = authQuery.eq('brand_id', brandId)
-          }
-
-          const { data: authUsers, error: authError } = await authQuery.limit(1)
+            .limit(1)
 
           if (authError) {
             console.error('❌ Supabase query error:', authError)
@@ -135,7 +126,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             image: authUser.image,
             role: userRole,
             pageRestrictions,
-            brandId: (authUser as any).brand_id || brandId || null
+            brandId: (authUser as any).brand_id || null
           }
         } catch (error) {
           console.error('❌ Auth error during login:', error)
@@ -156,17 +147,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const brandId = getBrandIdFromHeaders()
 
-          // Check if user exists using Supabase (scoped by brand)
-          let existingQuery = supabase
+          // Check if user exists by email (shared accounts across all brands)
+          const { data: existingUsers, error: queryError } = await supabase
             .from('auth_users')
             .select('id')
             .eq('email', user.email!)
-
-          if (brandId) {
-            existingQuery = existingQuery.eq('brand_id', brandId)
-          }
-
-          const { data: existingUsers, error: queryError } = await existingQuery.limit(1)
+            .limit(1)
 
           if (queryError) {
             console.error('❌ Error checking existing user:', queryError)
@@ -303,22 +289,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // Initial sign in - set userId and role
         // For Google users, fetch from database
         if (account?.provider === "google") {
-          const brandId = getBrandIdFromHeaders()
-
-          let authQuery = supabase
+          // Fetch user by email (shared accounts across all brands)
+          const { data: authUsers, error: authError } = await supabase
             .from('auth_users')
             .select('id, brand_id')
             .eq('email', user.email!)
-
-          if (brandId) {
-            authQuery = authQuery.eq('brand_id', brandId)
-          }
-
-          const { data: authUsers, error: authError } = await authQuery.limit(1)
+            .limit(1)
 
           if (!authError && authUsers && authUsers.length > 0) {
             token.userId = authUsers[0].id
-            token.brandId = (authUsers[0] as any).brand_id || brandId || null
+            token.brandId = (authUsers[0] as any).brand_id || null
 
             // Fetch role and permission_id from user_profiles
             const { data: profiles, error: profileError } = await supabase

@@ -78,11 +78,13 @@ export default auth(async (req) => {
   // --- Brand Resolution ---
   // Resolve brand from hostname and inject into request headers
   const hostname = req.headers.get('host') || 'localhost'
+  console.log('[Middleware] Hostname:', hostname, '| Path:', pathname)
   let brand: Awaited<ReturnType<typeof resolveBrandFromHostname>> | null = null
   try {
     brand = await resolveBrandFromHostname(hostname)
+    console.log('[Middleware] Brand resolved:', brand ? `${brand.slug} (${brand.id}, default=${brand.is_default})` : 'null')
   } catch (e) {
-    console.error('Brand resolution error:', e)
+    console.error('[Middleware] Brand resolution error:', e instanceof Error ? e.message : e)
   }
 
   // Prepare request headers so server components can read brand via headers()
@@ -119,15 +121,24 @@ export default auth(async (req) => {
     if (pathname === '/') {
       const url = req.nextUrl.clone()
       url.pathname = `/store/${brand.slug}`
+      console.log('[Middleware] Rewriting / -> /store/' + brand.slug)
       const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
       return addBrandHeaders(response)
     }
     if (pathname === '/catalog') {
       const url = req.nextUrl.clone()
       url.pathname = `/store/${brand.slug}/catalog`
+      console.log('[Middleware] Rewriting /catalog -> /store/' + brand.slug + '/catalog')
       const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
       return addBrandHeaders(response)
     }
+  } else if (brand && pathname === '/') {
+    console.log('[Middleware] No rewrite for /:', {
+      is_default: brand.is_default,
+      slug: brand.slug,
+      isAdminPath,
+      isStoreBrandRoute,
+    })
   }
 
   // Allow always-public paths (login, register, etc.)
