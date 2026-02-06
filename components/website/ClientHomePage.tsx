@@ -129,7 +129,7 @@ export default function ClientHomePage({
       <CartProvider>
         <div className="min-h-screen flex items-center justify-center" style={{backgroundColor: '#c0c0c0'}}>
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4" style={{borderColor: 'var(--primary-color, #DC2626)'}}></div>
             <p className="text-gray-600">جاري تحميل التطبيق...</p>
           </div>
         </div>

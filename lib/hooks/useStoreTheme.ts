@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/app/lib/supabase/client';
+import { useBrand } from '@/lib/brand/brand-context';
 
 export interface StoreThemeColors {
   id: string;
@@ -27,6 +28,7 @@ const DEFAULT_THEME: StoreThemeColors = {
 };
 
 export function useStoreTheme() {
+  const { brandId } = useBrand();
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_THEME.primary_color);
   const [primaryHoverColor, setPrimaryHoverColor] = useState(DEFAULT_THEME.primary_hover_color);
   const [interactiveColor, setInteractiveColor] = useState(DEFAULT_THEME.interactive_color);
@@ -39,11 +41,17 @@ export function useStoreTheme() {
     // Fetch active theme
     const fetchActiveTheme = async () => {
       try {
-        const { data, error } = await (supabase as any)
+        let query = (supabase as any)
           .from('store_theme_colors')
           .select('*')
-          .eq('is_active', true)
-          .single();
+          .eq('is_active', true);
+
+        // Filter by brand if available
+        if (brandId) {
+          query = query.eq('brand_id', brandId);
+        }
+
+        const { data, error } = await query.single();
 
         if (error) {
           console.error('Error fetching active theme:', error);
@@ -85,7 +93,7 @@ export function useStoreTheme() {
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'elfaroukgroup',
           table: 'store_theme_colors',
         },
         (payload: any) => {
@@ -98,7 +106,7 @@ export function useStoreTheme() {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [brandId]);
 
   return {
     primaryColor,
@@ -147,7 +155,7 @@ export function useStoreThemes() {
         'postgres_changes',
         {
           event: '*',
-          schema: 'public',
+          schema: 'elfaroukgroup',
           table: 'store_theme_colors',
         },
         () => {
