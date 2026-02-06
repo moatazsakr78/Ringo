@@ -85,7 +85,14 @@ export default auth(async (req) => {
     console.error('Brand resolution error:', e)
   }
 
-  // Helper to add brand headers to any response
+  // Prepare request headers so server components can read brand via headers()
+  const requestHeaders = new Headers(req.headers)
+  if (brand) {
+    requestHeaders.set('x-brand-id', brand.id)
+    requestHeaders.set('x-brand-slug', brand.slug)
+  }
+
+  // Helper to add brand headers to response (for browser/client access)
   const addBrandHeaders = (response: NextResponse) => {
     if (brand) {
       response.headers.set('x-brand-id', brand.id)
@@ -112,20 +119,20 @@ export default auth(async (req) => {
     if (pathname === '/') {
       const url = req.nextUrl.clone()
       url.pathname = `/store/${brand.slug}`
-      const response = NextResponse.rewrite(url)
+      const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
       return addBrandHeaders(response)
     }
     if (pathname === '/catalog') {
       const url = req.nextUrl.clone()
       url.pathname = `/store/${brand.slug}/catalog`
-      const response = NextResponse.rewrite(url)
+      const response = NextResponse.rewrite(url, { request: { headers: requestHeaders } })
       return addBrandHeaders(response)
     }
   }
 
   // Allow always-public paths (login, register, etc.)
   if (isAuthPath) {
-    return addBrandHeaders(NextResponse.next())
+    return addBrandHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
   }
 
   // Get session from NextAuth
@@ -193,7 +200,7 @@ export default auth(async (req) => {
 
     // Access granted - update last valid page cookie
     console.log('✅ Access granted');
-    const response = NextResponse.next()
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
     addBrandHeaders(response)
     response.cookies.set(LAST_PAGE_COOKIE, pathname, {
       httpOnly: true,
@@ -212,7 +219,7 @@ export default auth(async (req) => {
     return NextResponse.redirect(loginUrl)
   }
 
-  return addBrandHeaders(NextResponse.next())
+  return addBrandHeaders(NextResponse.next({ request: { headers: requestHeaders } }))
 })
 
 export const config = {
