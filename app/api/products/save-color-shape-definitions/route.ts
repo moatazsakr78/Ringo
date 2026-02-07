@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
     console.log('📦 API: productId:', productId)
     console.log('🎨 API: colors:', colors?.length || 0)
     console.log('🔶 API: shapes:', shapes?.length || 0)
+    console.log('📦 API: quantities:', quantities?.length || 0)
 
     if (!productId) {
       return NextResponse.json(
@@ -63,6 +64,20 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Build mapping: frontend color/shape ID → sort_order
+    const frontendIdToSortOrder = new Map<string, { sortOrder: number, variantType: string }>()
+
+    if (colors && Array.isArray(colors)) {
+      colors.forEach((color: any, index: number) => {
+        frontendIdToSortOrder.set(`color-${color.id}`, { sortOrder: index, variantType: 'color' })
+      })
+    }
+    if (shapes && Array.isArray(shapes)) {
+      shapes.forEach((shape: any, index: number) => {
+        frontendIdToSortOrder.set(`shape-${shape.id}`, { sortOrder: index, variantType: 'shape' })
+      })
+    }
+
     // ✅ Step 3: Insert new definitions
     let insertedDefinitions: any[] = []
     if (definitionsToInsert.length > 0) {
@@ -98,13 +113,26 @@ export async function POST(request: NextRequest) {
       const quantitiesToInsert: any[] = []
 
       quantities.forEach((variant: any) => {
-        // Find matching definition
+        // Use elementId → sort_order mapping instead of name matching
+        const mappingKey = `${variant.elementType}-${variant.elementId}`
+        const mapping = frontendIdToSortOrder.get(mappingKey)
+
+        if (!mapping) {
+          console.warn(`⚠️ No mapping found for variant:`, { elementType: variant.elementType, elementId: variant.elementId })
+          return
+        }
+
         const definition = insertedDefinitions.find(d =>
-          d.variant_type === variant.elementType &&
-          d.name === variant.elementName
+          d.variant_type === mapping.variantType &&
+          d.sort_order === mapping.sortOrder
         )
 
-        if (definition && variant.locationType === 'branch' && variant.locationId) {
+        if (!definition) {
+          console.warn(`⚠️ No definition found for sort_order=${mapping.sortOrder}, type=${mapping.variantType}`)
+          return
+        }
+
+        if (variant.locationId && variant.locationType === 'branch') {
           quantitiesToInsert.push({
             variant_definition_id: definition.id,
             branch_id: variant.locationId,
