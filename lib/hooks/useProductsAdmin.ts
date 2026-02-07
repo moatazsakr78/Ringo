@@ -350,6 +350,34 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           colorsMap.set(colorDef.product_id, existing);
         });
 
+      // Build colors (with barcode) and shapes maps for BarcodePrintModal
+      const colorsWithBarcodeMap = new Map<string, any[]>();
+      const shapesMap = new Map<string, any[]>();
+
+      (variantDefinitions || []).forEach(def => {
+        if (def.variant_type === 'color' && def.color_hex && def.name) {
+          const existing = colorsWithBarcodeMap.get(def.product_id) || [];
+          existing.push({
+            id: def.id,
+            name: def.name,
+            hex: def.color_hex,
+            image_url: def.image_url,
+            barcode: def.barcode || null,
+          });
+          colorsWithBarcodeMap.set(def.product_id, existing);
+        }
+        if (def.variant_type === 'shape' && def.name) {
+          const existing = shapesMap.get(def.product_id) || [];
+          existing.push({
+            id: def.id,
+            name: def.name,
+            image_url: def.image_url,
+            barcode: def.barcode || null,
+          });
+          shapesMap.set(def.product_id, existing);
+        }
+      });
+
       // Enrich products with computed data (client-side - fast!)
       const enrichedProducts: Product[] = rawProducts.map((product: any) => {
         const productInventory = inventoryMap.get(product.id) || [];
@@ -447,6 +475,8 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           inventoryData,
           variantsData,
           productColors, // ✨ Colors from variant definitions
+          colors: colorsWithBarcodeMap.get(product.id) || [],
+          shapes: shapesMap.get(product.id) || [],
           allImages,
           additional_images: exportAdditionalImages, // ✨ For export modal
           productVideos: productVideos, // ✨ Videos from product_videos table
@@ -835,6 +865,26 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           image: colorDef.image_url || undefined
         }));
 
+      // Build colors (with barcode) and shapes for BarcodePrintModal
+      const colors = variantDefinitions
+        .filter(d => d.variant_type === 'color' && d.color_hex && d.name)
+        .map(def => ({
+          id: def.id,
+          name: def.name,
+          hex: def.color_hex,
+          image_url: def.image_url,
+          barcode: def.barcode || null,
+        }));
+
+      const shapes = variantDefinitions
+        .filter(d => d.variant_type === 'shape' && d.name)
+        .map(def => ({
+          id: def.id,
+          name: def.name,
+          image_url: def.image_url,
+          barcode: def.barcode || null,
+        }));
+
       // Calculate total stock
       let totalQuantity = 0;
       productInventory.forEach((inv: any) => {
@@ -913,6 +963,8 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
         inventoryData,
         variantsData,
         productColors,
+        colors,
+        shapes,
         allImages,
         additional_images: additionalImages || [],
         productVideos,
