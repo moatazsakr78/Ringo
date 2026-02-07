@@ -786,8 +786,8 @@ export default function BarcodePrintModal({ isOpen, onClose, products, branches 
 
                           {/* Item Info */}
                           <div className="mb-2">
-                            <h4 className="text-white text-base font-bold line-clamp-2 leading-tight mb-1">{item.productName}</h4>
-                            <p className="text-gray-400 text-xs truncate">{item.barcode}</p>
+                            <h4 className="text-white text-base font-bold line-clamp-2 leading-tight">{item.productName}</h4>
+                            <p className="text-gray-500 text-[11px] font-mono mt-1 truncate">{item.barcode}</p>
                           </div>
 
                           {/* Copies Input */}
