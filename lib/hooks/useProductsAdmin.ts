@@ -496,6 +496,9 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           quantity_per_carton: productData.quantity_per_carton,
           main_image_url: productData.main_image_url,
           sub_image_url: productData.sub_image_url,
+          additional_images_urls: (productData as any).additional_images || productData.additional_images_urls || [],
+          video_url: (productData as any).video_url || null,
+          barcodes: productData.barcodes || [],
           unit: productData.unit || 'قطعة',
           is_active: true
         })
@@ -519,6 +522,10 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
   // ✨ Update existing product
   const updateProduct = useCallback(async (productId: string, productData: Partial<Product>): Promise<Product | null> => {
     try {
+      // Map additional_images field to additional_images_urls
+      const additionalImagesValue = (productData as any).additional_images || productData.additional_images_urls
+      const videoUrlValue = (productData as any).actualVideoUrl !== undefined ? (productData as any).actualVideoUrl : (productData as any).video_url
+
       const { data, error } = await supabase
         .from('products')
         .update({
@@ -539,6 +546,9 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
           product_code: productData.product_code,
           main_image_url: productData.main_image_url,
           sub_image_url: productData.sub_image_url,
+          additional_images_urls: additionalImagesValue,
+          video_url: videoUrlValue,
+          barcodes: productData.barcodes,
           unit: productData.unit,
           is_active: productData.is_active,
           updated_at: new Date().toISOString()
