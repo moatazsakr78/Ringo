@@ -1060,7 +1060,8 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
   const loadExistingImages = async () => {
     if (!editProduct) return
 
-    // Reset images state before loading new product's images
+    // Reset ALL image states before loading new product's images
+    setMainProductImages([])
     setAdditionalImages([])
 
     // Load main image if it exists
@@ -1071,11 +1072,13 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
           preview: editProduct.main_image_url,
           id: 'main-existing'
         }
-        
+
         setMainProductImages([imageFile])
       } catch (error) {
         console.error('Error loading main image:', error)
       }
+    } else {
+      setMainProductImages([])
     }
 
     // Load additional images - check additional_images_urls first, then fallback to video_url
