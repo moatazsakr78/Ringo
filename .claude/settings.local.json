@@ -351,7 +351,8 @@
       "WebFetch(domain:nanobanana.io)",
       "mcp__supabase__get_advisors",
       "Bash(xargs:*)",
-      "Bash(npx next build:*)"
+      "Bash(npx next build:*)",
+      "Bash(Select-String \"BarcodePrintModal\")"
     ],
     "deny": [],
     "additionalDirectories": [

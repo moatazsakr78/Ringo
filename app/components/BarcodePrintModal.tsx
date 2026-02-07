@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import JsBarcode from 'jsbarcode'
-import { XMarkIcon, PrinterIcon, Cog6ToothIcon, MagnifyingGlassIcon, EyeIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, PrinterIcon, Cog6ToothIcon, MagnifyingGlassIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
 import { Product } from '../lib/hooks/useProductsOptimized'
 import { ProductGridImage } from './ui/OptimizedImage'
 
@@ -40,6 +40,16 @@ interface PrintableItem {
   product: Product
 }
 
+interface DisplayGroup {
+  productId: string
+  productName: string
+  imageUrl?: string
+  product: Product
+  mainItem?: PrintableItem
+  variantItems: PrintableItem[]
+  hasVariants: boolean
+}
+
 export default function BarcodePrintModal({ isOpen, onClose, products, branches }: BarcodePrintModalProps) {
   const [labelSize, setLabelSize] = useState<LabelSize>('large')
   const [selectedBranch, setSelectedBranch] = useState<string>('')
@@ -53,9 +63,9 @@ export default function BarcodePrintModal({ isOpen, onClose, products, branches 
   })
   const [copies, setCopies] = useState<{[key: string]: number}>({})
   const [searchQuery, setSearchQuery] = useState('')
-  const barcodeRefs = useRef<{[key: string]: SVGSVGElement | null}>({})
   const [showPreview, setShowPreview] = useState(false)
   const [isPreparing, setIsPreparing] = useState(false)
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
 
   // Build flat list of printable items (product barcode + color barcodes + shape barcodes)
   const printableItems = useMemo(() => {
@@ -428,26 +438,39 @@ export default function BarcodePrintModal({ isOpen, onClose, products, branches 
     )
   }, [printableItems, searchQuery])
 
-  // Generate barcodes for preview cards
-  useEffect(() => {
+  // Group filtered items by product for display
+  const displayGroups = useMemo(() => {
+    const groupMap = new Map<string, DisplayGroup>()
+
     filteredItems.forEach(item => {
-      if (item.barcode && barcodeRefs.current[item.key]) {
-        try {
-          JsBarcode(barcodeRefs.current[item.key]!, item.barcode, {
-            format: 'CODE128',
-            width: 0.6,          // Very thin for small horizontal preview
-            height: 20,          // Low height for horizontal layout
-            displayValue: false,
-            margin: 1,
-            background: '#ffffff',
-            lineColor: '#000000'
-          })
-        } catch (error) {
-          console.error('Error generating barcode:', error)
-        }
+      const productId = item.product.id as string
+      if (!groupMap.has(productId)) {
+        groupMap.set(productId, {
+          productId,
+          productName: item.productName,
+          imageUrl: item.product.main_image_url || undefined,
+          product: item.product,
+          mainItem: undefined,
+          variantItems: [],
+          hasVariants: false
+        })
+      }
+
+      const group = groupMap.get(productId)!
+      if (!item.variantName) {
+        group.mainItem = item
+      } else {
+        group.variantItems.push(item)
       }
     })
-  }, [filteredItems, labelSize])
+
+    // Determine hasVariants
+    groupMap.forEach(group => {
+      group.hasVariants = group.variantItems.length > 0
+    })
+
+    return Array.from(groupMap.values())
+  }, [filteredItems])
 
   if (!isOpen) return null
 
@@ -473,6 +496,37 @@ export default function BarcodePrintModal({ isOpen, onClose, products, branches 
       return `${item.productName} - ${item.variantName}`
     }
     return item.productName
+  }
+
+  // Count total copies for a group
+  const getGroupTotalCopies = (group: DisplayGroup) => {
+    let total = 0
+    if (group.mainItem) total += copies[group.mainItem.key] || 0
+    group.variantItems.forEach(v => { total += copies[v.key] || 0 })
+    return total
+  }
+
+  // Count color and shape variants
+  const getVariantCounts = (group: DisplayGroup) => {
+    let colorCount = 0
+    let shapeCount = 0
+    group.variantItems.forEach(v => {
+      if (v.variantType === 'color') colorCount++
+      if (v.variantType === 'shape') shapeCount++
+    })
+    return { colorCount, shapeCount }
+  }
+
+  const toggleExpanded = (productId: string) => {
+    setExpandedProducts(prev => {
+      const next = new Set(prev)
+      if (next.has(productId)) {
+        next.delete(productId)
+      } else {
+        next.add(productId)
+      }
+      return next
+    })
   }
 
   return (
@@ -702,108 +756,244 @@ export default function BarcodePrintModal({ isOpen, onClose, products, branches 
               {/* Items Grid */}
               <div className="flex-1 p-4 overflow-y-auto scrollbar-hide">
                 <div className="grid grid-cols-3 gap-4">
-                  {filteredItems.map(item => {
-                    const hasQuantity = (copies[item.key] || 0) > 0
+                  {displayGroups.map(group => {
+                    const isExpanded = expandedProducts.has(group.productId)
+                    const totalCopies = getGroupTotalCopies(group)
+                    const { colorCount, shapeCount } = getVariantCounts(group)
 
-                    return (
-                      <div
-                        key={item.key}
-                        className={`rounded-lg p-3 border-2 transition-all ${
-                          hasQuantity
-                            ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
-                            : 'bg-[#374151] border-[#4A5568]'
-                        }`}
-                      >
-                        {/* Product Image */}
-                        <div className="mb-2 relative h-32">
-                          <ProductGridImage
-                            src={item.imageUrl || item.product.main_image_url}
-                            alt={getItemDisplayName(item)}
-                            priority={false}
-                          />
+                    // Products WITHOUT variants — simple card
+                    if (!group.hasVariants && group.mainItem) {
+                      const item = group.mainItem
+                      const hasQuantity = (copies[item.key] || 0) > 0
+
+                      return (
+                        <div
+                          key={group.productId}
+                          className={`rounded-lg p-3 border-2 transition-all ${
+                            hasQuantity
+                              ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'bg-[#374151] border-[#4A5568]'
+                          }`}
+                        >
+                          {/* Product Image */}
+                          <div className="mb-2 relative h-32">
+                            <ProductGridImage
+                              src={item.imageUrl || item.product.main_image_url}
+                              alt={item.productName}
+                              priority={false}
+                            />
+                          </div>
+
+                          {/* Item Info */}
+                          <div className="mb-2">
+                            <h4 className="text-white text-base font-bold line-clamp-2 leading-tight mb-1">{item.productName}</h4>
+                            <p className="text-gray-400 text-xs truncate">{item.barcode}</p>
+                          </div>
+
+                          {/* Copies Input */}
+                          <div>
+                            <label className="block text-gray-300 text-xs mb-1">عدد النسخ</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={copies[item.key] || 0}
+                              onChange={(e) => setCopies(prev => ({ ...prev, [item.key]: parseInt(e.target.value) || 0 }))}
+                              className={`w-full border rounded px-3 py-2 text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                hasQuantity
+                                  ? 'bg-blue-600 border-blue-400 text-white'
+                                  : 'bg-[#2B3544] border-gray-600 text-white'
+                              }`}
+                            />
+                          </div>
                         </div>
+                      )
+                    }
 
-                        {/* Item Info */}
-                        <div className="mb-2">
-                          <h4 className="text-white font-medium text-sm mb-1 truncate">{item.productName}</h4>
-                          {item.variantName && (
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {item.variantType === 'color' && item.colorHex && (
-                                <span
-                                  className="w-3 h-3 rounded-full border border-gray-500 flex-shrink-0"
-                                  style={{ backgroundColor: item.colorHex }}
-                                />
+                    // Products WITH variants — collapsed card
+                    if (group.hasVariants && !isExpanded) {
+                      return (
+                        <div
+                          key={group.productId}
+                          className={`rounded-lg p-3 border-2 transition-all ${
+                            totalCopies > 0
+                              ? 'bg-blue-900/30 border-blue-500 shadow-lg shadow-blue-500/20'
+                              : 'bg-[#374151] border-[#4A5568]'
+                          }`}
+                        >
+                          {/* Product Image */}
+                          <div className="mb-2 relative h-32">
+                            <ProductGridImage
+                              src={group.imageUrl || group.product.main_image_url}
+                              alt={group.productName}
+                              priority={false}
+                            />
+                          </div>
+
+                          {/* Product Name */}
+                          <div className="mb-2">
+                            <h4 className="text-white text-base font-bold line-clamp-2 leading-tight mb-1.5">{group.productName}</h4>
+
+                            {/* Variant Badges */}
+                            <div className="flex flex-wrap gap-1.5 mb-1">
+                              {colorCount > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                                  {colorCount} لون
+                                </span>
                               )}
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                item.variantType === 'color'
-                                  ? 'bg-purple-900/50 text-purple-300'
-                                  : 'bg-orange-900/50 text-orange-300'
-                              }`}>
-                                {item.variantType === 'color' ? 'لون' : 'شكل'}: {item.variantName}
-                              </span>
+                              {shapeCount > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-900/50 text-orange-300 border border-orange-700/50">
+                                  {shapeCount} شكل
+                                </span>
+                              )}
+                              {group.mainItem && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-900/50 text-green-300 border border-green-700/50">
+                                  رئيسي
+                                </span>
+                              )}
                             </div>
-                          )}
-                          <p className="text-gray-400 text-xs truncate">{item.barcode}</p>
-                        </div>
 
-                        {/* Copies Input */}
-                        <div className="mb-2">
-                          <label className="block text-gray-300 text-xs mb-1">عدد النسخ</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={copies[item.key] || 0}
-                            onChange={(e) => setCopies(prev => ({ ...prev, [item.key]: parseInt(e.target.value) || 0 }))}
-                            className={`w-full border rounded px-3 py-2 text-center font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                              hasQuantity
-                                ? 'bg-blue-600 border-blue-400 text-white'
-                                : 'bg-[#2B3544] border-gray-600 text-white'
-                            }`}
-                          />
-                        </div>
-
-                        {/* Label Preview - Horizontal */}
-                        <div className="bg-white rounded p-1 flex items-center justify-center">
-                          <div
-                            className="border border-gray-300 bg-white flex items-center justify-between overflow-hidden"
-                            style={{
-                              width: `${currentDimensions.width * 1.8}px`,
-                              height: `${currentDimensions.height * 1.8}px`,
-                              padding: '2px'
-                            }}
-                          >
-                            {/* Left */}
-                            <div className="flex flex-col justify-center flex-1 min-w-0 pr-1">
-                              {labelSettings.showCompanyName && (
-                                <div className="text-[5px] font-bold text-gray-800 truncate">المعرض</div>
-                              )}
-                              {labelSettings.showProductName && (
-                                <div className="text-[4px] font-medium text-gray-700 truncate">{getItemDisplayName(item)}</div>
-                              )}
-                            </div>
-
-                            {/* Center - Barcode */}
-                            {labelSettings.showBarcode && item.barcode && (
-                              <div className="flex flex-col items-center justify-center flex-[2] px-0.5">
-                                <svg
-                                  ref={(el) => { if (el) barcodeRefs.current[item.key] = el }}
-                                  style={{ maxWidth: '100%', height: 'auto' }}
-                                />
-                                <div className="text-[4px] font-mono font-bold text-gray-700">*{item.barcode}*</div>
-                              </div>
-                            )}
-
-                            {/* Right - Price */}
-                            {labelSettings.showPrice && (
-                              <div className="flex flex-col items-end justify-center flex-1 pl-1">
-                                <div className="text-[6px] font-bold text-gray-900">{getPrice(item.product).toFixed(2)}</div>
-                                <div className="text-[4px] font-bold text-gray-900">LE</div>
+                            {/* Total copies badge */}
+                            {totalCopies > 0 && (
+                              <div className="text-xs text-blue-300 font-medium">
+                                {totalCopies} نسخة محددة
                               </div>
                             )}
                           </div>
+
+                          {/* "اختار" button */}
+                          <button
+                            onClick={() => toggleExpanded(group.productId)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <ChevronDownIcon className="h-4 w-4" />
+                            اختار
+                          </button>
                         </div>
-                      </div>
-                    )
+                      )
+                    }
+
+                    // Products WITH variants — expanded card (full row)
+                    if (group.hasVariants && isExpanded) {
+                      return (
+                        <div
+                          key={group.productId}
+                          className="col-span-3 rounded-lg border-2 border-blue-500 bg-[#374151] shadow-lg shadow-blue-500/10 overflow-hidden"
+                        >
+                          {/* Header */}
+                          <div className="flex items-center gap-4 p-4 bg-[#2B3544] border-b border-[#4A5568]">
+                            <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden">
+                              <ProductGridImage
+                                src={group.imageUrl || group.product.main_image_url}
+                                alt={group.productName}
+                                priority={false}
+                              />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-white text-lg font-bold line-clamp-2 leading-tight">{group.productName}</h4>
+                              <div className="flex flex-wrap gap-1.5 mt-1">
+                                {colorCount > 0 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/50">
+                                    {colorCount} لون
+                                  </span>
+                                )}
+                                {shapeCount > 0 && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-900/50 text-orange-300 border border-orange-700/50">
+                                    {shapeCount} شكل
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => toggleExpanded(group.productId)}
+                              className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex-shrink-0"
+                            >
+                              <ChevronUpIcon className="h-5 w-5" />
+                            </button>
+                          </div>
+
+                          {/* Main product barcode row */}
+                          {group.mainItem && (
+                            <div className="px-4 py-3 border-b border-[#4A5568] flex items-center gap-4">
+                              <span className="text-xs px-2 py-1 rounded-full bg-green-900/50 text-green-300 border border-green-700/50 flex-shrink-0">
+                                رئيسي
+                              </span>
+                              <p className="text-gray-400 text-sm flex-shrink-0 font-mono">{group.mainItem.barcode}</p>
+                              <div className="flex-1" />
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <label className="text-gray-300 text-xs">نسخ</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={copies[group.mainItem.key] || 0}
+                                  onChange={(e) => setCopies(prev => ({ ...prev, [group.mainItem!.key]: parseInt(e.target.value) || 0 }))}
+                                  className={`w-20 border rounded px-2 py-1.5 text-center font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                    (copies[group.mainItem.key] || 0) > 0
+                                      ? 'bg-blue-600 border-blue-400 text-white'
+                                      : 'bg-[#2B3544] border-gray-600 text-white'
+                                  }`}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Variants grid */}
+                          <div className="p-4">
+                            <div className="grid grid-cols-4 gap-3">
+                              {group.variantItems.map(item => {
+                                const hasQuantity = (copies[item.key] || 0) > 0
+
+                                return (
+                                  <div
+                                    key={item.key}
+                                    className={`rounded-lg p-3 border transition-all ${
+                                      hasQuantity
+                                        ? 'bg-blue-900/30 border-blue-500'
+                                        : 'bg-[#2B3544] border-[#4A5568]'
+                                    }`}
+                                  >
+                                    {/* Variant label */}
+                                    <div className="flex items-center gap-1.5 mb-2">
+                                      {item.variantType === 'color' && item.colorHex && (
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-gray-500 flex-shrink-0"
+                                          style={{ backgroundColor: item.colorHex }}
+                                        />
+                                      )}
+                                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                        item.variantType === 'color'
+                                          ? 'bg-purple-900/50 text-purple-300'
+                                          : 'bg-orange-900/50 text-orange-300'
+                                      }`}>
+                                        {item.variantType === 'color' ? 'لون' : 'شكل'}
+                                      </span>
+                                      <span className="text-white text-sm font-medium truncate">{item.variantName}</span>
+                                    </div>
+
+                                    {/* Barcode */}
+                                    <p className="text-gray-400 text-xs font-mono truncate mb-2">{item.barcode}</p>
+
+                                    {/* Copies input */}
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={copies[item.key] || 0}
+                                      onChange={(e) => setCopies(prev => ({ ...prev, [item.key]: parseInt(e.target.value) || 0 }))}
+                                      className={`w-full border rounded px-2 py-1.5 text-center font-bold text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                        hasQuantity
+                                          ? 'bg-blue-600 border-blue-400 text-white'
+                                          : 'bg-[#2B3544] border-gray-600 text-white'
+                                      }`}
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return null
                   })}
                 </div>
               </div>
