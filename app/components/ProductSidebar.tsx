@@ -1060,6 +1060,9 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
   const loadExistingImages = async () => {
     if (!editProduct) return
 
+    // Reset images state before loading new product's images
+    setAdditionalImages([])
+
     // Load main image if it exists
     if (editProduct.main_image_url) {
       try {
@@ -1098,6 +1101,8 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
         id: `additional-existing-${index}`
       }))
       setAdditionalImages(additionalImageFiles)
+    } else {
+      setAdditionalImages([])
     }
   }
 
@@ -1826,32 +1831,35 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
 
       // Handle additional images for edit mode only - for new products, upload after creation
       let additionalImagesJson = null
-      if (isEditMode && additionalImages.length > 0) {
-        const additionalImageUrls: string[] = []
-        
-        for (const imageFile of additionalImages) {
-          if (imageFile.id.startsWith('additional-existing')) {
-            // Keep existing image URL
-            additionalImageUrls.push(imageFile.preview)
-          } else {
-            // Upload new image using versioned upload
-            const productId = editProduct?.id
-            if (productId && imageFile.file) {
-              const result = await addAdditionalVersionedImage(
-                imageFile.file,
-                productId
-              )
-              
-              if (result.success && result.publicUrl) {
-                additionalImageUrls.push(result.publicUrl)
+      if (isEditMode) {
+        if (additionalImages.length > 0) {
+          const additionalImageUrls: string[] = []
+
+          for (const imageFile of additionalImages) {
+            if (imageFile.id.startsWith('additional-existing')) {
+              // Keep existing image URL
+              additionalImageUrls.push(imageFile.preview)
+            } else {
+              // Upload new image using versioned upload
+              const productId = editProduct?.id
+              if (productId && imageFile.file) {
+                const result = await addAdditionalVersionedImage(
+                  imageFile.file,
+                  productId
+                )
+
+                if (result.success && result.publicUrl) {
+                  additionalImageUrls.push(result.publicUrl)
+                }
               }
             }
           }
+
+          if (additionalImageUrls.length > 0) {
+            additionalImagesJson = JSON.stringify(additionalImageUrls)
+          }
         }
-        
-        if (additionalImageUrls.length > 0) {
-          additionalImagesJson = JSON.stringify(additionalImageUrls)
-        }
+        // If additionalImages is empty, additionalImagesJson stays null → handled below as []
       }
 
       // ✅ حفظ الوصف كنص عادي فقط (الألوان والأشكال في product_color_shape_definitions)
@@ -1878,7 +1886,9 @@ export default function ProductSidebar({ isOpen, onClose, onProductCreated, crea
         category_id: formData.categoryId || undefined,
         product_code: formData.code.trim() || undefined,
         main_image_url: mainImageUrl || undefined,
-        additional_images: additionalImagesJson ? JSON.parse(additionalImagesJson) : undefined, // ✨ Store in new field
+        additional_images: isEditMode
+          ? (additionalImagesJson ? JSON.parse(additionalImagesJson) : [])
+          : (additionalImagesJson ? JSON.parse(additionalImagesJson) : undefined),
         is_active: formData.isActive,
         unit: 'قطعة'
       }
