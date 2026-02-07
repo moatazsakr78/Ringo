@@ -113,7 +113,12 @@ export default function ColorSelectionModal({
   // إعادة تعيين حالة الإدخال عند فتح النافذة
   useEffect(() => {
     if (isOpen) {
+      setSelections({})
+      setShapeSelections({})
+      setManualQuantity(1)
       setIsFirstDigitInput(true)
+      setTempColorQuantities({})
+      setEditingColorQuantity(null)
     }
   }, [isOpen])
 
@@ -746,9 +751,26 @@ export default function ColorSelectionModal({
                           <MinusIcon className="h-4 w-4 text-white" />
                         </button>
 
-                        <div className="bg-[#2B3544] rounded-lg px-3 py-2 min-w-[50px] text-center relative mx-2">
-                          <span className="text-white font-bold">{selections[color.name] || 0}</span>
-                        </div>
+                        <input
+                          type="number"
+                          value={selections[color.name] || 0}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0
+                            const max = color.availableQuantity || 0
+                            const clamped = Math.min(Math.max(0, val), max)
+                            setSelections(prev => {
+                              if (clamped === 0) {
+                                const { [color.name]: _, ...rest } = prev
+                                return rest
+                              }
+                              return { ...prev, [color.name]: clamped }
+                            })
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          min="0"
+                          max={color.availableQuantity}
+                          className="bg-[#2B3544] rounded-lg px-3 py-2 w-[60px] text-center text-white font-bold outline-none border-2 border-transparent focus:border-blue-500 mx-2"
+                        />
 
                         <button 
                           onClick={() => handleQuantityChange(color.name, 1)} 
@@ -802,9 +824,26 @@ export default function ColorSelectionModal({
                           <MinusIcon className="h-4 w-4 text-white" />
                         </button>
 
-                        <div className="bg-[#2B3544] rounded-lg px-3 py-2 min-w-[50px] text-center relative mx-2">
-                          <span className="text-white font-bold">{shapeSelections[shape.name] || 0}</span>
-                        </div>
+                        <input
+                          type="number"
+                          value={shapeSelections[shape.name] || 0}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value) || 0
+                            const max = shape.availableQuantity || 0
+                            const clamped = Math.min(Math.max(0, val), max)
+                            setShapeSelections(prev => {
+                              if (clamped === 0) {
+                                const { [shape.name]: _, ...rest } = prev
+                                return rest
+                              }
+                              return { ...prev, [shape.name]: clamped }
+                            })
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          min="0"
+                          max={shape.availableQuantity}
+                          className="bg-[#2B3544] rounded-lg px-3 py-2 w-[60px] text-center text-white font-bold outline-none border-2 border-transparent focus:border-blue-500 mx-2"
+                        />
 
                         <button
                           onClick={() => handleShapeQuantityChange(shape.name, 1)}
