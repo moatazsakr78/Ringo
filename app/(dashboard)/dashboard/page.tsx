@@ -7,6 +7,7 @@ import {
   CurrencyDollarIcon,
   UsersIcon,
   ExclamationTriangleIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 
 // Dashboard Components
@@ -16,7 +17,7 @@ import {
   InvoiceStatsCard,
   SaleTypeCard,
   RecentOrdersCard,
-  LowStockCard,
+  CapitalCard,
   TopCustomersCard,
   QuickActions,
   DashboardSkeleton,
@@ -202,11 +203,11 @@ export default function DashboardPage() {
                   loading={loading}
                 />
                 <StatsCard
-                  title="تنبيهات المخزون"
-                  value={data.lowStockProducts.length}
-                  icon={ExclamationTriangleIcon}
-                  color={data.lowStockProducts.length > 0 ? 'red' : 'green'}
-                  format="number"
+                  title="رأس المال"
+                  value={data.capitalData?.totalCapital || 0}
+                  icon={BanknotesIcon}
+                  color="green"
+                  format="currency"
                   loading={loading}
                 />
               </div>
@@ -254,13 +255,11 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Low Stock Alerts */}
-              {(data.lowStockProducts.length > 0 || loading) && (
-                <LowStockCard
-                  products={data.lowStockProducts}
-                  loading={loading}
-                />
-              )}
+              {/* Capital Card */}
+              <CapitalCard
+                data={data.capitalData}
+                loading={loading}
+              />
             </div>
           )}
         </div>

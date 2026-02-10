@@ -36,7 +36,8 @@ import {
   EyeIcon,
   EyeSlashIcon,
   XMarkIcon,
-  PencilSquareIcon
+  PencilSquareIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline'
 
 // Database category interface for type safety
@@ -801,6 +802,33 @@ export default function InventoryPage() {
     return filteredProducts.slice(0, VISIBLE_PRODUCTS_LIMIT)
   }, [filteredProducts, searchQuery, selectedCategory, showAllProducts])
 
+  // Calculate capital per branch from loaded products
+  const branchCapitals = useMemo(() => {
+    const capitalMap: { [branchId: string]: number } = {}
+    let total = 0
+
+    products.forEach((product: any) => {
+      const costPrice = parseFloat(product.cost_price) || 0
+      if (costPrice <= 0 || !product.inventoryData) return
+
+      Object.entries(product.inventoryData).forEach(([branchId, inv]: [string, any]) => {
+        if (!selectedBranches[branchId]) return
+        const qty = parseFloat(inv?.quantity) || 0
+        if (qty <= 0) return
+        const value = qty * costPrice
+        capitalMap[branchId] = (capitalMap[branchId] || 0) + value
+        total += value
+      })
+    })
+
+    const branchList = branches
+      .filter(b => selectedBranches[b.id] && capitalMap[b.id])
+      .map(b => ({ id: b.id, name: b.name, capital: capitalMap[b.id] || 0 }))
+      .sort((a, b) => b.capital - a.capital)
+
+    return { total, branches: branchList }
+  }, [products, branches, selectedBranches])
+
   // Reset showAllProducts when filters change
   useEffect(() => {
     setShowAllProducts(false)
@@ -1255,6 +1283,106 @@ export default function InventoryPage() {
               <TableCellsIcon className="h-5 w-5 mb-1" />
               <span className="text-sm">الأعمدة</span>
             </button>
+
+            {/* Separator */}
+            <div className="h-10 w-px bg-gray-500 mx-1"></div>
+
+            {/* Audit Status Filters - inline */}
+            <button
+              onClick={() => handleAuditStatusToggle('تام الجرد')}
+              className={`flex flex-col items-center min-w-[70px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                auditStatusFilters['تام الجرد']
+                  ? 'bg-green-600/20 text-green-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                auditStatusFilters['تام الجرد'] ? 'bg-green-500' : 'bg-gray-500'
+              }`}></div>
+              <span>تام الجرد</span>
+            </button>
+            <button
+              onClick={() => handleAuditStatusToggle('استعد')}
+              className={`flex flex-col items-center min-w-[70px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                auditStatusFilters['استعد']
+                  ? 'bg-yellow-600/20 text-yellow-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                auditStatusFilters['استعد'] ? 'bg-yellow-500' : 'bg-gray-500'
+              }`}></div>
+              <span>استعد</span>
+            </button>
+            <button
+              onClick={() => handleAuditStatusToggle('غير مجرود')}
+              className={`flex flex-col items-center min-w-[70px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                auditStatusFilters['غير مجرود']
+                  ? 'bg-red-600/20 text-red-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                auditStatusFilters['غير مجرود'] ? 'bg-red-500' : 'bg-gray-500'
+              }`}></div>
+              <span>غير مجرود</span>
+            </button>
+
+            {/* Branch Selector for Audit */}
+            <select
+              value={selectedAuditBranch}
+              onChange={(e) => setSelectedAuditBranch(e.target.value)}
+              className="px-2 py-1.5 bg-[#2B3544] border border-gray-600 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">جميع الفروع</option>
+              {branches.map(branch => (
+                <option key={branch.id} value={branch.id}>{branch.name}</option>
+              ))}
+            </select>
+
+            {/* Separator */}
+            <div className="h-10 w-px bg-gray-500 mx-1"></div>
+
+            {/* Stock Status Filters - inline */}
+            <button
+              onClick={() => handleStockStatusToggle('good')}
+              className={`flex flex-col items-center min-w-[60px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                stockStatusFilters.good
+                  ? 'text-green-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                stockStatusFilters.good ? 'bg-green-500' : 'bg-gray-500'
+              }`}></div>
+              <span>جيد</span>
+            </button>
+            <button
+              onClick={() => handleStockStatusToggle('low')}
+              className={`flex flex-col items-center min-w-[60px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                stockStatusFilters.low
+                  ? 'text-yellow-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                stockStatusFilters.low ? 'bg-yellow-500' : 'bg-gray-500'
+              }`}></div>
+              <span>منخفض</span>
+            </button>
+            <button
+              onClick={() => handleStockStatusToggle('zero')}
+              className={`flex flex-col items-center min-w-[60px] p-1.5 rounded-md text-xs font-medium transition-all ${
+                stockStatusFilters.zero
+                  ? 'text-red-400'
+                  : 'text-gray-500 opacity-50'
+              }`}
+            >
+              <div className={`h-3 w-3 rounded-full mb-1 ${
+                stockStatusFilters.zero ? 'bg-red-500' : 'bg-gray-500'
+              }`}></div>
+              <span>صفر</span>
+            </button>
           </div>
         </div>
 
@@ -1363,100 +1491,29 @@ export default function InventoryPage() {
                   </div>
                 </div>
 
-                {/* Right Side - Audit and Stock Status Filter Buttons */}
-                <div className="flex items-center gap-4">
-                  
-                  {/* Audit Status Filter Section */}
-                  <div className="flex items-center gap-2">
-                    {/* Audit Status Buttons */}
-                    <button 
-                      onClick={() => handleAuditStatusToggle('تام الجرد')}
-                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                        auditStatusFilters['تام الجرد'] 
-                          ? 'bg-green-600 hover:bg-green-700 text-white' 
-                          : 'bg-gray-600 text-gray-400 opacity-50'
-                      }`}
-                    >
-                      تام الجرد
-                    </button>
-                    
-                    <button 
-                      onClick={() => handleAuditStatusToggle('استعد')}
-                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                        auditStatusFilters['استعد'] 
-                          ? 'bg-yellow-600 hover:bg-yellow-700 text-white' 
-                          : 'bg-gray-600 text-gray-400 opacity-50'
-                      }`}
-                    >
-                      استعد
-                    </button>
-                    
-                    <button 
-                      onClick={() => handleAuditStatusToggle('غير مجرود')}
-                      className={`px-3 py-2 rounded-lg text-sm transition-all ${
-                        auditStatusFilters['غير مجرود'] 
-                          ? 'bg-red-600 hover:bg-red-700 text-white' 
-                          : 'bg-gray-600 text-gray-400 opacity-50'
-                      }`}
-                    >
-                      غير مجرود
-                    </button>
+                {/* Right Side - Capital Display */}
+                <div className="flex items-center gap-2">
+                  {/* Total Capital Badge */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-600/20 to-emerald-600/20 border border-blue-500/30 rounded-lg">
+                    <BanknotesIcon className="h-4 w-4 text-emerald-400" />
+                    <span className="text-xs text-gray-400">رأس المال:</span>
+                    <span className="text-sm font-bold text-emerald-400">
+                      {branchCapitals.total.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    </span>
                   </div>
-                  
-                  {/* Branch Selector for Audit Status - Positioned as Separator */}
-                  <select
-                    value={selectedAuditBranch}
-                    onChange={(e) => setSelectedAuditBranch(e.target.value)}
-                    className="px-3 py-2 bg-[#2B3544] border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">جميع الفروع</option>
-                    {branches.map(branch => (
-                      <option key={branch.id} value={branch.id}>{branch.name}</option>
-                    ))}
-                  </select>
-                  
-                  {/* Stock Status Buttons - Desktop Style */}
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => handleStockStatusToggle('good')}
-                      className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
-                        stockStatusFilters.good
-                          ? 'text-green-400 hover:text-green-300'
-                          : 'text-gray-500 opacity-50'
-                      }`}
+
+                  {/* Per-branch capital cards */}
+                  {branchCapitals.branches.map(branch => (
+                    <div
+                      key={branch.id}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-[#2B3544] border border-gray-600/50 rounded-md"
                     >
-                      <div className={`h-5 w-5 mb-1 rounded-full ${
-                        stockStatusFilters.good ? 'bg-green-500' : 'bg-gray-500'
-                      }`}></div>
-                      <span className="text-sm">جيد</span>
-                    </button>
-                    <button
-                      onClick={() => handleStockStatusToggle('low')}
-                      className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
-                        stockStatusFilters.low
-                          ? 'text-yellow-400 hover:text-yellow-300'
-                          : 'text-gray-500 opacity-50'
-                      }`}
-                    >
-                      <div className={`h-5 w-5 mb-1 rounded-full ${
-                        stockStatusFilters.low ? 'bg-yellow-500' : 'bg-gray-500'
-                      }`}></div>
-                      <span className="text-sm">منخفض</span>
-                    </button>
-                    <button
-                      onClick={() => handleStockStatusToggle('zero')}
-                      className={`flex flex-col items-center p-2 cursor-pointer min-w-[80px] transition-all ${
-                        stockStatusFilters.zero
-                          ? 'text-red-400 hover:text-red-300'
-                          : 'text-gray-500 opacity-50'
-                      }`}
-                    >
-                      <div className={`h-5 w-5 mb-1 rounded-full ${
-                        stockStatusFilters.zero ? 'bg-red-500' : 'bg-gray-500'
-                      }`}></div>
-                      <span className="text-sm">صفر</span>
-                    </button>
-                  </div>
+                      <span className="text-xs text-gray-400">{branch.name}:</span>
+                      <span className="text-xs font-semibold text-blue-300">
+                        {branch.capital.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

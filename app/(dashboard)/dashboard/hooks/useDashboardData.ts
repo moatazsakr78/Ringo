@@ -34,13 +34,16 @@ export interface RecentOrder {
   created_at: string;
 }
 
-// Low Stock Product interface
-export interface LowStockProduct {
-  id: string;
-  name: string;
-  quantity: number;
-  min_stock: number;
-  branch_name?: string;
+// Branch Capital interface
+export interface BranchCapital {
+  branch_id: string;
+  branch_name: string;
+  capital: number;
+}
+
+export interface CapitalData {
+  totalCapital: number;
+  branches: BranchCapital[];
 }
 
 // Dashboard Data interface
@@ -51,7 +54,7 @@ export interface DashboardData {
   topCustomers: TopCustomerData[];
   categoryDistribution: CategoryDistribution[];
   recentOrders: RecentOrder[];
-  lowStockProducts: LowStockProduct[];
+  capitalData: CapitalData | null;
   saleTypeBreakdown: SaleTypeBreakdownData | null;
 }
 
@@ -63,7 +66,7 @@ const initialData: DashboardData = {
   topCustomers: [],
   categoryDistribution: [],
   recentOrders: [],
-  lowStockProducts: [],
+  capitalData: null,
   saleTypeBreakdown: null,
 };
 
@@ -100,43 +103,50 @@ const fetchRecentOrders = async (dateFilter: DateFilter, limit: number = 5): Pro
   }));
 };
 
-// Fetch low stock products
-const fetchLowStockProducts = async (limit: number = 10): Promise<LowStockProduct[]> => {
+// Fetch branch capitals: sum of (quantity × cost_price) per branch
+const fetchBranchCapitals = async (): Promise<CapitalData> => {
   const { data, error } = await supabase
     .from('branch_stocks')
     .select(`
       quantity,
-      min_stock,
-      product_id,
       branch_id,
-      products!inner(id, name),
-      branches(name)
+      products!inner(cost_price),
+      branches!inner(id, name)
     `)
-    .order('quantity', { ascending: true })
-    .limit(100);
+    .gt('quantity', 0);
 
   if (error) {
-    console.error('Error fetching low stock products:', error);
-    return [];
+    console.error('Error fetching branch capitals:', error);
+    return { totalCapital: 0, branches: [] };
   }
 
-  // Filter products where quantity < min_stock
-  const lowStock = (data || [])
-    .filter((item: any) => {
-      const qty = parseFloat(item.quantity) || 0;
-      const minStock = parseFloat(item.min_stock) || 0;
-      return qty < minStock && minStock > 0;
-    })
-    .map((item: any) => ({
-      id: item.products?.id || item.product_id,
-      name: item.products?.name || 'منتج غير معروف',
-      quantity: parseFloat(item.quantity) || 0,
-      min_stock: parseFloat(item.min_stock) || 0,
-      branch_name: item.branches?.name,
-    }))
-    .slice(0, limit);
+  // Group by branch and calculate capital
+  const branchMap = new Map<string, { name: string; capital: number }>();
 
-  return lowStock;
+  (data || []).forEach((item: any) => {
+    const quantity = parseFloat(item.quantity) || 0;
+    const costPrice = parseFloat(item.products?.cost_price) || 0;
+    const branchId = item.branch_id;
+    const branchName = item.branches?.name || 'فرع غير معروف';
+
+    if (quantity > 0 && costPrice > 0) {
+      const existing = branchMap.get(branchId) || { name: branchName, capital: 0 };
+      existing.capital += quantity * costPrice;
+      branchMap.set(branchId, existing);
+    }
+  });
+
+  const branches: BranchCapital[] = Array.from(branchMap.entries())
+    .map(([branchId, data]) => ({
+      branch_id: branchId,
+      branch_name: data.name,
+      capital: data.capital,
+    }))
+    .sort((a, b) => b.capital - a.capital);
+
+  const totalCapital = branches.reduce((sum, b) => sum + b.capital, 0);
+
+  return { totalCapital, branches };
 };
 
 // Check if entity filters are active
@@ -273,7 +283,7 @@ function applyFiltersToSales(
 function computeFilteredDashboardData(
   filteredSales: any[],
   filteredItems: any[],
-): Omit<DashboardData, 'recentOrders' | 'lowStockProducts'> {
+): Omit<DashboardData, 'recentOrders' | 'capitalData'> {
   // KPIs
   const totalSales = filteredSales.reduce((sum, s) => sum + (parseFloat(String(s.total_amount)) || 0), 0);
   const totalProfit = filteredSales.reduce((sum, s) => sum + (parseFloat(String(s.profit ?? 0)) || 0), 0);
@@ -554,11 +564,11 @@ export function useDashboardData(
           customerGroupCustomerIds = await fetchCustomerIdsByGroups(groupIds);
         }
 
-        // Fetch raw data + low stock + recent orders in parallel
-        const [rawResult, recentOrdersResult, lowStockResult] = await Promise.allSettled([
+        // Fetch raw data + recent orders + capital in parallel
+        const [rawResult, recentOrdersResult, capitalResult] = await Promise.allSettled([
           fetchRawSalesData(dateFilter),
           fetchRecentOrders(dateFilter, 5),
-          fetchLowStockProducts(10),
+          fetchBranchCapitals(),
         ]);
 
         if (rawResult.status === 'rejected') throw rawResult.reason;
@@ -586,7 +596,7 @@ export function useDashboardData(
           categoryDistribution: computed.categoryDistribution,
           saleTypeBreakdown: computed.saleTypeBreakdown,
           recentOrders: recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : [],
-          lowStockProducts: lowStockResult.status === 'fulfilled' ? lowStockResult.value : [],
+          capitalData: capitalResult.status === 'fulfilled' ? capitalResult.value : null,
         };
       } else {
         // UNFILTERED MODE: Use existing service functions (no change from original)
@@ -597,7 +607,7 @@ export function useDashboardData(
           topCustomersResult,
           categoryDistResult,
           recentOrdersResult,
-          lowStockResult,
+          capitalResult,
           saleTypeResult,
         ] = await Promise.allSettled([
           fetchKPIs(dateFilter),
@@ -606,7 +616,7 @@ export function useDashboardData(
           fetchTopCustomers(dateFilter, 5),
           fetchCategoryDistribution(dateFilter),
           fetchRecentOrders(dateFilter, 5),
-          fetchLowStockProducts(10),
+          fetchBranchCapitals(),
           fetchSaleTypeBreakdown(dateFilter),
         ]);
 
@@ -617,7 +627,7 @@ export function useDashboardData(
           topCustomers: topCustomersResult.status === 'fulfilled' ? topCustomersResult.value : [],
           categoryDistribution: categoryDistResult.status === 'fulfilled' ? categoryDistResult.value : [],
           recentOrders: recentOrdersResult.status === 'fulfilled' ? recentOrdersResult.value : [],
-          lowStockProducts: lowStockResult.status === 'fulfilled' ? lowStockResult.value : [],
+          capitalData: capitalResult.status === 'fulfilled' ? capitalResult.value : null,
           saleTypeBreakdown: saleTypeResult.status === 'fulfilled' ? saleTypeResult.value : null,
         };
       }
