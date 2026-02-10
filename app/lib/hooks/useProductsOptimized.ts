@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabase/client'
 import { ProductColor, ProductShape } from '../../../components/website/shared/types'
 import { cache, CacheKeys, CacheTTL } from '../cache/memoryCache'
@@ -160,6 +160,7 @@ export function useProducts() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedBranchesForStock, setSelectedBranchesForStock] = useState<string[]>([])
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   // HELPER: Process product images (extracted for consistency)
   const processProductImages = useCallback((product: any, variants: any[] = []): string[] => {
@@ -854,8 +855,12 @@ export function useProducts() {
     }
   }, [])
 
-  // OPTIMIZATION: Enhanced real-time subscriptions with smart cache invalidation
+  // OPTIMIZATION: Deferred real-time subscriptions - wait until initial load completes
   useEffect(() => {
+    // Don't set up subscriptions until initial data is loaded
+    if (isLoading) return
+
+    const timer = setTimeout(() => {
     // Products subscription
     const productsChannel = supabase
       .channel('products_changes_optimized')
@@ -1086,14 +1091,23 @@ export function useProducts() {
       )
       .subscribe()
 
-    return () => {
+    cleanupRef.current = () => {
       productsChannel.unsubscribe()
       inventoryChannel.unsubscribe()
       variantDefsChannel.unsubscribe()
       variantQuantitiesChannel.unsubscribe()
       displaySettingsChannel.unsubscribe()
     }
-  }, [fetchProductsOptimized])
+    }, 2000) // Defer subscriptions 2s after products load
+
+    return () => {
+      clearTimeout(timer)
+      if (cleanupRef.current) {
+        cleanupRef.current()
+        cleanupRef.current = null
+      }
+    }
+  }, [isLoading, fetchProductsOptimized])
 
   // Initial data fetch
   useEffect(() => {

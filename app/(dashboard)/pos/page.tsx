@@ -10,7 +10,7 @@ import { useCartBadge } from "@/lib/hooks/useCartBadge";
 import { useUserProfile } from "@/lib/contexts/UserProfileContext";
 import { useCurrentBranch } from "@/lib/contexts/CurrentBranchContext";
 import { usePermissionCheck } from "@/lib/hooks/usePermissionCheck";
-import CartModal from "@/app/components/CartModal";
+import dynamic from 'next/dynamic';
 import { useCompanySettings } from "@/lib/hooks/useCompanySettings";
 import {
   ProductGridImage,
@@ -21,7 +21,8 @@ import { usePerformanceMonitor } from "../../lib/utils/performanceMonitor";
 import { useSystemCurrency, useFormatPrice } from "@/lib/hooks/useCurrency";
 import { preloadImagesInBackground, getPreloadStats } from "@/lib/utils/imagePreloader";
 import { getLastPurchaseInfo, LastPurchaseInfo } from "@/app/lib/utils/purchase-cost-management";
-import PurchaseHistoryModal from "@/app/components/PurchaseHistoryModal";
+const CartModal = dynamic(() => import("@/app/components/CartModal"), { ssr: false });
+const PurchaseHistoryModal = dynamic(() => import("@/app/components/PurchaseHistoryModal"), { ssr: false });
 
 // Editable Field Component for inline editing
 interface EditableFieldProps {
@@ -98,24 +99,30 @@ import { Category } from "../../types";
 import ResizableTable from "../../components/tables/ResizableTable";
 import Sidebar from "../../components/layout/Sidebar";
 import TopHeader from "../../components/layout/TopHeader";
-import RecordsSelectionModal from "../../components/RecordsSelectionModal";
-import CustomerSelectionModal from "../../components/CustomerSelectionModal";
-import PartySelectionModal, { SelectedParty, PartyType } from "../../components/PartySelectionModal";
-import PriceTypeSelectionModal, { PriceType, getPriceTypeName } from "../../components/PriceTypeSelectionModal";
-import HistoryModal from "../../components/HistoryModal";
-import AddToCartModal from "../../components/AddToCartModal";
-import ColorSelectionModal from "../../components/ColorSelectionModal";
-import SupplierSelectionModal from "../../components/SupplierSelectionModal";
-import WarehouseSelectionModal from "../../components/WarehouseSelectionModal";
-import TransferLocationModal from "../../components/TransferLocationModal";
-import QuickAddProductModal from "../../components/QuickAddProductModal";
-import ColumnsControlModal from "../../components/ColumnsControlModal";
+// Types stay as static imports (erased at compile time)
+import type { SelectedParty, PartyType } from "../../components/PartySelectionModal";
+import type { PriceType } from "../../components/PriceTypeSelectionModal";
+import { getPriceTypeName } from "../../components/PriceTypeSelectionModal";
+// Static imports for always-visible components
 import PaymentSplit from "../../components/PaymentSplit";
-import POSTabletView from "../../components/POSTabletView";
-import DiscountModal from "../../components/DiscountModal";
-import PostponedInvoicesModal from "../../components/PostponedInvoicesModal";
-import CashDrawerModal from "../../components/CashDrawerModal";
 import ProductGridSkeleton from "../../components/ui/ProductGridSkeleton";
+// Dynamic imports for modals and heavy components (loaded on demand)
+const RecordsSelectionModal = dynamic(() => import("../../components/RecordsSelectionModal"), { ssr: false });
+const CustomerSelectionModal = dynamic(() => import("../../components/CustomerSelectionModal"), { ssr: false });
+const PartySelectionModal = dynamic(() => import("../../components/PartySelectionModal"), { ssr: false });
+const PriceTypeSelectionModal = dynamic(() => import("../../components/PriceTypeSelectionModal"), { ssr: false });
+const HistoryModal = dynamic(() => import("../../components/HistoryModal"), { ssr: false });
+const AddToCartModal = dynamic(() => import("../../components/AddToCartModal"), { ssr: false });
+const ColorSelectionModal = dynamic(() => import("../../components/ColorSelectionModal"), { ssr: false });
+const SupplierSelectionModal = dynamic(() => import("../../components/SupplierSelectionModal"), { ssr: false });
+const WarehouseSelectionModal = dynamic(() => import("../../components/WarehouseSelectionModal"), { ssr: false });
+const TransferLocationModal = dynamic(() => import("../../components/TransferLocationModal"), { ssr: false });
+const QuickAddProductModal = dynamic(() => import("../../components/QuickAddProductModal"), { ssr: false });
+const ColumnsControlModal = dynamic(() => import("../../components/ColumnsControlModal"), { ssr: false });
+const POSTabletView = dynamic(() => import("../../components/POSTabletView"), { ssr: false });
+const DiscountModal = dynamic(() => import("../../components/DiscountModal"), { ssr: false });
+const PostponedInvoicesModal = dynamic(() => import("../../components/PostponedInvoicesModal"), { ssr: false });
+const CashDrawerModal = dynamic(() => import("../../components/CashDrawerModal"), { ssr: false });
 import { useProducts, Product } from "../../lib/hooks/useProductsOptimized";
 import { usePersistentSelections } from "../../lib/hooks/usePersistentSelections";
 import { usePOSTabs } from "@/lib/hooks/usePOSTabs";
@@ -448,6 +455,7 @@ function POSPageContent() {
   // Categories state
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const categoriesSubRef = useRef<any>(null);
 
   // Selected Category for filtering products
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -1557,33 +1565,45 @@ function POSPageContent() {
     }
   };
 
-  // OPTIMIZED: Categories real-time subscription with smart updates
+  // Fetch categories on mount
   useEffect(() => {
     startRender();
     fetchCategories();
     endRender();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // Subscribe to real-time changes with optimized handling
-    const subscription = supabase
-      .channel("categories-realtime-optimized")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "categories" },
-        (payload: any) => {
-          console.log("Categories change detected:", payload.eventType);
-          // Only refetch if necessary
-          if (payload.eventType !== "DELETE" || payload.old?.is_active) {
-            fetchCategories();
-          }
-        },
-      )
-      .subscribe();
+  // OPTIMIZED: Deferred categories real-time subscription
+  useEffect(() => {
+    if (isLoadingCategories) return;
+
+    const timer = setTimeout(() => {
+      const subscription = supabase
+        .channel("categories-realtime-optimized")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "categories" },
+          (payload: any) => {
+            console.log("Categories change detected:", payload.eventType);
+            if (payload.eventType !== "DELETE" || payload.old?.is_active) {
+              fetchCategories();
+            }
+          },
+        )
+        .subscribe();
+
+      categoriesSubRef.current = subscription;
+    }, 2000);
 
     return () => {
-      subscription.unsubscribe();
+      clearTimeout(timer);
+      if (categoriesSubRef.current) {
+        categoriesSubRef.current.unsubscribe();
+        categoriesSubRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Intentionally empty - fetchCategories and performance monitors are internal
+  }, [isLoadingCategories]);
 
   // Ref to track previous activeTabId for cart sync
   const prevCartSyncTabIdRef = useRef<string | null>(null);

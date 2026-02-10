@@ -137,32 +137,29 @@ export function usePersistentSelections(userProfileBranchId?: string | null) {
           loadedSelections = JSON.parse(stored)
         }
 
-        // Always ensure default customer is set if no customer is selected
-        const defaultCust = await loadDefaultCustomer()
+        // Load all defaults in parallel for faster initialization
+        const [defaultCust, defaultBranchData, freshRecordData] = await Promise.all([
+          loadDefaultCustomer(),
+          loadDefaultBranch(userProfileBranchId),
+          loadedSelections.record?.id ? refreshRecordData(loadedSelections.record.id) : Promise.resolve(null)
+        ])
+
         if (defaultCust) {
-          setDefaultCustomer(defaultCust) // Store default customer for later use
+          setDefaultCustomer(defaultCust)
           if (!loadedSelections.customer) {
             loadedSelections.customer = defaultCust
           }
         }
 
-        // تحميل الفرع الافتراضي للموظف
-        // الأولوية: 1. فرع الموظف 2. الفرع الافتراضي 3. أول فرع
-        const defaultBranchData = await loadDefaultBranch(userProfileBranchId)
         if (defaultBranchData) {
           setDefaultBranch(defaultBranchData)
-          // إذا لم يكن هناك فرع محدد مسبقاً، استخدم الافتراضي
           if (!loadedSelections.branch) {
             loadedSelections.branch = defaultBranchData
           }
         }
 
-        // Refresh record data from database to get latest name
-        if (loadedSelections.record && loadedSelections.record.id) {
-          const freshRecordData = await refreshRecordData(loadedSelections.record.id)
-          if (freshRecordData) {
-            loadedSelections.record = freshRecordData
-          }
+        if (freshRecordData) {
+          loadedSelections.record = freshRecordData
         }
 
         setSelections(loadedSelections)
