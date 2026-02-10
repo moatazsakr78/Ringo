@@ -11,6 +11,7 @@ interface StatsCardProps {
   color: 'blue' | 'green' | 'purple' | 'red' | 'orange';
   format?: 'currency' | 'number';
   loading?: boolean;
+  paymentBreakdown?: { method: string; amount: number }[];
 }
 
 const colorClasses = {
@@ -49,6 +50,7 @@ export default function StatsCard({
   color,
   format = 'number',
   loading = false,
+  paymentBreakdown,
 }: StatsCardProps) {
   const colors = colorClasses[color];
 
@@ -91,21 +93,32 @@ export default function StatsCard({
     <div className={`bg-[#374151] rounded-xl border border-gray-600 p-5 ${colors.bg} hover:border-gray-500 transition-colors`}>
       <div className="flex items-center justify-between">
         <div className="flex-1">
-          <p className="text-gray-400 text-sm font-medium mb-1">{title}</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-400 text-sm font-medium">{title}</p>
+            {change !== null && (
+              <div className="flex items-center gap-1">
+                {isPositive ? (
+                  <ArrowTrendingUpIcon className="w-4 h-4 text-green-400" />
+                ) : (
+                  <ArrowTrendingDownIcon className="w-4 h-4 text-red-400" />
+                )}
+                <span className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+                  {isPositive ? '+' : ''}{change.toFixed(1)}%
+                </span>
+                <span className="text-gray-500 text-xs mr-1">من السابق</span>
+              </div>
+            )}
+          </div>
           <p className="text-2xl font-bold text-white mb-2">
             {formatValue(value)}
           </p>
-          {change !== null && (
-            <div className="flex items-center gap-1">
-              {isPositive ? (
-                <ArrowTrendingUpIcon className="w-4 h-4 text-green-400" />
-              ) : (
-                <ArrowTrendingDownIcon className="w-4 h-4 text-red-400" />
-              )}
-              <span className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-                {isPositive ? '+' : ''}{change.toFixed(1)}%
-              </span>
-              <span className="text-gray-500 text-xs mr-1">من السابق</span>
+          {paymentBreakdown && paymentBreakdown.length > 0 && (
+            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+              {paymentBreakdown.map(({ method, amount }) => (
+                <span key={method} className="text-sm text-gray-400">
+                  {method}: <span className="text-gray-300 font-medium">{formatValue(amount)}</span>
+                </span>
+              ))}
             </div>
           )}
         </div>

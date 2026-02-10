@@ -16,6 +16,7 @@ export interface KPIData {
   invoiceTotal: number;
   returnCount: number;
   returnTotal: number;
+  paymentBreakdown: { method: string; amount: number }[];
   previousPeriod: {
     totalSales: number;
     totalProfit: number;

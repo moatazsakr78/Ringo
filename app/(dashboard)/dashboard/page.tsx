@@ -169,6 +169,7 @@ export default function DashboardPage() {
                   color="blue"
                   format="currency"
                   loading={loading}
+                  paymentBreakdown={data.kpis?.paymentBreakdown}
                 />
                 <InvoiceStatsCard
                   periodLabel={periodLabel}

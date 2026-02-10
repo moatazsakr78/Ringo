@@ -65,6 +65,9 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
   // Cash drawer balance (actual paid amounts, not invoice totals)
   const [cashDrawerBalance, setCashDrawerBalance] = useState<number>(0)
 
+  // Payment method breakdown from RPC
+  const [paymentBreakdown, setPaymentBreakdown] = useState<{method: string, amount: number}[]>([])
+
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -470,6 +473,28 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
     } catch (error) {
       console.error('Error fetching cash drawer balance:', error)
       setCashDrawerBalance(0)
+    }
+  }
+
+  // Fetch payment method breakdown via RPC
+  const fetchPaymentBreakdown = async () => {
+    if (!safe?.id) return
+    try {
+      const { data, error } = await (supabase as any)
+        .rpc('get_safe_payment_breakdown', { p_record_id: safe.id })
+      if (error) {
+        console.error('Error fetching payment breakdown:', error)
+        setPaymentBreakdown([])
+        return
+      }
+      setPaymentBreakdown(
+        (data || [])
+          .map((row: any) => ({ method: row.payment_method, amount: Number(row.total_amount) }))
+          .filter((item: any) => item.amount !== 0)
+      )
+    } catch (error) {
+      console.error('Error fetching payment breakdown:', error)
+      setPaymentBreakdown([])
     }
   }
 
@@ -1191,6 +1216,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
       fetchSales()
       fetchPurchaseInvoices()
       fetchCashDrawerBalance()
+      fetchPaymentBreakdown()
       // Account statement and transfers are now handled by infinite scroll hooks
 
       // Set up real-time subscription for sales
@@ -1253,6 +1279,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
           (payload: any) => {
             console.log('Cash drawer real-time update:', payload)
             fetchCashDrawerBalance()
+            fetchPaymentBreakdown()
           }
         )
         .subscribe()
@@ -1266,6 +1293,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
             console.log('Cash drawer transactions real-time update:', payload)
             refreshTransfers() // Refresh transfers via infinite scroll hook
             refreshStatements() // Also update account statement
+            fetchPaymentBreakdown()
           }
         )
         .subscribe()
@@ -1449,6 +1477,7 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
     // إعادة تحميل البيانات بعد التعديل
     refreshStatements()
     fetchCashDrawerBalance()
+    fetchPaymentBreakdown()
   }
 
   // Handle delete transaction
@@ -2690,39 +2719,30 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
                       </div>
 
                       {/* Payment Method Breakdown */}
-                      {(() => {
-                        const pmStats: Record<string, number> = {}
-                        accountStatementData.forEach((statement: any) => {
-                          if (statement.type === 'فاتورة بيع' || statement.type === 'مرتجع بيع') {
-                            const method = statement.payment_method || 'cash'
-                            pmStats[method] = (pmStats[method] || 0) + statement.paidAmount
-                          }
-                        })
-                        const pmEntries = Object.entries(pmStats).filter(([_, amount]) => amount !== 0)
-                        const totalPm = pmEntries.reduce((sum, [_, amount]) => sum + amount, 0)
-
-                        if (pmEntries.length === 0) return null
-                        return (
-                          <div className="bg-[#2B3544] rounded-lg p-3">
-                            <h4 className="text-white font-medium mb-2 flex items-center gap-2 text-sm">
-                              <span>💳</span>
-                              <span>طرق الدفع</span>
-                            </h4>
-                            <div className="space-y-2 text-sm">
-                              {pmEntries.map(([method, amount]) => (
-                                <div key={method} className="flex justify-between">
-                                  <span className="text-blue-400">{formatPrice(amount)}</span>
-                                  <span className="text-gray-400">{method}</span>
-                                </div>
-                              ))}
-                              <div className="flex justify-between border-t border-gray-600 pt-2">
-                                <span className="text-white font-bold">{formatPrice(totalPm)}</span>
-                                <span className="text-gray-400 font-medium">الإجمالي</span>
+                      <div className="bg-[#2B3544] rounded-lg p-3">
+                        <h4 className="text-white font-medium mb-2 flex items-center gap-2 text-sm">
+                          <span>💳</span>
+                          <span>طرق الدفع</span>
+                        </h4>
+                        {paymentBreakdown.length > 0 ? (
+                          <div className="space-y-2 text-sm">
+                            {paymentBreakdown.map(({ method, amount }) => (
+                              <div key={method} className="flex justify-between">
+                                <span className={method === 'cash' ? 'text-green-400' : 'text-blue-400'}>
+                                  {formatPrice(amount)}
+                                </span>
+                                <span className="text-gray-400">{method}</span>
                               </div>
+                            ))}
+                            <div className="flex justify-between border-t border-gray-600 pt-2">
+                              <span className="text-white font-bold">{formatPrice(safeBalance)}</span>
+                              <span className="text-gray-400 font-medium">رصيد الخزنة</span>
                             </div>
                           </div>
-                        )
-                      })()}
+                        ) : (
+                          <div className="text-gray-500 text-sm text-center">لا توجد بيانات</div>
+                        )}
+                      </div>
 
                       {/* Date Filter Button */}
                       <button
@@ -3227,39 +3247,30 @@ export default function SafeDetailsModal({ isOpen, onClose, safe }: SafeDetailsM
               </div>
 
               {/* Payment Method Breakdown */}
-              {(() => {
-                const pmStats: Record<string, number> = {}
-                accountStatementData.forEach((statement: any) => {
-                  if (statement.type === 'فاتورة بيع' || statement.type === 'مرتجع بيع') {
-                    const method = statement.payment_method || 'cash'
-                    pmStats[method] = (pmStats[method] || 0) + statement.paidAmount
-                  }
-                })
-                const pmEntries = Object.entries(pmStats).filter(([_, amount]) => amount !== 0)
-                const totalPm = pmEntries.reduce((sum, [_, amount]) => sum + amount, 0)
-
-                if (pmEntries.length === 0) return null
-                return (
-                  <div className="p-4 border-t border-gray-600">
-                    <h4 className="text-white font-medium mb-3 text-right flex items-center gap-2">
-                      <span>💳</span>
-                      <span>طرق الدفع</span>
-                    </h4>
-                    <div className="space-y-2">
-                      {pmEntries.map(([method, amount]) => (
-                        <div key={method} className="flex justify-between items-center">
-                          <span className="text-blue-400">{formatPrice(amount, 'system')}</span>
-                          <span className="text-gray-400 text-sm">{method}</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center border-t border-gray-600 pt-2">
-                        <span className="text-white font-bold">{formatPrice(totalPm, 'system')}</span>
-                        <span className="text-gray-400 text-sm font-medium">الإجمالي</span>
+              <div className="p-4 border-t border-gray-600">
+                <h4 className="text-white font-medium mb-3 text-right flex items-center gap-2">
+                  <span>💳</span>
+                  <span>طرق الدفع</span>
+                </h4>
+                {paymentBreakdown.length > 0 ? (
+                  <div className="space-y-2">
+                    {paymentBreakdown.map(({ method, amount }) => (
+                      <div key={method} className="flex justify-between items-center">
+                        <span className={method === 'cash' ? 'text-green-400' : 'text-blue-400'}>
+                          {formatPrice(amount, 'system')}
+                        </span>
+                        <span className="text-gray-400 text-sm">{method}</span>
                       </div>
+                    ))}
+                    <div className="flex justify-between items-center border-t border-gray-600 pt-2">
+                      <span className="text-white font-bold">{formatPrice(safeBalance, 'system')}</span>
+                      <span className="text-gray-400 text-sm font-medium">رصيد الخزنة</span>
                     </div>
                   </div>
-                )
-              })()}
+                ) : (
+                  <div className="text-gray-500 text-sm text-center">لا توجد بيانات</div>
+                )}
+              </div>
 
               {/* Date Filter Button */}
               <div className="p-4 border-t border-gray-600">

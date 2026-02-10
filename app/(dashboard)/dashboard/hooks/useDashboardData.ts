@@ -191,7 +191,7 @@ async function fetchRawSalesData(dateFilter: DateFilter) {
 
   let salesQuery = supabase
     .from('sales')
-    .select('id, total_amount, profit, customer_id, cashier_id, branch_id, record_id, created_at, invoice_type, sale_type, shipping_amount');
+    .select('id, total_amount, profit, customer_id, cashier_id, branch_id, record_id, created_at, invoice_type, sale_type, shipping_amount, payment_method');
 
   if (startDate) salesQuery = salesQuery.gte('created_at', startDate.toISOString());
   if (endDate) salesQuery = salesQuery.lte('created_at', endDate.toISOString());
@@ -328,6 +328,18 @@ function computeFilteredDashboardData(
   const returnCount = returns.length;
   const returnTotal = Math.abs(returns.reduce((sum, s) => sum + (parseFloat(String(s.total_amount)) || 0), 0));
 
+  // Payment method breakdown
+  const methodMap = new Map<string, number>();
+  filteredSales.forEach((s: any) => {
+    const method = s.payment_method || 'cash';
+    const amount = parseFloat(String(s.total_amount)) || 0;
+    methodMap.set(method, (methodMap.get(method) || 0) + amount);
+  });
+  const paymentBreakdown = Array.from(methodMap.entries())
+    .filter(([_, amount]) => amount !== 0)
+    .map(([method, amount]) => ({ method, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
   const kpis: KPIData = {
     totalSales,
     totalProfit,
@@ -338,6 +350,7 @@ function computeFilteredDashboardData(
     invoiceTotal,
     returnCount,
     returnTotal,
+    paymentBreakdown,
     previousPeriod: {
       totalSales: 0,
       totalProfit: 0,

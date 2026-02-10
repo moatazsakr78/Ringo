@@ -92,7 +92,7 @@ export const fetchKPIs = async (filter: DateFilter, brandId?: string | null): Pr
   // Current period
   let currentQuery = supabase
     .from('sales')
-    .select('id, total_amount, profit, customer_id, invoice_type')
+    .select('id, total_amount, profit, customer_id, invoice_type, payment_method')
     .gte('created_at', startDate)
     .lte('created_at', endDate);
 
@@ -105,7 +105,7 @@ export const fetchKPIs = async (filter: DateFilter, brandId?: string | null): Pr
   // Previous period
   let prevQuery = supabase
     .from('sales')
-    .select('id, total_amount, profit, customer_id, invoice_type')
+    .select('id, total_amount, profit, customer_id, invoice_type, payment_method')
     .gte('created_at', prevPeriod.startDate)
     .lte('created_at', prevPeriod.endDate);
 
@@ -139,8 +139,21 @@ export const fetchKPIs = async (filter: DateFilter, brandId?: string | null): Pr
   const current = calcKPIs(currentSales);
   const prev = calcKPIs(prevSales);
 
+  // Payment method breakdown for current period
+  const methodMap = new Map<string, number>();
+  currentSales.forEach(s => {
+    const method = (s as any).payment_method || 'cash';
+    const amount = parseFloat(String(s.total_amount)) || 0;
+    methodMap.set(method, (methodMap.get(method) || 0) + amount);
+  });
+  const paymentBreakdown = Array.from(methodMap.entries())
+    .filter(([_, amount]) => amount !== 0)
+    .map(([method, amount]) => ({ method, amount }))
+    .sort((a, b) => b.amount - a.amount);
+
   return {
     ...current,
+    paymentBreakdown,
     previousPeriod: prev,
   };
 };
