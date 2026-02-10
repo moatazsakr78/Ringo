@@ -2607,13 +2607,9 @@ function POSPageContent() {
 
         // التحقق من صحة المدفوعات للعميل الافتراضي
         if (isDefaultCustomer) {
-          // العميل الافتراضي: المبلغ المدفوع يجب أن يساوي قيمة الفاتورة بالضبط
+          // العميل الافتراضي: المبلغ المدفوع يجب أن يكون >= قيمة الفاتورة (الباقي/الفكة مسموح)
           if (totalPaid < discountedTotal) {
             alert('العميل الافتراضي لا يقبل البيع بالآجل - يجب دفع قيمة الفاتورة كاملة');
-            return;
-          }
-          if (totalPaid > discountedTotal) {
-            alert('المبلغ المدفوع أعلى من قيمة الفاتورة - العميل الافتراضي يقبل الدفع بقيمة الفاتورة فقط');
             return;
           }
         } else {
@@ -5872,23 +5868,20 @@ function POSPageContent() {
                     ) : (
                       <div className="flex-1 flex flex-col min-h-0">
                         {/* Cart Header */}
-                        <div className="p-4 border-b border-gray-600 flex-shrink-0">
+                        <div className="px-3 py-2 border-b border-gray-600 flex-shrink-0">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
                               {/* Close button for mobile */}
                               <button
                                 onClick={() => setIsCartOpen(false)}
-                                className="text-gray-400 hover:text-white mr-2"
+                                className="text-gray-400 hover:text-white"
                                 title="إغلاق السلة"
                               >
-                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                               </button>
-                              <span className="text-white font-medium">السلة</span>
-                              <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
-                                {cartItems.length}
-                              </span>
+                              <span className="text-white font-medium text-sm">منتجات السلة: {cartItems.length}</span>
                             </div>
                             {cartItems.length > 0 && (
                               <div className="flex items-center gap-2">
@@ -5930,16 +5923,16 @@ function POSPageContent() {
                                       }, 150);
                                     }, 100);
                                   }}
-                                  className="text-orange-400 hover:text-orange-300 text-sm flex items-center gap-1"
+                                  className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 rounded px-1.5 py-0.5 transition-colors text-xs flex items-center gap-1"
                                   title="تأجيل الفاتورة"
                                 >
-                                  <ClockIcon className="h-4 w-4" />
+                                  <ClockIcon className="h-3 w-3" />
                                   تأجيل
                                 </button>
                                 <span className="text-gray-500">|</span>
                                 <button
                                   onClick={() => setShowClearCartConfirm(true)}
-                                  className="text-red-400 hover:text-red-300 text-sm"
+                                  className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded px-1.5 py-0.5 transition-colors text-xs"
                                   title="مسح السلة"
                                 >
                                   مسح الكل
@@ -6205,7 +6198,6 @@ function POSPageContent() {
                                     الباقي: {(parseFloat(paidAmount) - calculateTotalWithDiscounts()).toFixed(0)}
                                   </span>
                                 )}
-                                <span>({cartItems.length})</span>
                               </>
                             )}
                             <ChevronLeftIcon className="w-4 h-4" />
@@ -6426,14 +6418,9 @@ function POSPageContent() {
               ) : (
                 <div className="h-full flex flex-col">
                   {/* Cart Header */}
-                  <div className="p-4 border-b border-gray-600 flex-shrink-0">
+                  <div className="px-3 py-2 border-b border-gray-600 flex-shrink-0">
                     <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">السلة</span>
-                        <span className="bg-blue-600 px-2 py-1 rounded text-xs text-white">
-                          {cartItems.length}
-                        </span>
-                      </div>
+                      <span className="text-white font-medium text-sm">منتجات السلة: {cartItems.length}</span>
                       {cartItems.length > 0 && (
                         <div className="flex items-center gap-2">
                           <button
@@ -6474,7 +6461,7 @@ function POSPageContent() {
                                 }, 150);
                               }, 100);
                             }}
-                            className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 rounded px-2 py-1 transition-colors text-xs flex items-center gap-1"
+                            className="text-orange-400 hover:text-orange-300 hover:bg-orange-400/10 rounded px-1.5 py-0.5 transition-colors text-xs flex items-center gap-1"
                             title="تأجيل الفاتورة"
                           >
                             <ClockIcon className="h-3 w-3" />
@@ -6483,7 +6470,7 @@ function POSPageContent() {
                           <span className="text-gray-500">|</span>
                           <button
                             onClick={clearCart}
-                            className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded px-2 py-1 transition-colors text-xs"
+                            className="text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded px-1.5 py-0.5 transition-colors text-xs"
                             title="مسح السلة"
                           >
                             مسح الكل
@@ -6797,7 +6784,6 @@ function POSPageContent() {
                               الباقي: {(parseFloat(paidAmount) - calculateTotalWithDiscounts()).toFixed(0)}
                             </span>
                           )}
-                          <span>({cartItems.length})</span>
                         </>
                       )}
                       <ChevronLeftIcon className="w-4 h-4" />
