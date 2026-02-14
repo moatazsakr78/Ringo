@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     for (let i = 0; i < messageIds.length; i += BATCH_SIZE) {
       const batch = messageIds.slice(i, i + BATCH_SIZE);
       const { data: existingMessages } = await supabase
-        .schema('elfaroukgroup')
+        .schema('ringo')
         .from('whatsapp_messages')
         .select('message_id')
         .in('message_id', batch);
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
           : new Date();
 
         const { error: insertError } = await supabase
-          .schema('elfaroukgroup')
+          .schema('ringo')
           .from('whatsapp_messages')
           .upsert({
             message_id: log.id,

@@ -1110,7 +1110,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
         'postgres_changes',
         {
           event: '*',
-          schema: 'elfaroukgroup',
+          schema: 'ringo',
           table: 'products',
         },
         handleProductChange
@@ -1124,7 +1124,7 @@ export function useProductsAdmin(options?: { selectedBranches?: string[] }) {
         'postgres_changes',
         {
           event: '*',
-          schema: 'elfaroukgroup',
+          schema: 'ringo',
           table: 'inventory',
         },
         handleInventoryChange

@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
           // For outgoing messages from real WhatsApp app, customer_name should be the recipient name
           // but we use 'الفاروق جروب' as sender name for display consistency
           const { error: dbError } = await supabase
-            .schema('elfaroukgroup')
+            .schema('ringo')
             .from('whatsapp_messages')
             .upsert({
               message_id: message.messageId,
@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
           // If emoji is empty or null, it means removing the reaction
           if (!emoji || emoji === '') {
             const { error: deleteError } = await supabase
-              .schema('elfaroukgroup')
+              .schema('ringo')
               .from('whatsapp_reactions')
               .delete()
               .eq('message_id', messageId)
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
           } else {
             // Add or update the reaction
             const { error: upsertError } = await supabase
-              .schema('elfaroukgroup')
+              .schema('ringo')
               .from('whatsapp_reactions')
               .upsert({
                 message_id: messageId,
@@ -427,7 +427,7 @@ async function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): 
 
           // Look up in whatsapp_lid_mappings table
           const { data: mapping, error: mappingError } = await supabase
-            .schema('elfaroukgroup')
+            .schema('ringo')
             .from('whatsapp_lid_mappings')
             .select('phone_number, customer_name')
             .eq('lid', lid)
@@ -486,7 +486,7 @@ async function parseWasenderMessage(msgData: any, isOutgoing: boolean = false): 
             // Save the LID mapping (upsert to handle updates)
             const customerName = msgData.pushName || key.pushName || msgData.notifyName || from;
             supabase
-              .schema('elfaroukgroup')
+              .schema('ringo')
               .from('whatsapp_lid_mappings')
               .upsert({
                 lid: lid,

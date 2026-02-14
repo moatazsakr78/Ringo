@@ -21,7 +21,6 @@ import { useCart } from '@/lib/contexts/CartContext';
 import { useFavorites } from '@/lib/contexts/FavoritesContext';
 import { useCartBadge } from '@/lib/hooks/useCartBadge';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
-import { useBrand } from '@/lib/brand/brand-context';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
@@ -79,12 +78,7 @@ export default function DesktopHome({
     whatsappLink?.link_url?.replace('https://wa.me/', '');
 
   // Get company settings
-  const { companyName: rawCompanyName, logoUrl: rawLogoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
-
-  // Override with brand data if available
-  const { brand } = useBrand();
-  const companyName = brand?.name_ar || brand?.name || rawCompanyName;
-  const logoUrl = brand?.logo_url || rawLogoUrl;
+  const { companyName, logoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
 
   // Get cart badge count and cart functions
   const { cartBadgeCount } = useCartBadge();
@@ -634,7 +628,7 @@ export default function DesktopHome({
             <div className="max-w-[90%] mx-auto px-4 flex items-center justify-between w-full min-h-[50px]">
               <div className="flex items-center gap-3">
                 <div className={`h-10 w-10 ${logoRoundingClass} overflow-hidden bg-transparent flex items-center justify-center`}>
-                  <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-full w-full object-cover" />
+                  <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-full w-full object-cover" />
                 </div>
                 <h1 className="text-base font-bold text-white">{companyName}</h1>
               </div>
@@ -725,7 +719,7 @@ export default function DesktopHome({
             <div className="flex items-center gap-8">
               <div className="flex items-center gap-3">
                 <div className={`h-20 w-20 ${logoRoundingClass} overflow-hidden bg-transparent flex items-center justify-center`}>
-                  <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-full w-full object-cover" />
+                  <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-full w-full object-cover" />
                 </div>
                 <h1 className="text-xl font-bold text-white">{companyName}</h1>
               </div>
@@ -881,7 +875,7 @@ export default function DesktopHome({
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-8 w-8 object-contain" />
+                <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-8 w-8 object-contain" />
                 <h5 className="font-bold text-lg text-white">{companyName}</h5>
               </div>
               <p className="text-gray-400">متجرك المتكامل للحصول على أفضل المنتجات بأسعار مميزة وجودة عالية</p>

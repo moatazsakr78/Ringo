@@ -312,7 +312,7 @@ export function useSocialMedia() {
       .channel('social_media_links_changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'social_media_links' },
+        { event: '*', schema: 'ringo', table: 'social_media_links' },
         () => {
           fetchLinks();
         }
@@ -323,7 +323,7 @@ export function useSocialMedia() {
       .channel('social_media_settings_changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'social_media_settings' },
+        { event: '*', schema: 'ringo', table: 'social_media_settings' },
         () => {
           fetchSettings();
         }

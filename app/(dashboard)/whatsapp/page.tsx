@@ -600,7 +600,7 @@ export default function WhatsAppPage() {
         'postgres_changes',
         {
           event: 'INSERT',
-          schema: 'elfaroukgroup',
+          schema: 'ringo',
           table: 'whatsapp_messages'
         },
         (payload) => {

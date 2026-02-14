@@ -381,7 +381,7 @@ export default function SuppliersPage() {
     const invoicesChannel = supabase
       .channel('suppliers_page_invoices')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'purchase_invoices' },
+        { event: '*', schema: 'ringo', table: 'purchase_invoices' },
         (payload: any) => {
           // ✨ Only update the affected supplier's balance
           const supplierId = payload.new?.supplier_id || payload.old?.supplier_id
@@ -395,7 +395,7 @@ export default function SuppliersPage() {
     const paymentsChannel = supabase
       .channel('suppliers_page_payments')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'supplier_payments' },
+        { event: '*', schema: 'ringo', table: 'supplier_payments' },
         (payload: any) => {
           // ✨ Only update the affected supplier's balance
           const supplierId = payload.new?.supplier_id || payload.old?.supplier_id

@@ -20,7 +20,6 @@ import { useCart } from '@/lib/contexts/CartContext';
 import { useFavorites } from '@/lib/contexts/FavoritesContext';
 import { useCartBadge } from '@/lib/hooks/useCartBadge';
 import { useCompanySettings } from '@/lib/hooks/useCompanySettings';
-import { useBrand } from '@/lib/brand/brand-context';
 import { useProductDisplaySettings } from '@/lib/hooks/useProductDisplaySettings';
 import { useStoreTheme } from '@/lib/hooks/useStoreTheme';
 import { useStoreBackHandler } from '@/lib/hooks/useBackButton';
@@ -78,12 +77,7 @@ export default function TabletHome({
     whatsappLink?.link_url?.replace('https://wa.me/', '');
 
   // Get company settings
-  const { companyName: rawCompanyName, logoUrl: rawLogoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
-
-  // Override with brand data if available
-  const { brand } = useBrand();
-  const companyName = brand?.name_ar || brand?.name || rawCompanyName;
-  const logoUrl = brand?.logo_url || rawLogoUrl;
+  const { companyName, logoUrl, logoShape, socialMedia, isLoading: isCompanyLoading } = useCompanySettings();
 
   // Get product display settings
   const { settings: displaySettings } = useProductDisplaySettings();
@@ -652,7 +646,7 @@ export default function TabletHome({
                 {/* Logo and Title - Left Side */}
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className={`h-12 w-12 ${logoRoundingClass} overflow-hidden bg-transparent flex items-center justify-center`}>
-                    <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-full w-full object-cover" />
+                    <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-full w-full object-cover" />
                   </div>
                   <h1 className="text-lg font-bold text-white">{companyName}</h1>
                 </div>
@@ -740,7 +734,7 @@ export default function TabletHome({
               {/* Logo and Title - Left Side */}
               <div className="flex items-center gap-3 flex-shrink-0">
                 <div className={`h-16 w-16 ${logoRoundingClass} overflow-hidden bg-transparent flex items-center justify-center`}>
-                  <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-full w-full object-cover" />
+                  <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-full w-full object-cover" />
                 </div>
                 <div className="flex flex-col">
                   <h1 className="text-lg font-bold text-white leading-tight">{companyName}</h1>
@@ -922,7 +916,7 @@ export default function TabletHome({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <img src={logoUrl || '/assets/logo/El Farouk Group2.png'} alt={companyName} className="h-7 w-7 object-contain" />
+                <img src={logoUrl || '/assets/logo/Ringo2.png'} alt={companyName} className="h-7 w-7 object-contain" />
                 <h5 className="font-bold text-lg text-white">{companyName}</h5>
               </div>
               <p className="text-gray-400 mb-4">متجرك المتكامل للحصول على أفضل المنتجات بأسعار مميزة وجودة عالية</p>

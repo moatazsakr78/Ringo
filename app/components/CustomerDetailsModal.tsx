@@ -1201,7 +1201,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     // Check if customer is valid (not walk-in) for showing payment details
     const showPaymentDetails = customer && customer.id !== '00000000-0000-0000-0000-000000000001'
     // Note: customerBalance is from the component state (calculated in fetchCustomerBalance)
-    const logoUrl = window.location.origin + '/assets/logo/El Farouk Group2.png'
+    const logoUrl = window.location.origin + '/assets/logo/Ringo2.png'
 
     const receiptContent = `
       <html dir="rtl" lang="ar">
@@ -1441,12 +1441,12 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           <div class="receipt-header">
             <img
               src="${logoUrl}"
-              alt="El Farouk Group"
+              alt="Ringo"
               class="company-logo"
               onerror="this.style.display='none'; document.querySelector('.company-logo-fallback').style.display='block';"
             />
             <div class="company-logo-fallback" style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 4px;">🏢</div>
-            <div class="company-name">El Farouk Group</div>
+            <div class="company-name">Ringo</div>
             <div class="receipt-date">${new Date(sale.created_at).toLocaleDateString("ar-EG")} - ${new Date(sale.created_at).toLocaleDateString("en-US")}</div>
             <div class="receipt-address">${branchData?.name || "الفرع الرئيسي"}</div>
             <div class="receipt-phone">${branchData?.phone || "01102862856"}</div>
@@ -1546,7 +1546,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
     const total = Math.abs(sale.total_amount)
 
     // Logo URL for the company logo
-    const logoUrl = window.location.origin + '/assets/logo/El Farouk Group2.png'
+    const logoUrl = window.location.origin + '/assets/logo/Ringo2.png'
 
     const a4InvoiceContent = `
       <!DOCTYPE html>
@@ -1762,8 +1762,8 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
           <div class="invoice-container">
             <div class="invoice-header">
               <div class="header-right">
-                <img src="${logoUrl}" alt="El Farouk Group" class="company-logo" onerror="this.style.display='none'" />
-                <div class="company-name">El Farouk Group</div>
+                <img src="${logoUrl}" alt="Ringo" class="company-logo" onerror="this.style.display='none'" />
+                <div class="company-name">Ringo</div>
               </div>
             </div>
 
@@ -1892,7 +1892,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
         .limit(1)
         .single()
 
-      const logoUrl = window.location.origin + '/assets/logo/El Farouk Group2.png'
+      const logoUrl = window.location.origin + '/assets/logo/Ringo2.png'
       const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
       const totalDiscount = items.reduce((sum, item) => sum + (item.discount || 0), 0)
       const total = Math.abs(sale.total_amount)
@@ -1943,7 +1943,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
             <div class="invoice-container">
               <div class="invoice-header">
                 <div>
-                  <div class="company-name">El Farouk Group</div>
+                  <div class="company-name">Ringo</div>
                   <div class="company-details">${branchData?.name || 'الفرع الرئيسي'}<br>${branchData?.phone || '01102862856'}</div>
                 </div>
               </div>
@@ -2043,7 +2043,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       const salesChannel = supabase
         .channel('modal_sales_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'sales' },
+          { event: '*', schema: 'ringo', table: 'sales' },
           (payload: any) => {
             console.log('Sales real-time update:', payload)
             fetchSales()
@@ -2057,7 +2057,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       const saleItemsChannel = supabase
         .channel('modal_sale_items_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'sale_items' },
+          { event: '*', schema: 'ringo', table: 'sale_items' },
           (payload: any) => {
             console.log('Sale items real-time update:', payload)
             if (sales.length > 0 && selectedTransaction < sales.length) {
@@ -2074,7 +2074,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       const purchaseItemsChannel = supabase
         .channel('modal_purchase_items_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'purchase_invoice_items' },
+          { event: '*', schema: 'ringo', table: 'purchase_invoice_items' },
           (payload: any) => {
             console.log('Purchase invoice items real-time update:', payload)
             if (sales.length > 0 && selectedTransaction < sales.length) {
@@ -2091,7 +2091,7 @@ export default function CustomerDetailsModal({ isOpen, onClose, customer }: Cust
       const paymentsChannel = supabase
         .channel('modal_customer_payments_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'customer_payments' },
+          { event: '*', schema: 'ringo', table: 'customer_payments' },
           (payload: any) => {
             console.log('Customer payments real-time update:', payload)
             refreshPayments() // Refresh via infinite scroll hook

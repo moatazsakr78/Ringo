@@ -865,7 +865,7 @@ export function useProducts() {
     const productsChannel = supabase
       .channel('products_changes_optimized')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'products' },
+        { event: '*', schema: 'ringo', table: 'products' },
         async (payload) => {
           // OPTIMIZATION: Invalidate cache and refetch only when necessary
           cache.invalidatePattern('products:')
@@ -955,7 +955,7 @@ export function useProducts() {
     const inventoryChannel = supabase
       .channel('inventory_changes_optimized')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'inventory' },
+        { event: '*', schema: 'ringo', table: 'inventory' },
         (payload: any) => {
           // OPTIMIZATION: Update specific product inventory without full refetch
           if (payload.new && payload.new.product_id) {
@@ -1045,7 +1045,7 @@ export function useProducts() {
     const variantDefsChannel = supabase
       .channel('variant_definitions_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'product_color_shape_definitions' },
+        { event: '*', schema: 'ringo', table: 'product_color_shape_definitions' },
         async (payload: any) => {
           const productId = payload.new?.product_id || payload.old?.product_id
           if (productId) {
@@ -1059,7 +1059,7 @@ export function useProducts() {
     const variantQuantitiesChannel = supabase
       .channel('variant_quantities_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'product_variant_quantities' },
+        { event: '*', schema: 'ringo', table: 'product_variant_quantities' },
         async (payload: any) => {
           const variantDefId = payload.new?.variant_definition_id || payload.old?.variant_definition_id
           if (variantDefId) {
@@ -1081,7 +1081,7 @@ export function useProducts() {
     const displaySettingsChannel = supabase
       .channel('product_display_settings_changes')
       .on('postgres_changes',
-        { event: 'UPDATE', schema: 'elfaroukgroup', table: 'product_display_settings' },
+        { event: 'UPDATE', schema: 'ringo', table: 'product_display_settings' },
         (payload: any) => {
           if (payload.new?.selected_branches) {
             // Reload products to recalculate with new branch selection

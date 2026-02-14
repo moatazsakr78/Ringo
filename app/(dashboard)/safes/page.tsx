@@ -487,7 +487,7 @@ export default function SafesPage() {
     const safesChannel = supabase
       .channel('safes_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'records' },
+        { event: '*', schema: 'ringo', table: 'records' },
         () => {
           fetchSafes()
         }
@@ -497,7 +497,7 @@ export default function SafesPage() {
     const paymentMethodsChannel = supabase
       .channel('payment_methods_changes')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'payment_methods' },
+        { event: '*', schema: 'ringo', table: 'payment_methods' },
         () => {
           fetchPaymentMethods()
         }

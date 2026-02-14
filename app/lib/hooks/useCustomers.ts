@@ -112,7 +112,7 @@ export function useCustomers() {
     const subscription = supabase
       .channel('customers_changes_optimized')
       .on('postgres_changes',
-        { event: '*', schema: 'elfaroukgroup', table: 'customers' },
+        { event: '*', schema: 'ringo', table: 'customers' },
         handleCustomerChange
       )
       .subscribe()

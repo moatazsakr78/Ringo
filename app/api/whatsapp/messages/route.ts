@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // ============================================
     if (conversationsOnly && !phoneNumber) {
       const { data: conversations, error } = await supabase
-        .schema('elfaroukgroup')
+        .schema('ringo')
         .rpc('get_whatsapp_conversations');
 
       if (error) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
     // SPECIFIC PHONE: Fetch messages for one conversation
     // ============================================
     let query = supabase
-      .schema('elfaroukgroup')
+      .schema('ringo')
       .from('whatsapp_messages')
       .select('*')
       .order('created_at', { ascending: true });
@@ -156,7 +156,7 @@ export async function GET(request: NextRequest) {
       // Fetch reactions in batches
       const reactionsPromises = messageIdChunks.map(chunk =>
         supabase
-          .schema('elfaroukgroup')
+          .schema('ringo')
           .from('whatsapp_reactions')
           .select('message_id, emoji, from_number, is_from_me')
           .in('message_id', chunk)

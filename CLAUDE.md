@@ -1,4 +1,4 @@
-# El Farouk Group - POS & E-Commerce System
+# Ringo - POS & E-Commerce System
 
 ## Project Overview
 نظام متكامل يجمع بين:
@@ -20,7 +20,7 @@ npm run typecheck  # Run TypeScript checks
 
 ## Project Structure
 ```
-elfaroukgroup/
+ringo/
 ├── app/
 │   ├── (dashboard)/           # POS & Admin System (للموظفين)
 │   │   ├── dashboard/         # لوحة التحكم الرئيسية
@@ -100,12 +100,12 @@ elfaroukgroup/
 
 ### CRITICAL: Schema Usage
 ```
-Schema Name: elfaroukgroup (NOT public)
+Schema Name: ringo (NOT public)
 ```
 
-**IMPORTANT**: This project uses the `elfaroukgroup` schema, NOT the default `public` schema.
-- All queries MUST use `elfaroukgroup` schema
-- Example: `elfaroukgroup.products`, `elfaroukgroup.customers`
+**IMPORTANT**: This project uses the `ringo` schema, NOT the default `public` schema.
+- All queries MUST use `ringo` schema
+- Example: `ringo.products`, `ringo.customers`
 - The `public` schema contains only utility tables
 
 ### CRITICAL: Authentication & Security
@@ -119,7 +119,7 @@ RLS: DISABLED (Security at application level)
 - After limit, costs become very expensive
 - External auth provides more control and scalability
 
-**Authentication Tables** (in `elfaroukgroup` schema):
+**Authentication Tables** (in `ringo` schema):
 - `auth_users` - User accounts
 - `auth_sessions` - Active sessions
 - `auth_accounts` - OAuth provider accounts
@@ -130,7 +130,7 @@ RLS: DISABLED (Security at application level)
 - Security handled at application level in Next.js API routes
 - All operations go through server-side validation
 
-### Database Tables (65 total in `elfaroukgroup` schema)
+### Database Tables (65 total in `ringo` schema)
 
 #### Authentication
 - `auth_users`, `auth_sessions`, `auth_accounts`, `auth_verification_tokens`
@@ -305,7 +305,7 @@ Located in `/ui-designs/`:
 ## PWA Configuration
 The app is a Progressive Web App:
 - **Manifest**: `/public/manifest.json`
-- **Icons**: El Farouk Group branding
+- **Icons**: Ringo branding
 - **Theme Color**: #DC2626
 - **Installable**: Add to homescreen support
 
@@ -331,10 +331,10 @@ GOOGLE_CLIENT_SECRET=your_google_client_secret
 ## Important Notes
 
 ### Schema Reminder
-Always use `elfaroukgroup` schema, not `public`:
+Always use `ringo` schema, not `public`:
 ```sql
 -- Correct
-SELECT * FROM elfaroukgroup.products;
+SELECT * FROM ringo.products;
 
 -- Wrong
 SELECT * FROM public.products;

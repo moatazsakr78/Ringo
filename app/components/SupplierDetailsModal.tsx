@@ -1112,7 +1112,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const invoicesChannel = supabase
         .channel('modal_purchase_invoices_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'purchase_invoices' },
+          { event: '*', schema: 'ringo', table: 'purchase_invoices' },
           (payload: any) => {
             console.log('Purchase invoices real-time update:', payload)
             fetchPurchaseInvoices()
@@ -1126,7 +1126,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const invoiceItemsChannel = supabase
         .channel('modal_purchase_invoice_items_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'purchase_invoice_items' },
+          { event: '*', schema: 'ringo', table: 'purchase_invoice_items' },
           (payload: any) => {
             console.log('Purchase invoice items real-time update:', payload)
             if (purchaseInvoices.length > 0 && selectedTransaction < purchaseInvoices.length) {
@@ -1143,7 +1143,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const saleItemsChannel = supabase
         .channel('modal_supplier_sale_items_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'sale_items' },
+          { event: '*', schema: 'ringo', table: 'sale_items' },
           (payload: any) => {
             console.log('Sale items real-time update (supplier modal):', payload)
             if (purchaseInvoices.length > 0 && selectedTransaction < purchaseInvoices.length) {
@@ -1160,7 +1160,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       const paymentsChannel = supabase
         .channel('modal_supplier_payments_changes')
         .on('postgres_changes',
-          { event: '*', schema: 'elfaroukgroup', table: 'supplier_payments' },
+          { event: '*', schema: 'ringo', table: 'supplier_payments' },
           (payload: any) => {
             console.log('Supplier payments real-time update:', payload)
             refreshPayments() // Refresh via infinite scroll hook
@@ -1386,7 +1386,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       .limit(1)
       .single()
 
-    const logoUrl = window.location.origin + '/assets/logo/El Farouk Group2.png'
+    const logoUrl = window.location.origin + '/assets/logo/Ringo2.png'
 
     const receiptContent = `
       <html dir="rtl" lang="ar">
@@ -1418,8 +1418,8 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
         </head>
         <body>
           <div class="receipt-header">
-            <img src="${logoUrl}" alt="El Farouk Group" class="company-logo" onerror="this.style.display='none'" />
-            <div class="company-name">El Farouk Group</div>
+            <img src="${logoUrl}" alt="Ringo" class="company-logo" onerror="this.style.display='none'" />
+            <div class="company-name">Ringo</div>
             <div class="receipt-date">${new Date(invoice.created_at).toLocaleDateString('ar-EG')} - ${new Date(invoice.created_at).toLocaleDateString('en-US')}</div>
             <div class="receipt-phone">${branchData?.phone || '01102862856'}</div>
           </div>
@@ -1498,7 +1498,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
       .limit(1)
       .single()
 
-    const logoUrl = window.location.origin + '/assets/logo/El Farouk Group2.png'
+    const logoUrl = window.location.origin + '/assets/logo/Ringo2.png'
     const currentDate = new Date().toLocaleDateString('ar-EG', {
       year: 'numeric',
       month: 'long',
@@ -1567,7 +1567,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
           <div class="invoice-container">
             <div class="invoice-header">
               <div class="company-info">
-                <div class="company-name">El Farouk Group</div>
+                <div class="company-name">Ringo</div>
                 <div class="company-details">${branchData?.name || 'الفرع الرئيسي'}<br>${branchData?.phone || '01102862856'}</div>
               </div>
               <img src="${logoUrl}" alt="Logo" class="company-logo" onerror="this.style.display='none'" />
@@ -1724,7 +1724,7 @@ export default function SupplierDetailsModal({ isOpen, onClose, supplier }: Supp
             <div class="invoice-container">
               <div class="invoice-header">
                 <div>
-                  <div class="company-name">El Farouk Group</div>
+                  <div class="company-name">Ringo</div>
                   <div class="company-details">${branchData?.name || 'الفرع الرئيسي'}<br>${branchData?.phone || '01102862856'}</div>
                 </div>
               </div>
